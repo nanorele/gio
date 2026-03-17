@@ -427,11 +427,11 @@ func (w *window) addEventListeners() {
 				// Safari sends "insertReplacementText" for autocorrect, but the cursor is at the end of the word, so we need to find the word start.
 				insertLen := utf8.RuneCountInString(data)
 				wordStart := absStart
-				
+
 				if absStart > snippetStart {
 					relPos := absStart - snippetStart
 					snippetRunes := []rune(st.Snippet.Text)
-					
+
 					for i := relPos - 1; i >= 0; i-- {
 						if i >= len(snippetRunes) {
 							continue
@@ -443,7 +443,7 @@ func (w *window) addEventListeners() {
 						wordStart = snippetStart + i
 					}
 				}
-				
+
 				replaceRange := key.Range{Start: wordStart, End: absStart}
 				w.w.EditorReplace(replaceRange, data)
 
