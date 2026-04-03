@@ -193,6 +193,7 @@ func Write(o *Ops, n int) []byte {
 	l := len(o.data)
 	if l+n <= cap(o.data) {
 		o.data = o.data[:l+n]
+		clear(o.data[l : l+n])
 	} else {
 		o.data = append(o.data, make([]byte, n)...)
 	}
@@ -265,6 +266,7 @@ func Write1(o *Ops, n int, ref1 any) []byte {
 	l := len(o.data)
 	if l+n <= cap(o.data) {
 		o.data = o.data[:l+n]
+		clear(o.data[l : l+n])
 	} else {
 		o.data = append(o.data, make([]byte, n)...)
 	}
@@ -283,6 +285,7 @@ func Write2(o *Ops, n int, ref1, ref2 any) []byte {
 	l := len(o.data)
 	if l+n <= cap(o.data) {
 		o.data = o.data[:l+n]
+		clear(o.data[l : l+n])
 	} else {
 		o.data = append(o.data, make([]byte, n)...)
 	}
@@ -301,12 +304,14 @@ func Write3(o *Ops, n int, ref1, ref2, ref3 any) []byte {
 	l := len(o.data)
 	if l+n <= cap(o.data) {
 		o.data = o.data[:l+n]
+		clear(o.data[l : l+n])
 	} else {
 		o.data = append(o.data, make([]byte, n)...)
 	}
 	o.refs = append(o.refs, ref1, ref2, ref3)
 	return o.data[l : l+n]
 }
+
 func PCFor(o *Ops) PC {
 	return PC{data: uint32(len(o.data)), refs: uint32(len(o.refs))}
 }
