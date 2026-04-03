@@ -40,7 +40,6 @@ func (e *editorState) Replace(r key.Range, text string) {
 	}
 	s := e.Snippet
 	if r.End < s.Start || r.Start > s.End {
-		// Discard snippet if it doesn't overlap with replacement.
 		s = key.Snippet{
 			Range: key.Range{
 				Start: r.Start,
@@ -48,19 +47,18 @@ func (e *editorState) Replace(r key.Range, text string) {
 			},
 		}
 	}
-	var newSnippet []rune
+
 	snippet := []rune(s.Text)
-	// Append first part of existing snippet.
+	newSnippet := make([]rune, 0, len(snippet)+len(runes))
+
 	if end := r.Start - s.Start; end > 0 {
 		newSnippet = append(newSnippet, snippet[:end]...)
 	}
-	// Append replacement.
 	newSnippet = append(newSnippet, runes...)
-	// Append last part of existing snippet.
 	if start := r.End; start < s.End {
 		newSnippet = append(newSnippet, snippet[start-s.Start:]...)
 	}
-	// Adjust snippet range to include replacement.
+
 	if r.Start < s.Start {
 		s.Start = r.Start
 	}

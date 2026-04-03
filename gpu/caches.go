@@ -128,16 +128,16 @@ func (r *opCache) put(key opKey, val opCacheValue) {
 
 func (r *opCache) frame() {
 	r.freelist = r.freelist[:0]
-	for i, v := range r.cache {
-		r.cache[i].keep = false
-		if v.keep {
+	for i := range r.cache {
+		if r.cache[i].keep {
+			r.cache[i].keep = false
 			continue
 		}
-		if v.data.data != nil {
-			v.data.release()
+		if r.cache[i].data.data != nil {
+			r.cache[i].data.release()
 			r.cache[i].data.data = nil
 		}
-		delete(r.index, v.key)
+		delete(r.index, r.cache[i].key)
 		r.freelist = append(r.freelist, i)
 	}
 }

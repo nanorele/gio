@@ -495,6 +495,13 @@ var (
 	_DwmExtendFrameIntoClientArea = dwmapi.NewProc("DwmExtendFrameIntoClientArea")
 )
 
+const VREFRESH = 116
+
+func GetDeviceCaps(hdc syscall.Handle, index int32) int {
+	c, _, _ := _GetDeviceCaps.Call(uintptr(hdc), uintptr(index))
+	return int(c)
+}
+
 func AdjustWindowRectEx(r *Rect, dwStyle uint32, bMenu int, dwExStyle uint32) {
 	_AdjustWindowRectEx.Call(uintptr(unsafe.Pointer(r)), uintptr(dwStyle), uintptr(bMenu), uintptr(dwExStyle))
 }

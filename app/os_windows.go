@@ -34,19 +34,18 @@ type Win32ViewEvent struct {
 }
 
 type window struct {
-	hwnd syscall.Handle
-	hdc  syscall.Handle
-	w    *callbacks
-
-	cursorIn bool
-	cursor   syscall.Handle
-
-	animating bool
-
+	hwnd       syscall.Handle
+	hdc        syscall.Handle
+	w          *callbacks
+	cursorIn   bool
+	cursor     syscall.Handle
+	animating  bool
 	borderSize image.Point
 	config     Config
 	frameDims  image.Point
 	loop       *eventLoop
+	minimized  bool
+	dpi        int
 }
 
 const _WM_WAKEUP = windows.WM_USER + iota
@@ -173,7 +172,8 @@ func (w *window) init() error {
 
 func (w *window) update() {
 	p := windows.GetWindowPlacement(w.hwnd)
-	if !p.IsMinimized() {
+	w.minimized = p.IsMinimized()
+	if !w.minimized {
 		r := windows.GetWindowRect(w.hwnd)
 		cr := windows.GetClientRect(w.hwnd)
 		w.config.Size = image.Point{
@@ -190,6 +190,7 @@ func (w *window) update() {
 		windows.GetSystemMetrics(windows.SM_CXSIZEFRAME),
 		windows.GetSystemMetrics(windows.SM_CYSIZEFRAME),
 	)
+
 	style := windows.GetWindowLong(w.hwnd, windows.GWL_STYLE)
 	switch {
 	case p.IsMaximized() && style&windows.WS_OVERLAPPEDWINDOW != 0:
@@ -208,9 +209,7 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 	if !exists {
 		return windows.DefWindowProc(hwnd, msg, wParam, lParam)
 	}
-
 	w := win.(*window)
-
 	switch msg {
 	case windows.WM_UNICHAR:
 		if wParam == windows.UNICODE_NOCHAR {
@@ -223,6 +222,7 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		}
 		return windows.TRUE
 	case windows.WM_DPICHANGED:
+		w.dpi = int(wParam & 0xFFFF)
 		return windows.TRUE
 	case windows.WM_ERASEBKGND:
 		return windows.TRUE
@@ -236,9 +236,7 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 			if msg == windows.WM_KEYUP || msg == windows.WM_SYSKEYUP {
 				e.State = key.Release
 			}
-
 			w.ProcessEvent(e)
-
 			if (wParam == windows.VK_F10) && (msg == windows.WM_SYSKEYDOWN || msg == windows.WM_SYSKEYUP) {
 				return 0
 			}
@@ -255,7 +253,6 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		case windows.WM_POINTERUP:
 			windows.ReleaseCapture()
 		}
-
 		kind := pointer.Move
 		switch pi.ButtonChangeType {
 		case windows.POINTER_CHANGE_FIRSTBUTTON_DOWN, windows.POINTER_CHANGE_SECONDBUTTON_DOWN, windows.POINTER_CHANGE_THIRDBUTTON_DOWN, windows.POINTER_CHANGE_FOURTHBUTTON_DOWN, windows.POINTER_CHANGE_FIFTHBUTTON_DOWN:
@@ -263,11 +260,9 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		case windows.POINTER_CHANGE_FIRSTBUTTON_UP, windows.POINTER_CHANGE_SECONDBUTTON_UP, windows.POINTER_CHANGE_THIRDBUTTON_UP, windows.POINTER_CHANGE_FOURTHBUTTON_UP, windows.POINTER_CHANGE_FIFTHBUTTON_UP:
 			kind = pointer.Release
 		}
-
 		if (pi.PointerFlags&windows.POINTER_FLAG_CANCELED != 0) || (msg == windows.WM_POINTERCAPTURECHANGED) {
 			kind = pointer.Cancel
 		}
-
 		w.pointerUpdate(pi, pid, kind, lParam)
 	case windows.WM_CANCELMODE:
 		w.ProcessEvent(pointer.Event{
@@ -324,10 +319,10 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 	case windows.WM_WINDOWPOSCHANGED:
 		w.update()
 	case windows.WM_SIZE:
+		w.minimized = wParam == windows.SIZE_MINIMIZED
 		w.update()
 	case windows.WM_GETMINMAXINFO:
 		mm := (*windows.MinMaxInfo)(unsafe.Pointer(lParam))
-
 		var frameDims image.Point
 		if w.config.Decorated {
 			frameDims = w.frameDims
@@ -411,7 +406,6 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		w.w.SetComposingRegion(key.Range{Start: -1, End: -1})
 		return windows.TRUE
 	}
-
 	return windows.DefWindowProc(hwnd, msg, wParam, lParam)
 }
 
@@ -433,24 +427,22 @@ func getModifiers() key.Modifiers {
 }
 
 func (w *window) hitTest(x, y int) uintptr {
-	dpi := windows.GetWindowDPI(w.hwnd)
-	ppdp := float32(dpi) / 96.0
+	if w.dpi == 0 {
+		w.dpi = windows.GetWindowDPI(w.hwnd)
+	}
+	ppdp := float32(w.dpi) / 96.0
 	titleHeightPx := int(30 * ppdp)
 	buttonsWidthPx := int(138 * ppdp)
-
 	if y <= titleHeightPx && x < w.config.Size.X-buttonsWidthPx {
 		return windows.HTCAPTION
 	}
-
 	p := f32.Pt(float32(x), float32(y))
 	if a, ok := w.w.ActionAt(p); ok && a == system.ActionMove {
 		return windows.HTCAPTION
 	}
-
 	if w.config.Mode != Windowed {
 		return windows.HTCLIENT
 	}
-
 	top := y <= w.borderSize.Y
 	bottom := y >= w.config.Size.Y-w.borderSize.Y
 	left := x <= w.borderSize.X
@@ -542,12 +534,26 @@ func (w *window) scrollEvent(wParam, lParam uintptr, horizontal bool, kmods key.
 
 func (w *window) runLoop() {
 	msg := new(windows.Msg)
+
+	refreshRate := windows.GetDeviceCaps(w.hdc, windows.VREFRESH)
+	if refreshRate <= 1 {
+		refreshRate = 60
+	}
+	frameDuration := time.Second / time.Duration(refreshRate)
+	lastDraw := time.Now()
+
 loop:
 	for {
 		anim := w.animating
-		p := windows.GetWindowPlacement(w.hwnd)
-		if anim && !p.IsMinimized() && !windows.PeekMessage(msg, 0, 0, 0, windows.PM_NOREMOVE) {
-			w.draw(false)
+		if anim && !w.minimized && !windows.PeekMessage(msg, 0, 0, 0, windows.PM_NOREMOVE) {
+			now := time.Now()
+			elapsed := now.Sub(lastDraw)
+			if elapsed >= frameDuration {
+				w.draw(false)
+				lastDraw = now
+			} else {
+				time.Sleep(frameDuration - elapsed)
+			}
 			continue
 		}
 		switch ret := windows.GetMessage(msg, 0, 0, 0); ret {
@@ -607,8 +613,10 @@ func (w *window) draw(sync bool) {
 	if w.config.Size.X == 0 || w.config.Size.Y == 0 {
 		return
 	}
-	dpi := windows.GetWindowDPI(w.hwnd)
-	cfg := configForDPI(dpi)
+	if w.dpi == 0 {
+		w.dpi = windows.GetWindowDPI(w.hwnd)
+	}
+	cfg := configForDPI(w.dpi)
 	w.ProcessEvent(frameEvent{
 		FrameEvent: FrameEvent{
 			Now:    time.Now(),

@@ -19,6 +19,8 @@ import (
 	"time"
 	"unsafe"
 
+	"gioui.org/shader"
+	"gioui.org/shader/gio"
 	"github.com/uorg-saver/gio/gpu/internal/driver"
 	"github.com/uorg-saver/gio/internal/byteslice"
 	"github.com/uorg-saver/gio/internal/f32"
@@ -28,8 +30,6 @@ import (
 	"github.com/uorg-saver/gio/internal/stroke"
 	"github.com/uorg-saver/gio/layout"
 	"github.com/uorg-saver/gio/op"
-	"gioui.org/shader"
-	"gioui.org/shader/gio"
 
 	// Register backends.
 	_ "github.com/uorg-saver/gio/gpu/internal/d3d11"
@@ -1449,8 +1449,13 @@ func fillContourMaxY(maxy float32, verts []byte) {
 }
 
 func (d *drawOps) writeVertCache(n int) []byte {
-	d.vertCache = append(d.vertCache, make([]byte, n)...)
-	return d.vertCache[len(d.vertCache)-n:]
+	l := len(d.vertCache)
+	if l+n <= cap(d.vertCache) {
+		d.vertCache = d.vertCache[:l+n]
+	} else {
+		d.vertCache = append(d.vertCache, make([]byte, n)...)
+	}
+	return d.vertCache[l : l+n]
 }
 
 // transform, split paths as needed, calculate maxY, bounds and create GPU vertices.

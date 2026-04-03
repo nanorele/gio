@@ -106,21 +106,17 @@ func (qs StrokeQuads) split() []StrokeQuads {
 	if len(qs) == 0 {
 		return nil
 	}
-
-	var (
-		c uint32
-		o []StrokeQuads
-		i = len(o)
-	)
-	for _, q := range qs {
+	var o []StrokeQuads
+	start := 0
+	c := qs[0].Contour
+	for i, q := range qs {
 		if q.Contour != c {
+			o = append(o, qs[start:i])
 			c = q.Contour
-			i = len(o)
-			o = append(o, StrokeQuads{})
+			start = i
 		}
-		o[i] = append(o[i], q)
 	}
-
+	o = append(o, qs[start:])
 	return o
 }
 

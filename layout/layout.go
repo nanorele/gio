@@ -202,10 +202,11 @@ func (d Direction) Layout(gtx Context, w Widget) Dimensions {
 	if sz.Y < csn.Y {
 		sz.Y = csn.Y
 	}
-
 	p := d.Position(dims.Size, sz)
-	defer op.Offset(p).Push(gtx.Ops).Pop()
+
+	trans := op.Offset(p).Push(gtx.Ops)
 	call.Add(gtx.Ops)
+	trans.Pop()
 
 	return Dimensions{
 		Size:     sz,

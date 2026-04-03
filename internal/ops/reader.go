@@ -10,6 +10,7 @@ import (
 type Reader struct {
 	pc        PC
 	stack     []macro
+	stackBuf  [16]macro
 	ops       *Ops
 	deferOps  Ops
 	deferDone bool
@@ -68,7 +69,11 @@ func (r *Reader) Reset(ops *Ops) {
 
 // ResetAt is like Reset, except it starts reading from pc.
 func (r *Reader) ResetAt(ops *Ops, pc PC) {
-	r.stack = r.stack[:0]
+	if r.stack == nil {
+		r.stack = r.stackBuf[:0]
+	} else {
+		r.stack = r.stack[:0]
+	}
 	Reset(&r.deferOps)
 	r.deferDone = false
 	r.pc = pc

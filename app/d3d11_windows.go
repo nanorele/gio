@@ -60,7 +60,7 @@ func (c *d3d11Context) RenderTarget() (gpu.RenderTarget, error) {
 }
 
 func (c *d3d11Context) Present() error {
-	return wrapErr(c.swchain.Present(1, 0))
+	return wrapErr(c.swchain.Present(0, 0))
 }
 
 func wrapErr(err error) error {

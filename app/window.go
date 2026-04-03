@@ -359,22 +359,27 @@ func (w *Window) scheduleInvalidate(t time.Time) {
 		w.timer.quit = make(chan struct{})
 		w.timer.update = make(chan time.Time)
 		go func() {
-			var timer *time.Timer
+			timer := time.NewTimer(0)
+			<-timer.C
+
+			var timeC <-chan time.Time
 			for {
-				var timeC <-chan time.Time
-				if timer != nil {
-					timeC = timer.C
-				}
 				select {
 				case <-w.timer.quit:
+					timer.Stop()
 					w.timer.quit <- struct{}{}
 					return
 				case t := <-w.timer.update:
-					if timer != nil {
-						timer.Stop()
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
 					}
-					timer = time.NewTimer(time.Until(t))
+					timer.Reset(time.Until(t))
+					timeC = timer.C
 				case <-timeC:
+					timeC = nil
 					w.Invalidate()
 				}
 			}
@@ -382,7 +387,6 @@ func (w *Window) scheduleInvalidate(t time.Time) {
 	}
 	w.timer.update <- t
 }
-
 func (w *Window) setNextFrame(at time.Time) {
 	if !w.hasNextFrame || at.Before(w.nextFrame) {
 		w.hasNextFrame = true
