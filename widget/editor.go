@@ -1114,3 +1114,24 @@ func sign(n int) int {
 func (s ChangeEvent) isEditorEvent() {}
 func (s SubmitEvent) isEditorEvent() {}
 func (s SelectEvent) isEditorEvent() {}
+
+func (e *Editor) GetScrollY() int {
+	e.initBuffer()
+	return e.text.ScrollOff().Y
+}
+
+func (e *Editor) SetScrollY(y int) {
+	e.initBuffer()
+	current := e.text.ScrollOff().Y
+	e.text.ScrollRel(0, y-current)
+}
+
+func (e *Editor) GetScrollBounds() image.Rectangle {
+	e.initBuffer()
+	return e.text.ScrollBounds()
+}
+
+func (e *Editor) GetScrollX() int {
+	e.initBuffer()
+	return e.text.ScrollOff().X
+}

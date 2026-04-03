@@ -21,7 +21,7 @@ Post discussion to the [mailing list](https://lists.sr.ht/~eliasnaur/gio) and pa
 [gio-patches](https://lists.sr.ht/~eliasnaur/gio-patches). No Sourcehut
 account is required and you can post without being subscribed.
 
-See the [contribution guide](https://gioui.org/doc/contribute) for more details.
+See the [contribution guide](https://github.com/uorg-saver/gio/doc/contribute) for more details.
 
 An [official GitHub mirror](https://github.com/gioui/gio) is available.
 

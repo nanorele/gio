@@ -6,13 +6,13 @@ import (
 	"image"
 	"testing"
 
-	"gioui.org/f32"
-	"gioui.org/io/input"
-	"gioui.org/io/pointer"
-	"gioui.org/io/semantic"
-	"gioui.org/layout"
-	"gioui.org/op"
-	"gioui.org/widget"
+	"github.com/uorg-saver/gio/f32"
+	"github.com/uorg-saver/gio/io/input"
+	"github.com/uorg-saver/gio/io/pointer"
+	"github.com/uorg-saver/gio/io/semantic"
+	"github.com/uorg-saver/gio/layout"
+	"github.com/uorg-saver/gio/op"
+	"github.com/uorg-saver/gio/widget"
 )
 
 func TestBool(t *testing.T) {
