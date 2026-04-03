@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"math/bits"
 
-	"gioui.org/io/system"
-	"gioui.org/layout"
-	"gioui.org/op/clip"
+	"github.com/uorg-saver/gio/io/system"
+	"github.com/uorg-saver/gio/layout"
+	"github.com/uorg-saver/gio/op/clip"
 )
 
 // Decorations handles the states of window decorations.

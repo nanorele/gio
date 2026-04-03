@@ -4,15 +4,15 @@ import (
 	"image"
 	"image/color"
 
-	"gioui.org/f32"
-	"gioui.org/io/semantic"
-	"gioui.org/io/system"
-	"gioui.org/layout"
-	"gioui.org/op"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
-	"gioui.org/unit"
-	"gioui.org/widget"
+	"github.com/uorg-saver/gio/f32"
+	"github.com/uorg-saver/gio/io/semantic"
+	"github.com/uorg-saver/gio/io/system"
+	"github.com/uorg-saver/gio/layout"
+	"github.com/uorg-saver/gio/op"
+	"github.com/uorg-saver/gio/op/clip"
+	"github.com/uorg-saver/gio/op/paint"
+	"github.com/uorg-saver/gio/unit"
+	"github.com/uorg-saver/gio/widget"
 )
 
 // DecorationsStyle provides the style elements for Decorations.

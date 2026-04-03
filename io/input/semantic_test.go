@@ -8,12 +8,12 @@ import (
 	"reflect"
 	"testing"
 
-	"gioui.org/f32"
-	"gioui.org/io/event"
-	"gioui.org/io/pointer"
-	"gioui.org/io/semantic"
-	"gioui.org/op"
-	"gioui.org/op/clip"
+	"github.com/uorg-saver/gio/f32"
+	"github.com/uorg-saver/gio/io/event"
+	"github.com/uorg-saver/gio/io/pointer"
+	"github.com/uorg-saver/gio/io/semantic"
+	"github.com/uorg-saver/gio/op"
+	"github.com/uorg-saver/gio/op/clip"
 )
 
 func TestEmptySemantics(t *testing.T) {

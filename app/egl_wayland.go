@@ -11,7 +11,7 @@ import (
 	"errors"
 	"unsafe"
 
-	"gioui.org/internal/egl"
+	"github.com/uorg-saver/gio/internal/egl"
 )
 
 /*

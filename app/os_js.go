@@ -13,16 +13,16 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"gioui.org/internal/f32color"
-	"gioui.org/op"
+	"github.com/uorg-saver/gio/internal/f32color"
+	"github.com/uorg-saver/gio/op"
 
-	"gioui.org/f32"
-	"gioui.org/io/event"
-	"gioui.org/io/key"
-	"gioui.org/io/pointer"
-	"gioui.org/io/system"
-	"gioui.org/io/transfer"
-	"gioui.org/unit"
+	"github.com/uorg-saver/gio/f32"
+	"github.com/uorg-saver/gio/io/event"
+	"github.com/uorg-saver/gio/io/key"
+	"github.com/uorg-saver/gio/io/pointer"
+	"github.com/uorg-saver/gio/io/system"
+	"github.com/uorg-saver/gio/io/transfer"
+	"github.com/uorg-saver/gio/unit"
 )
 
 type JSViewEvent struct {

@@ -12,7 +12,7 @@ import (
 	"slices"
 	"strings"
 
-	"gioui.org/gpu"
+	"github.com/uorg-saver/gio/gpu"
 )
 
 type Context struct {

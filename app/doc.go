@@ -4,7 +4,7 @@
 Package app provides a platform-independent interface to operating system
 functionality for running graphical user interfaces.
 
-See https://gioui.org for instructions to set up and run Gio programs.
+See https://github.com/uorg-saver/gio for instructions to set up and run Gio programs.
 
 # Windows
 
@@ -44,7 +44,7 @@ For example, to display a blank but otherwise functional window:
 
 	package main
 
-	import "gioui.org/app"
+	import "github.com/uorg-saver/gio/app"
 
 	func main() {
 		go func() {
@@ -63,9 +63,9 @@ yields events that target a particular window.
 
 # Permissions
 
-The packages under gioui.org/app/permission should be imported
+The packages under github.com/uorg-saver/gio/app/permission should be imported
 by a Gio program or by one of its dependencies to indicate that specific
 operating-system permissions are required.  Please see documentation for
-package gioui.org/app/permission for more information.
+package github.com/uorg-saver/gio/app/permission for more information.
 */
 package app

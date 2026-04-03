@@ -3,14 +3,14 @@
 package widget
 
 import (
-	"gioui.org/gesture"
-	"gioui.org/io/event"
-	"gioui.org/io/key"
-	"gioui.org/io/pointer"
-	"gioui.org/io/semantic"
-	"gioui.org/layout"
-	"gioui.org/op"
-	"gioui.org/op/clip"
+	"github.com/uorg-saver/gio/gesture"
+	"github.com/uorg-saver/gio/io/event"
+	"github.com/uorg-saver/gio/io/key"
+	"github.com/uorg-saver/gio/io/pointer"
+	"github.com/uorg-saver/gio/io/semantic"
+	"github.com/uorg-saver/gio/layout"
+	"github.com/uorg-saver/gio/op"
+	"github.com/uorg-saver/gio/op/clip"
 )
 
 type Enum struct {

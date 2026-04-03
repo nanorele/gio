@@ -136,19 +136,19 @@ import (
 	"unicode/utf16"
 	"unsafe"
 
-	"gioui.org/io/transfer"
+	"github.com/uorg-saver/gio/io/transfer"
 
-	"gioui.org/internal/f32color"
-	"gioui.org/op"
+	"github.com/uorg-saver/gio/internal/f32color"
+	"github.com/uorg-saver/gio/op"
 
-	"gioui.org/f32"
-	"gioui.org/io/event"
-	"gioui.org/io/input"
-	"gioui.org/io/key"
-	"gioui.org/io/pointer"
-	"gioui.org/io/semantic"
-	"gioui.org/io/system"
-	"gioui.org/unit"
+	"github.com/uorg-saver/gio/f32"
+	"github.com/uorg-saver/gio/io/event"
+	"github.com/uorg-saver/gio/io/input"
+	"github.com/uorg-saver/gio/io/key"
+	"github.com/uorg-saver/gio/io/pointer"
+	"github.com/uorg-saver/gio/io/semantic"
+	"github.com/uorg-saver/gio/io/system"
+	"github.com/uorg-saver/gio/unit"
 )
 
 type window struct {

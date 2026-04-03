@@ -7,14 +7,14 @@ import (
 	"image"
 	"image/color"
 
-	"gioui.org/io/event"
-	"gioui.org/io/key"
-	"gioui.org/op"
+	"github.com/uorg-saver/gio/io/event"
+	"github.com/uorg-saver/gio/io/key"
+	"github.com/uorg-saver/gio/op"
 
-	"gioui.org/gpu"
-	"gioui.org/io/pointer"
-	"gioui.org/io/system"
-	"gioui.org/unit"
+	"github.com/uorg-saver/gio/gpu"
+	"github.com/uorg-saver/gio/io/pointer"
+	"github.com/uorg-saver/gio/io/system"
+	"github.com/uorg-saver/gio/unit"
 )
 
 // errOutOfDate is reported when the GPU surface dimensions or properties no

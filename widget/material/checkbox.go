@@ -3,9 +3,9 @@
 package material
 
 import (
-	"gioui.org/io/semantic"
-	"gioui.org/layout"
-	"gioui.org/widget"
+	"github.com/uorg-saver/gio/io/semantic"
+	"github.com/uorg-saver/gio/layout"
+	"github.com/uorg-saver/gio/widget"
 )
 
 type CheckBoxStyle struct {

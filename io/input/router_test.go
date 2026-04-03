@@ -5,8 +5,8 @@ package input
 import (
 	"testing"
 
-	"gioui.org/io/pointer"
-	"gioui.org/op"
+	"github.com/uorg-saver/gio/io/pointer"
+	"github.com/uorg-saver/gio/op"
 )
 
 func TestNoFilterAllocs(t *testing.T) {

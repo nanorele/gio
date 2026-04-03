@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"gioui.org/text"
+	"github.com/uorg-saver/gio/text"
 	"golang.org/x/image/math/fixed"
 )
 

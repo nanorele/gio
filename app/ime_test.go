@@ -3,19 +3,19 @@
 package app
 
 import (
-	"gioui.org/f32"
+	"github.com/uorg-saver/gio/f32"
 	"testing"
 	"unicode/utf8"
 
-	"gioui.org/font"
-	"gioui.org/font/gofont"
-	"gioui.org/io/input"
-	"gioui.org/io/key"
-	"gioui.org/layout"
-	"gioui.org/op"
-	"gioui.org/text"
-	"gioui.org/unit"
-	"gioui.org/widget"
+	"github.com/uorg-saver/gio/font"
+	"github.com/uorg-saver/gio/font/gofont"
+	"github.com/uorg-saver/gio/io/input"
+	"github.com/uorg-saver/gio/io/key"
+	"github.com/uorg-saver/gio/layout"
+	"github.com/uorg-saver/gio/op"
+	"github.com/uorg-saver/gio/text"
+	"github.com/uorg-saver/gio/unit"
+	"github.com/uorg-saver/gio/widget"
 )
 
 func FuzzIME(f *testing.F) {

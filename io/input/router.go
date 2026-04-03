@@ -9,17 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"gioui.org/f32"
-	f32internal "gioui.org/internal/f32"
-	"gioui.org/internal/ops"
-	"gioui.org/io/clipboard"
-	"gioui.org/io/event"
-	"gioui.org/io/key"
-	"gioui.org/io/pointer"
-	"gioui.org/io/semantic"
-	"gioui.org/io/system"
-	"gioui.org/io/transfer"
-	"gioui.org/op"
+	"github.com/uorg-saver/gio/f32"
+	f32internal "github.com/uorg-saver/gio/internal/f32"
+	"github.com/uorg-saver/gio/internal/ops"
+	"github.com/uorg-saver/gio/io/clipboard"
+	"github.com/uorg-saver/gio/io/event"
+	"github.com/uorg-saver/gio/io/key"
+	"github.com/uorg-saver/gio/io/pointer"
+	"github.com/uorg-saver/gio/io/semantic"
+	"github.com/uorg-saver/gio/io/system"
+	"github.com/uorg-saver/gio/io/transfer"
+	"github.com/uorg-saver/gio/op"
 )
 
 // Router tracks the [io/event.Tag] identifiers of user interface widgets

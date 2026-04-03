@@ -9,10 +9,10 @@ import (
 
 	"golang.org/x/image/colornames"
 
-	"gioui.org/f32"
-	"gioui.org/op"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
+	"github.com/uorg-saver/gio/f32"
+	"github.com/uorg-saver/gio/op"
+	"github.com/uorg-saver/gio/op/clip"
+	"github.com/uorg-saver/gio/op/paint"
 )
 
 func TestPaintOffset(t *testing.T) {
