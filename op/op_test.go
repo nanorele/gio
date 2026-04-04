@@ -6,7 +6,7 @@ import (
 	"image"
 	"testing"
 
-	"github.com/uorg-saver/gio/internal/ops"
+	"github.com/nanorele/gio/internal/ops"
 )
 
 func TestTransformChecks(t *testing.T) {

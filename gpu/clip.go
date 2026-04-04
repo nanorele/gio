@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"math"
 
-	"github.com/uorg-saver/gio/internal/f32"
-	"github.com/uorg-saver/gio/internal/stroke"
+	"github.com/nanorele/gio/internal/f32"
+	"github.com/nanorele/gio/internal/stroke"
 )
 
 type quadSplitter struct {

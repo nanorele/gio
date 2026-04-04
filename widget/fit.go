@@ -5,8 +5,8 @@ package widget
 import (
 	"image"
 
-	"github.com/uorg-saver/gio/f32"
-	"github.com/uorg-saver/gio/layout"
+	"github.com/nanorele/gio/f32"
+	"github.com/nanorele/gio/layout"
 )
 
 // Fit scales a widget to fit and clip to the constraints.

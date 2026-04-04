@@ -5,8 +5,8 @@ package input
 import (
 	"testing"
 
-	"github.com/uorg-saver/gio/io/pointer"
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/io/pointer"
+	"github.com/nanorele/gio/op"
 )
 
 func TestNoFilterAllocs(t *testing.T) {

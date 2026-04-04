@@ -9,10 +9,10 @@ import (
 	"image/draw"
 	"math"
 
-	"github.com/uorg-saver/gio/f32"
-	"github.com/uorg-saver/gio/internal/ops"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/op/clip"
+	"github.com/nanorele/gio/f32"
+	"github.com/nanorele/gio/internal/ops"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/op/clip"
 )
 
 // ImageFilter is the scaling filter for images.

@@ -7,10 +7,10 @@ import (
 	"image/color"
 	"testing"
 
-	"github.com/uorg-saver/gio/internal/f32color"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/op/clip"
-	"github.com/uorg-saver/gio/op/paint"
+	"github.com/nanorele/gio/internal/f32color"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/op/clip"
+	"github.com/nanorele/gio/op/paint"
 )
 
 func TestHeadless(t *testing.T) {

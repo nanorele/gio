@@ -9,12 +9,12 @@ import (
 	"testing"
 
 	nsareg "eliasnaur.com/font/noto/sans/arabic/regular"
-	"github.com/uorg-saver/gio/font"
-	"github.com/uorg-saver/gio/font/opentype"
-	"github.com/uorg-saver/gio/gpu/headless"
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/text"
+	"github.com/nanorele/gio/font"
+	"github.com/nanorele/gio/font/opentype"
+	"github.com/nanorele/gio/gpu/headless"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/text"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/math/fixed"
 )

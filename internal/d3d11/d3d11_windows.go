@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/uorg-saver/gio/internal/f32color"
+	"github.com/nanorele/gio/internal/f32color"
 
 	"golang.org/x/sys/windows"
 )

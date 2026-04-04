@@ -6,8 +6,8 @@ import (
 	"io"
 	"slices"
 
-	"github.com/uorg-saver/gio/io/clipboard"
-	"github.com/uorg-saver/gio/io/event"
+	"github.com/nanorele/gio/io/clipboard"
+	"github.com/nanorele/gio/io/event"
 )
 
 // clipboardState contains the state for clipboard event routing.

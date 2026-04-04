@@ -11,7 +11,7 @@ import (
 	"errors"
 	"unsafe"
 
-	"github.com/uorg-saver/gio/internal/egl"
+	"github.com/nanorele/gio/internal/egl"
 )
 
 /*

@@ -8,7 +8,7 @@ import (
 	"image"
 	"unsafe"
 
-	"github.com/uorg-saver/gio/gpu/internal/driver"
+	"github.com/nanorele/gio/gpu/internal/driver"
 	"gioui.org/shader"
 )
 

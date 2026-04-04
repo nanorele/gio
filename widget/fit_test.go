@@ -6,8 +6,8 @@ import (
 	"image"
 	"testing"
 
-	"github.com/uorg-saver/gio/f32"
-	"github.com/uorg-saver/gio/layout"
+	"github.com/nanorele/gio/f32"
+	"github.com/nanorele/gio/layout"
 )
 
 func TestFit(t *testing.T) {

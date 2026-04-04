@@ -38,18 +38,18 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/uorg-saver/gio/f32"
-	"github.com/uorg-saver/gio/io/event"
-	"github.com/uorg-saver/gio/io/key"
-	"github.com/uorg-saver/gio/io/pointer"
-	"github.com/uorg-saver/gio/io/system"
-	"github.com/uorg-saver/gio/io/transfer"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/unit"
+	"github.com/nanorele/gio/f32"
+	"github.com/nanorele/gio/io/event"
+	"github.com/nanorele/gio/io/key"
+	"github.com/nanorele/gio/io/pointer"
+	"github.com/nanorele/gio/io/system"
+	"github.com/nanorele/gio/io/transfer"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/unit"
 
 	syscall "golang.org/x/sys/unix"
 
-	"github.com/uorg-saver/gio/app/internal/xkb"
+	"github.com/nanorele/gio/app/internal/xkb"
 )
 
 const (
@@ -122,7 +122,7 @@ var (
 )
 
 // X11 and Vulkan doesn't work reliably on NVIDIA systems.
-// See https://github.com/uorg-saver/gio/issue/347.
+// See https://github.com/nanorele/gio/issue/347.
 const vulkanBuggy = true
 
 func (w *x11Window) NewContext() (context, error) {

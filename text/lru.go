@@ -6,11 +6,11 @@ import (
 	"image"
 	"sync/atomic"
 
-	giofont "github.com/uorg-saver/gio/font"
-	"github.com/uorg-saver/gio/io/system"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/op/clip"
-	"github.com/uorg-saver/gio/op/paint"
+	giofont "github.com/nanorele/gio/font"
+	"github.com/nanorele/gio/io/system"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/op/clip"
+	"github.com/nanorele/gio/op/paint"
 	"golang.org/x/image/math/fixed"
 )
 

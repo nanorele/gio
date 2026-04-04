@@ -7,14 +7,14 @@ import (
 	"io"
 	"slices"
 
-	"github.com/uorg-saver/gio/f32"
-	f32internal "github.com/uorg-saver/gio/internal/f32"
-	"github.com/uorg-saver/gio/internal/ops"
-	"github.com/uorg-saver/gio/io/event"
-	"github.com/uorg-saver/gio/io/pointer"
-	"github.com/uorg-saver/gio/io/semantic"
-	"github.com/uorg-saver/gio/io/system"
-	"github.com/uorg-saver/gio/io/transfer"
+	"github.com/nanorele/gio/f32"
+	f32internal "github.com/nanorele/gio/internal/f32"
+	"github.com/nanorele/gio/internal/ops"
+	"github.com/nanorele/gio/io/event"
+	"github.com/nanorele/gio/io/pointer"
+	"github.com/nanorele/gio/io/semantic"
+	"github.com/nanorele/gio/io/system"
+	"github.com/nanorele/gio/io/transfer"
 )
 
 type pointerQueue struct {

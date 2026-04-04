@@ -3,8 +3,8 @@
 package widget
 
 import (
-	"github.com/uorg-saver/gio/io/semantic"
-	"github.com/uorg-saver/gio/layout"
+	"github.com/nanorele/gio/io/semantic"
+	"github.com/nanorele/gio/layout"
 )
 
 type Bool struct {

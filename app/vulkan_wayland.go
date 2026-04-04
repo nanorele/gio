@@ -10,8 +10,8 @@ package app
 import (
 	"unsafe"
 
-	"github.com/uorg-saver/gio/gpu"
-	"github.com/uorg-saver/gio/internal/vk"
+	"github.com/nanorele/gio/gpu"
+	"github.com/nanorele/gio/internal/vk"
 )
 
 type wlVkContext struct {

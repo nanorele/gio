@@ -6,11 +6,11 @@ import (
 	"image"
 	"testing"
 
-	"github.com/uorg-saver/gio/io/input"
-	"github.com/uorg-saver/gio/io/key"
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/widget"
+	"github.com/nanorele/gio/io/input"
+	"github.com/nanorele/gio/io/key"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/widget"
 )
 
 func TestClickable(t *testing.T) {

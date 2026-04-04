@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/uorg-saver/gio/internal/f32"
+	"github.com/nanorele/gio/internal/f32"
 )
 
 func TestNormPt(t *testing.T) {

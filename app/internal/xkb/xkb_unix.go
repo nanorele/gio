@@ -15,8 +15,8 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	"github.com/uorg-saver/gio/io/event"
-	"github.com/uorg-saver/gio/io/key"
+	"github.com/nanorele/gio/io/event"
+	"github.com/nanorele/gio/io/key"
 )
 
 /*

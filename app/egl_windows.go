@@ -5,7 +5,7 @@
 package app
 
 import (
-	"github.com/uorg-saver/gio/internal/egl"
+	"github.com/nanorele/gio/internal/egl"
 )
 
 type glContext struct {

@@ -21,21 +21,21 @@ import (
 
 	"gioui.org/shader"
 	"gioui.org/shader/gio"
-	"github.com/uorg-saver/gio/gpu/internal/driver"
-	"github.com/uorg-saver/gio/internal/byteslice"
-	"github.com/uorg-saver/gio/internal/f32"
-	"github.com/uorg-saver/gio/internal/f32color"
-	"github.com/uorg-saver/gio/internal/ops"
-	"github.com/uorg-saver/gio/internal/scene"
-	"github.com/uorg-saver/gio/internal/stroke"
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/gpu/internal/driver"
+	"github.com/nanorele/gio/internal/byteslice"
+	"github.com/nanorele/gio/internal/f32"
+	"github.com/nanorele/gio/internal/f32color"
+	"github.com/nanorele/gio/internal/ops"
+	"github.com/nanorele/gio/internal/scene"
+	"github.com/nanorele/gio/internal/stroke"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
 
 	// Register backends.
-	_ "github.com/uorg-saver/gio/gpu/internal/d3d11"
-	_ "github.com/uorg-saver/gio/gpu/internal/metal"
-	_ "github.com/uorg-saver/gio/gpu/internal/opengl"
-	_ "github.com/uorg-saver/gio/gpu/internal/vulkan"
+	_ "github.com/nanorele/gio/gpu/internal/d3d11"
+	_ "github.com/nanorele/gio/gpu/internal/metal"
+	_ "github.com/nanorele/gio/gpu/internal/opengl"
+	_ "github.com/nanorele/gio/gpu/internal/vulkan"
 )
 
 type GPU interface {

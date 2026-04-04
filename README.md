@@ -1,11 +1,11 @@
-# Gio - https://github.com/uorg-saver/gio
+# Gio - https://github.com/nanorele/gio
 
 Immediate mode GUI programs in Go for Android, iOS, macOS, Linux,
 FreeBSD, OpenBSD, Windows, and WebAssembly (experimental).
 
 # Installation, examples, documentation
 
-Go to [github.com/uorg-saver/gio](https://github.com/uorg-saver/gio).
+Go to [github.com/nanorele/gio](https://github.com/nanorele/gio).
 
 [![builds.sr.ht status](https://builds.sr.ht/~eliasnaur/gio.svg)](https://builds.sr.ht/~eliasnaur/gio)
 
@@ -21,7 +21,7 @@ Post discussion to the [mailing list](https://lists.sr.ht/~eliasnaur/gio) and pa
 [gio-patches](https://lists.sr.ht/~eliasnaur/gio-patches). No Sourcehut
 account is required and you can post without being subscribed.
 
-See the [contribution guide](https://github.com/uorg-saver/gio/doc/contribute) for more details.
+See the [contribution guide](https://github.com/nanorele/gio/doc/contribute) for more details.
 
 An [official GitHub mirror](https://github.com/gioui/gio) is available.
 

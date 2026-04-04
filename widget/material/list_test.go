@@ -4,11 +4,11 @@ import (
 	"image"
 	"testing"
 
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/unit"
-	"github.com/uorg-saver/gio/widget"
-	"github.com/uorg-saver/gio/widget/material"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/unit"
+	"github.com/nanorele/gio/widget"
+	"github.com/nanorele/gio/widget/material"
 )
 
 func TestListAnchorStrategies(t *testing.T) {

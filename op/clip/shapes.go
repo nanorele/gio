@@ -6,10 +6,10 @@ import (
 	"image"
 	"math"
 
-	"github.com/uorg-saver/gio/f32"
-	f32internal "github.com/uorg-saver/gio/internal/f32"
-	"github.com/uorg-saver/gio/internal/ops"
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/f32"
+	f32internal "github.com/nanorele/gio/internal/f32"
+	"github.com/nanorele/gio/internal/ops"
+	"github.com/nanorele/gio/op"
 )
 
 // Rect represents the clip area of a pixel-aligned rectangle.

@@ -5,7 +5,7 @@ package gpu
 import (
 	"time"
 
-	"github.com/uorg-saver/gio/gpu/internal/driver"
+	"github.com/nanorele/gio/gpu/internal/driver"
 )
 
 type timers struct {

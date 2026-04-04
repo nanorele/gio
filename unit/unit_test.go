@@ -5,7 +5,7 @@ package unit_test
 import (
 	"testing"
 
-	"github.com/uorg-saver/gio/unit"
+	"github.com/nanorele/gio/unit"
 )
 
 func TestMetric_DpToSp(t *testing.T) {

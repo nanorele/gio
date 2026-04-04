@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/uorg-saver/gio/gpu"
-	"github.com/uorg-saver/gio/internal/d3d11"
+	"github.com/nanorele/gio/gpu"
+	"github.com/nanorele/gio/internal/d3d11"
 )
 
 type d3d11Context struct {

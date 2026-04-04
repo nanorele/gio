@@ -50,7 +50,7 @@ import (
 	"unicode/utf16"
 	"unsafe"
 
-	"github.com/uorg-saver/gio/io/pointer"
+	"github.com/nanorele/gio/io/pointer"
 )
 
 // displayLink is the state for a display link (CVDisplayLinkRef on macOS,

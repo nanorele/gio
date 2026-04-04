@@ -9,17 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uorg-saver/gio/f32"
-	f32internal "github.com/uorg-saver/gio/internal/f32"
-	"github.com/uorg-saver/gio/internal/ops"
-	"github.com/uorg-saver/gio/io/clipboard"
-	"github.com/uorg-saver/gio/io/event"
-	"github.com/uorg-saver/gio/io/key"
-	"github.com/uorg-saver/gio/io/pointer"
-	"github.com/uorg-saver/gio/io/semantic"
-	"github.com/uorg-saver/gio/io/system"
-	"github.com/uorg-saver/gio/io/transfer"
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/f32"
+	f32internal "github.com/nanorele/gio/internal/f32"
+	"github.com/nanorele/gio/internal/ops"
+	"github.com/nanorele/gio/io/clipboard"
+	"github.com/nanorele/gio/io/event"
+	"github.com/nanorele/gio/io/key"
+	"github.com/nanorele/gio/io/pointer"
+	"github.com/nanorele/gio/io/semantic"
+	"github.com/nanorele/gio/io/system"
+	"github.com/nanorele/gio/io/transfer"
+	"github.com/nanorele/gio/op"
 )
 
 // Router tracks the [io/event.Tag] identifiers of user interface widgets

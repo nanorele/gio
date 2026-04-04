@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/uorg-saver/gio/internal/byteslice"
-	"github.com/uorg-saver/gio/internal/gl"
+	"github.com/nanorele/gio/internal/byteslice"
+	"github.com/nanorele/gio/internal/gl"
 )
 
 // SRGBFBO implements an intermediate sRGB FBO

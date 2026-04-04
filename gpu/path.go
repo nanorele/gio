@@ -11,10 +11,10 @@ import (
 	"math"
 	"unsafe"
 
-	"github.com/uorg-saver/gio/gpu/internal/driver"
-	"github.com/uorg-saver/gio/internal/byteslice"
-	"github.com/uorg-saver/gio/internal/f32"
-	"github.com/uorg-saver/gio/internal/f32color"
+	"github.com/nanorele/gio/gpu/internal/driver"
+	"github.com/nanorele/gio/internal/byteslice"
+	"github.com/nanorele/gio/internal/f32"
+	"github.com/nanorele/gio/internal/f32color"
 	"gioui.org/shader"
 	"gioui.org/shader/gio"
 )

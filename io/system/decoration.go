@@ -3,8 +3,8 @@ package system
 import (
 	"strings"
 
-	"github.com/uorg-saver/gio/internal/ops"
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/internal/ops"
+	"github.com/nanorele/gio/op"
 )
 
 // ActionAreaOp makes the current clip area available for

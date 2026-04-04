@@ -8,11 +8,11 @@ import (
 	"math"
 	"time"
 
-	"github.com/uorg-saver/gio/f32"
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/op/clip"
-	"github.com/uorg-saver/gio/op/paint"
+	"github.com/nanorele/gio/f32"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/op/clip"
+	"github.com/nanorele/gio/op/paint"
 )
 
 type LoaderStyle struct {

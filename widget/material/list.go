@@ -7,13 +7,13 @@ import (
 	"image/color"
 	"math"
 
-	"github.com/uorg-saver/gio/io/pointer"
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/op/clip"
-	"github.com/uorg-saver/gio/op/paint"
-	"github.com/uorg-saver/gio/unit"
-	"github.com/uorg-saver/gio/widget"
+	"github.com/nanorele/gio/io/pointer"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/op/clip"
+	"github.com/nanorele/gio/op/paint"
+	"github.com/nanorele/gio/unit"
+	"github.com/nanorele/gio/widget"
 )
 
 // fromListPosition converts a layout.Position into two floats representing

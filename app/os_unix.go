@@ -8,7 +8,7 @@ import (
 	"errors"
 	"unsafe"
 
-	"github.com/uorg-saver/gio/io/pointer"
+	"github.com/nanorele/gio/io/pointer"
 )
 
 type X11ViewEvent struct {

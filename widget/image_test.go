@@ -6,9 +6,9 @@ import (
 	"image"
 	"testing"
 
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/op/paint"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/op/paint"
 )
 
 func TestImageScale(t *testing.T) {

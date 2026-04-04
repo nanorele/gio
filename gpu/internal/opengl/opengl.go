@@ -13,8 +13,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/uorg-saver/gio/gpu/internal/driver"
-	"github.com/uorg-saver/gio/internal/gl"
+	"github.com/nanorele/gio/gpu/internal/driver"
+	"github.com/nanorele/gio/internal/gl"
 	"gioui.org/shader"
 )
 

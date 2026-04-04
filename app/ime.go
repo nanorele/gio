@@ -7,8 +7,8 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/uorg-saver/gio/io/input"
-	"github.com/uorg-saver/gio/io/key"
+	"github.com/nanorele/gio/io/input"
+	"github.com/nanorele/gio/io/key"
 )
 
 type editorState struct {

@@ -5,7 +5,7 @@ package gpu
 import (
 	"testing"
 
-	"github.com/uorg-saver/gio/internal/f32"
+	"github.com/nanorele/gio/internal/f32"
 )
 
 func BenchmarkEncodeQuadTo(b *testing.B) {

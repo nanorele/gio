@@ -8,15 +8,15 @@ import (
 	"math"
 	"testing"
 
-	"github.com/uorg-saver/gio/f32"
-	"github.com/uorg-saver/gio/font/gofont"
-	"github.com/uorg-saver/gio/gpu/headless"
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/op/clip"
-	"github.com/uorg-saver/gio/op/paint"
-	"github.com/uorg-saver/gio/text"
-	"github.com/uorg-saver/gio/widget/material"
+	"github.com/nanorele/gio/f32"
+	"github.com/nanorele/gio/font/gofont"
+	"github.com/nanorele/gio/gpu/headless"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/op/clip"
+	"github.com/nanorele/gio/op/paint"
+	"github.com/nanorele/gio/text"
+	"github.com/nanorele/gio/widget/material"
 )
 
 // use some global variables for benchmarking so as to not pollute

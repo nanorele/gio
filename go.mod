@@ -1,4 +1,4 @@
-module github.com/uorg-saver/gio
+module github.com/nanorele/gio
 
 go 1.24.0
 

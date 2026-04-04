@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/uorg-saver/gio/text"
+	"github.com/nanorele/gio/text"
 	"golang.org/x/image/math/fixed"
 )
 

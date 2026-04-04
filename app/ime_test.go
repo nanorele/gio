@@ -3,19 +3,19 @@
 package app
 
 import (
-	"github.com/uorg-saver/gio/f32"
+	"github.com/nanorele/gio/f32"
 	"testing"
 	"unicode/utf8"
 
-	"github.com/uorg-saver/gio/font"
-	"github.com/uorg-saver/gio/font/gofont"
-	"github.com/uorg-saver/gio/io/input"
-	"github.com/uorg-saver/gio/io/key"
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/text"
-	"github.com/uorg-saver/gio/unit"
-	"github.com/uorg-saver/gio/widget"
+	"github.com/nanorele/gio/font"
+	"github.com/nanorele/gio/font/gofont"
+	"github.com/nanorele/gio/io/input"
+	"github.com/nanorele/gio/io/key"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/text"
+	"github.com/nanorele/gio/unit"
+	"github.com/nanorele/gio/widget"
 )
 
 func FuzzIME(f *testing.F) {

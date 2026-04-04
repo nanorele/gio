@@ -6,10 +6,10 @@ import (
 	"image"
 	"math"
 
-	"github.com/uorg-saver/gio/gesture"
-	"github.com/uorg-saver/gio/io/pointer"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/op/clip"
+	"github.com/nanorele/gio/gesture"
+	"github.com/nanorele/gio/io/pointer"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/op/clip"
 )
 
 type scrollChild struct {

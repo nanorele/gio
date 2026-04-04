@@ -7,9 +7,9 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/uorg-saver/gio/f32"
-	"github.com/uorg-saver/gio/io/event"
-	"github.com/uorg-saver/gio/io/key"
+	"github.com/nanorele/gio/f32"
+	"github.com/nanorele/gio/io/event"
+	"github.com/nanorele/gio/io/key"
 )
 
 // EditorState represents the state of an editor needed by input handlers.

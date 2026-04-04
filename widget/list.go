@@ -5,11 +5,11 @@ package widget
 import (
 	"image"
 
-	"github.com/uorg-saver/gio/gesture"
-	"github.com/uorg-saver/gio/io/key"
-	"github.com/uorg-saver/gio/io/pointer"
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/gesture"
+	"github.com/nanorele/gio/io/key"
+	"github.com/nanorele/gio/io/pointer"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
 )
 
 // Scrollbar holds the persistent state for an area that can

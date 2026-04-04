@@ -6,8 +6,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/uorg-saver/gio/f32"
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/f32"
+	"github.com/nanorele/gio/op"
 )
 
 func TestPath_MoveTo_LineTo(t *testing.T) {

@@ -5,7 +5,7 @@ package text
 import (
 	"fmt"
 
-	"github.com/uorg-saver/gio/io/system"
+	"github.com/nanorele/gio/io/system"
 	"golang.org/x/image/math/fixed"
 )
 

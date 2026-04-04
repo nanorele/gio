@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/uorg-saver/gio/unit"
+	"github.com/nanorele/gio/unit"
 )
 
 type Animation struct {

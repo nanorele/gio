@@ -29,9 +29,9 @@ import (
 	"encoding/binary"
 	"math"
 
-	"github.com/uorg-saver/gio/internal/f32"
-	"github.com/uorg-saver/gio/internal/ops"
-	"github.com/uorg-saver/gio/internal/scene"
+	"github.com/nanorele/gio/internal/f32"
+	"github.com/nanorele/gio/internal/ops"
+	"github.com/nanorele/gio/internal/scene"
 )
 
 // The following are copies of types from op/clip to avoid a circular import of

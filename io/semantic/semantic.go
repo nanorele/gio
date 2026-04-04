@@ -10,8 +10,8 @@
 package semantic
 
 import (
-	"github.com/uorg-saver/gio/internal/ops"
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/internal/ops"
+	"github.com/nanorele/gio/op"
 )
 
 // LabelOp provides the content of a textual component.

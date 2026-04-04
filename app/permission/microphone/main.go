@@ -10,6 +10,6 @@ The following entries will be added to AndroidManifest.xml:
 	<uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
 RECORD_AUDIO is a "dangerous" permission. See documentation for package
-github.com/uorg-saver/gio/app/permission for more information.
+github.com/nanorele/gio/app/permission for more information.
 */
 package microphone

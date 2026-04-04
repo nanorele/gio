@@ -7,8 +7,8 @@ import (
 	"image/color"
 	"testing"
 
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
 
 	"golang.org/x/exp/shiny/materialdesign/icons"
 )

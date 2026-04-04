@@ -20,7 +20,7 @@ package transfer
 import (
 	"io"
 
-	"github.com/uorg-saver/gio/io/event"
+	"github.com/nanorele/gio/io/event"
 )
 
 // OfferCmd is used by data sources as a response to a RequestEvent.

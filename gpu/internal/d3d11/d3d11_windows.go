@@ -12,8 +12,8 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/uorg-saver/gio/gpu/internal/driver"
-	"github.com/uorg-saver/gio/internal/d3d11"
+	"github.com/nanorele/gio/gpu/internal/driver"
+	"github.com/nanorele/gio/internal/d3d11"
 	"gioui.org/shader"
 )
 

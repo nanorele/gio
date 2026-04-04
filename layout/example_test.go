@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"image"
 
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
 )
 
 func ExampleInset() {

@@ -7,14 +7,14 @@ import (
 	"image"
 	"image/color"
 
-	"github.com/uorg-saver/gio/io/event"
-	"github.com/uorg-saver/gio/io/key"
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/io/event"
+	"github.com/nanorele/gio/io/key"
+	"github.com/nanorele/gio/op"
 
-	"github.com/uorg-saver/gio/gpu"
-	"github.com/uorg-saver/gio/io/pointer"
-	"github.com/uorg-saver/gio/io/system"
-	"github.com/uorg-saver/gio/unit"
+	"github.com/nanorele/gio/gpu"
+	"github.com/nanorele/gio/io/pointer"
+	"github.com/nanorele/gio/io/system"
+	"github.com/nanorele/gio/unit"
 )
 
 // errOutOfDate is reported when the GPU surface dimensions or properties no

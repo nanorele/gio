@@ -3,14 +3,14 @@
 package widget
 
 import (
-	"github.com/uorg-saver/gio/gesture"
-	"github.com/uorg-saver/gio/io/event"
-	"github.com/uorg-saver/gio/io/key"
-	"github.com/uorg-saver/gio/io/pointer"
-	"github.com/uorg-saver/gio/io/semantic"
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/op/clip"
+	"github.com/nanorele/gio/gesture"
+	"github.com/nanorele/gio/io/event"
+	"github.com/nanorele/gio/io/key"
+	"github.com/nanorele/gio/io/pointer"
+	"github.com/nanorele/gio/io/semantic"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/op/clip"
 )
 
 type Enum struct {

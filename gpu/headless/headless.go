@@ -9,9 +9,9 @@ import (
 	"image"
 	"image/color"
 
-	"github.com/uorg-saver/gio/gpu"
-	"github.com/uorg-saver/gio/gpu/internal/driver"
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/gpu"
+	"github.com/nanorele/gio/gpu/internal/driver"
+	"github.com/nanorele/gio/op"
 )
 
 // Window is a headless window.

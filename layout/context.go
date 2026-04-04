@@ -5,10 +5,10 @@ package layout
 import (
 	"time"
 
-	"github.com/uorg-saver/gio/io/input"
-	"github.com/uorg-saver/gio/io/system"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/unit"
+	"github.com/nanorele/gio/io/input"
+	"github.com/nanorele/gio/io/system"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/unit"
 )
 
 // Context carries the state needed by almost all layouts and widgets.

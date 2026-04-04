@@ -9,10 +9,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/go-text/typesetting/font"
-	giofont "github.com/uorg-saver/gio/font"
-	"github.com/uorg-saver/gio/io/system"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/op/clip"
+	giofont "github.com/nanorele/gio/font"
+	"github.com/nanorele/gio/io/system"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/op/clip"
 	"golang.org/x/image/math/fixed"
 )
 

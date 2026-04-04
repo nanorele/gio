@@ -7,10 +7,10 @@ import (
 
 	"golang.org/x/exp/shiny/materialdesign/icons"
 
-	"github.com/uorg-saver/gio/font"
-	"github.com/uorg-saver/gio/text"
-	"github.com/uorg-saver/gio/unit"
-	"github.com/uorg-saver/gio/widget"
+	"github.com/nanorele/gio/font"
+	"github.com/nanorele/gio/text"
+	"github.com/nanorele/gio/unit"
+	"github.com/nanorele/gio/widget"
 )
 
 // Palette contains the minimal set of colors that a widget may need to

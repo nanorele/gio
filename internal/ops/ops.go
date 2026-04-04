@@ -7,9 +7,9 @@ import (
 	"image"
 	"math"
 
-	"github.com/uorg-saver/gio/f32"
-	"github.com/uorg-saver/gio/internal/byteslice"
-	"github.com/uorg-saver/gio/internal/scene"
+	"github.com/nanorele/gio/f32"
+	"github.com/nanorele/gio/internal/byteslice"
+	"github.com/nanorele/gio/internal/scene"
 )
 
 type Ops struct {

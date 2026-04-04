@@ -5,7 +5,7 @@ package clipboard
 import (
 	"io"
 
-	"github.com/uorg-saver/gio/io/event"
+	"github.com/nanorele/gio/io/event"
 )
 
 // WriteCmd copies Text to the clipboard.

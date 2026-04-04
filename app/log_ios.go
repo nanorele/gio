@@ -21,7 +21,7 @@ import (
 	"log"
 	"unsafe"
 
-	_ "github.com/uorg-saver/gio/internal/cocoainit"
+	_ "github.com/nanorele/gio/internal/cocoainit"
 )
 
 func init() {

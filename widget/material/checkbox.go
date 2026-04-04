@@ -3,9 +3,9 @@
 package material
 
 import (
-	"github.com/uorg-saver/gio/io/semantic"
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/widget"
+	"github.com/nanorele/gio/io/semantic"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/widget"
 )
 
 type CheckBoxStyle struct {

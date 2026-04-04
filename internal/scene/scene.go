@@ -11,7 +11,7 @@ import (
 	"math"
 	"unsafe"
 
-	"github.com/uorg-saver/gio/internal/f32"
+	"github.com/nanorele/gio/internal/f32"
 )
 
 type Op uint32

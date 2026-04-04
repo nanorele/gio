@@ -5,14 +5,14 @@ package material
 import (
 	"image/color"
 
-	"github.com/uorg-saver/gio/font"
-	"github.com/uorg-saver/gio/internal/f32color"
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/op/paint"
-	"github.com/uorg-saver/gio/text"
-	"github.com/uorg-saver/gio/unit"
-	"github.com/uorg-saver/gio/widget"
+	"github.com/nanorele/gio/font"
+	"github.com/nanorele/gio/internal/f32color"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/op/paint"
+	"github.com/nanorele/gio/text"
+	"github.com/nanorele/gio/unit"
+	"github.com/nanorele/gio/widget"
 )
 
 // LabelStyle configures the presentation of text. If the State field is set, the

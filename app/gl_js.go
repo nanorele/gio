@@ -6,8 +6,8 @@ import (
 	"errors"
 	"syscall/js"
 
-	"github.com/uorg-saver/gio/gpu"
-	"github.com/uorg-saver/gio/internal/gl"
+	"github.com/nanorele/gio/gpu"
+	"github.com/nanorele/gio/internal/gl"
 )
 
 type glContext struct {

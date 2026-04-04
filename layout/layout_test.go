@@ -6,7 +6,7 @@ import (
 	"image"
 	"testing"
 
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/op"
 )
 
 func TestStack(t *testing.T) {

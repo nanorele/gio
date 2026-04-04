@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"math/bits"
 
-	"github.com/uorg-saver/gio/io/system"
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op/clip"
+	"github.com/nanorele/gio/io/system"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op/clip"
 )
 
 // Decorations handles the states of window decorations.

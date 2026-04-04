@@ -8,12 +8,12 @@ import (
 	"image"
 	"math"
 
-	"github.com/uorg-saver/gio/f32"
-	f32internal "github.com/uorg-saver/gio/internal/f32"
-	"github.com/uorg-saver/gio/internal/ops"
-	"github.com/uorg-saver/gio/internal/scene"
-	"github.com/uorg-saver/gio/internal/stroke"
-	"github.com/uorg-saver/gio/op"
+	"github.com/nanorele/gio/f32"
+	f32internal "github.com/nanorele/gio/internal/f32"
+	"github.com/nanorele/gio/internal/ops"
+	"github.com/nanorele/gio/internal/scene"
+	"github.com/nanorele/gio/internal/stroke"
+	"github.com/nanorele/gio/op"
 )
 
 // Op represents a clip area. Op intersects the current clip area with

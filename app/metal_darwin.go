@@ -8,7 +8,7 @@ package app
 import (
 	"errors"
 
-	"github.com/uorg-saver/gio/gpu"
+	"github.com/nanorele/gio/gpu"
 )
 
 /*

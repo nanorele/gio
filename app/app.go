@@ -3,7 +3,7 @@
 package app
 
 import (
-	"github.com/uorg-saver/gio/io/event"
+	"github.com/nanorele/gio/io/event"
 	"golang.org/x/net/idna"
 	"image"
 	"net/url"
@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uorg-saver/gio/io/input"
-	"github.com/uorg-saver/gio/layout"
-	"github.com/uorg-saver/gio/op"
-	"github.com/uorg-saver/gio/unit"
+	"github.com/nanorele/gio/io/input"
+	"github.com/nanorele/gio/layout"
+	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/unit"
 )
 
 // extraArgs contains extra arguments to append to
@@ -32,9 +32,9 @@ var extraArgs string
 // on Wayland it is the toplevel app_id,
 // on X11 it is the X11 XClassHint.
 //
-// ID is set by the [github.com/uorg-saver/gio/cmd/gogio] tool or manually with the -X linker flag. For example,
+// ID is set by the [github.com/nanorele/gio/cmd/gogio] tool or manually with the -X linker flag. For example,
 //
-//	go build -ldflags="-X 'github.com/uorg-saver/gio/app.ID=org.gioui.example.Kitchen'" .
+//	go build -ldflags="-X 'github.com/nanorele/gio/app.ID=org.gioui.example.Kitchen'" .
 //
 // Note that ID is treated as a constant, and that changing it at runtime
 // is not supported. The default value of ID is filepath.Base(os.Args[0]).
