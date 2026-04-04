@@ -1,11 +1,11 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package text
 
 import (
 	"bytes"
 	"fmt"
 	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"log"
 	"os"
@@ -30,25 +30,19 @@ import (
 	"github.com/nanorele/gio/op/paint"
 )
 
-// document holds a collection of shaped lines and alignment information for
-// those lines.
 type document struct {
-	lines     []line
-	alignment Alignment
-	// alignWidth is the width used when aligning text.
+	lines           []line
+	alignment       Alignment
 	alignWidth      int
 	unreadRuneCount int
 }
 
-// append adds the lines of other to the end of l and ensures they
-// are aligned to the same width.
 func (l *document) append(other document) {
 	l.lines = append(l.lines, other.lines...)
 	l.alignWidth = max(l.alignWidth, other.alignWidth)
 	calculateYOffsets(l.lines)
 }
 
-// reset empties the document in preparation to reuse its memory.
 func (l *document) reset() {
 	l.lines = l.lines[:0]
 	l.alignment = Start
@@ -56,45 +50,20 @@ func (l *document) reset() {
 	l.unreadRuneCount = 0
 }
 
-// A line contains the measurements of a line of text.
 type line struct {
-	// runs contains sequences of shaped glyphs with common attributes. The order
-	// of runs is logical, meaning that the first run will contain the glyphs
-	// corresponding to the first runes of data in the original text.
-	runs []runLayout
-	// visualOrder is a slice of indices into Runs that describes the visual positions
-	// of each run of text. Iterating this slice and accessing Runs at each
-	// of the values stored in this slice traverses the runs in proper visual
-	// order from left to right.
+	runs        []runLayout
 	visualOrder []int
-	// width is the width of the line.
-	width fixed.Int26_6
-	// ascent is the height above the baseline.
-	ascent fixed.Int26_6
-	// descent is the height below the baseline, including
-	// the line gap.
-	descent fixed.Int26_6
-	// lineHeight captures the gap that should exist between the baseline of this
-	// line and the previous (if any).
-	lineHeight fixed.Int26_6
-	// direction is the dominant direction of the line. This direction will be
-	// used to align the text content of the line, but may not match the actual
-	// direction of the runs of text within the line (such as an RTL sentence
-	// within an LTR paragraph).
-	direction system.TextDirection
-	// runeCount is the number of text runes represented by this line's runs.
-	runeCount int
-
-	yOffset int
+	width       fixed.Int26_6
+	ascent      fixed.Int26_6
+	descent     fixed.Int26_6
+	lineHeight  fixed.Int26_6
+	direction   system.TextDirection
+	runeCount   int
+	yOffset     int
 }
 
-// insertTrailingSyntheticNewline adds a synthetic newline to the final logical run of the line
-// with the given shaping cluster index.
 func (l *line) insertTrailingSyntheticNewline(newLineClusterIdx int) {
-	// If there was a newline at the end of this paragraph, insert a synthetic glyph representing it.
 	finalContentRun := len(l.runs) - 1
-	// If there was a trailing newline update the rune counts to include
-	// it on the last line of the paragraph.
 	l.runeCount += 1
 	l.runs[finalContentRun].Runes.Count += 1
 
@@ -108,11 +77,10 @@ func (l *line) insertTrailingSyntheticNewline(newLineClusterIdx int) {
 		xOffset:      0,
 		yOffset:      0,
 	}
-	// Inset the synthetic newline glyph on the proper end of the run.
+
 	if l.runs[finalContentRun].Direction.Progression() == system.FromOrigin {
 		l.runs[finalContentRun].Glyphs = append(l.runs[finalContentRun].Glyphs, syntheticGlyph)
 	} else {
-		// Ensure capacity.
 		l.runs[finalContentRun].Glyphs = append(l.runs[finalContentRun].Glyphs, glyph{})
 		copy(l.runs[finalContentRun].Glyphs[1:], l.runs[finalContentRun].Glyphs)
 		l.runs[finalContentRun].Glyphs[0] = syntheticGlyph
@@ -120,14 +88,10 @@ func (l *line) insertTrailingSyntheticNewline(newLineClusterIdx int) {
 }
 
 func (l *line) setTruncatedCount(truncatedCount int) {
-	// If we've truncated the text with a truncator, adjust the rune counts within the
-	// truncator to make it represent the truncated text.
 	finalRunIdx := len(l.runs) - 1
 	l.runs[finalRunIdx].truncator = true
 	finalGlyphIdx := len(l.runs[finalRunIdx].Glyphs) - 1
-	// The run represents all of the truncated text.
 	l.runs[finalRunIdx].Runes.Count = truncatedCount
-	// Only the final glyph represents any runes, and it represents all truncated text.
 	for i := range l.runs[finalRunIdx].Glyphs {
 		if i == finalGlyphIdx {
 			l.runs[finalRunIdx].Glyphs[finalGlyphIdx].runeCount = truncatedCount
@@ -137,71 +101,36 @@ func (l *line) setTruncatedCount(truncatedCount int) {
 	}
 }
 
-// Range describes the position and quantity of a range of text elements
-// within a larger slice. The unit is usually runes of unicode data or
-// glyphs of shaped font data.
 type Range struct {
-	// Count describes the number of items represented by the Range.
-	Count int
-	// Offset describes the start position of the represented
-	// items within a larger list.
+	Count  int
 	Offset int
 }
 
-// glyph contains the metadata needed to render a glyph.
 type glyph struct {
-	// id is this glyph's identifier within the font it was shaped with.
-	id GlyphID
-	// clusterIndex is the identifier for the text shaping cluster that
-	// this glyph is part of.
+	id           GlyphID
 	clusterIndex int
-	// glyphCount is the number of glyphs in the same cluster as this glyph.
-	glyphCount int
-	// runeCount is the quantity of runes in the source text that this glyph
-	// corresponds to.
-	runeCount int
-	// xAdvance and yAdvance describe the distance the dot moves when
-	// laying out the glyph on the X or Y axis.
-	xAdvance, yAdvance fixed.Int26_6
-	// xOffset and yOffset describe offsets from the dot that should be
-	// applied when rendering the glyph.
-	xOffset, yOffset fixed.Int26_6
-	// bounds describes the visual bounding box of the glyph relative to
-	// its dot.
-	bounds fixed.Rectangle26_6
+	glyphCount   int
+	runeCount    int
+	xAdvance     fixed.Int26_6
+	yAdvance     fixed.Int26_6
+	xOffset      fixed.Int26_6
+	yOffset      fixed.Int26_6
+	bounds       fixed.Rectangle26_6
 }
 
 type runLayout struct {
-	// VisualPosition describes the relative position of this run of text within
-	// its line. It should be a valid index into the containing line's VisualOrder
-	// slice.
 	VisualPosition int
-	// X is the visual offset of the dot for the first glyph in this run
-	// relative to the beginning of the line.
-	X fixed.Int26_6
-	// Glyphs are the actual font characters for the text. They are ordered
-	// from left to right regardless of the text direction of the underlying
-	// text.
-	Glyphs []glyph
-	// Runes describes the position of the text data this layout represents
-	// within the containing text.Line.
-	Runes Range
-	// Advance is the sum of the advances of all clusters in the Layout.
-	Advance fixed.Int26_6
-	// PPEM is the pixels-per-em scale used to shape this run.
-	PPEM fixed.Int26_6
-	// Direction is the layout direction of the glyphs.
-	Direction system.TextDirection
-	// face is the font face that the ID of each Glyph in the Layout refers to.
-	face *font.Face
-	// truncator indicates that this run is a text truncator standing in for remaining
-	// text.
-	truncator bool
+	X              fixed.Int26_6
+	Glyphs         []glyph
+	Runes          Range
+	Advance        fixed.Int26_6
+	PPEM           fixed.Int26_6
+	Direction      system.TextDirection
+	face           *font.Face
+	truncator      bool
 }
 
-// shaperImpl implements the shaping and line-wrapping of opentype fonts.
 type shaperImpl struct {
-	// Fields for tracking fonts/faces.
 	fontMap      *fontscan.FontMap
 	faces        []*font.Face
 	faceToIndex  map[*font.Font]int
@@ -210,24 +139,17 @@ type shaperImpl struct {
 	logger       interface {
 		Printf(format string, args ...any)
 	}
-	parser parser
-
-	// Shaping and wrapping state.
-	shaper        shaping.HarfbuzzShaper
-	wrapper       shaping.LineWrapper
-	bidiParagraph bidi.Paragraph
-
-	// Scratch buffers used to avoid re-allocating slices during routine internal
-	// shaping operations.
-	splitScratch1, splitScratch2 []shaping.Input
-	outScratchBuf                []shaping.Output
-	scratchRunes                 []rune
-
-	// bitmapGlyphCache caches extracted bitmap glyph images.
+	parser           parser
+	shaper           shaping.HarfbuzzShaper
+	wrapper          shaping.LineWrapper
+	bidiParagraph    bidi.Paragraph
+	splitScratch1    []shaping.Input
+	splitScratch2    []shaping.Input
+	outScratchBuf    []shaping.Output
+	scratchRunes     []rune
 	bitmapGlyphCache bitmapCache
 }
 
-// debugLogger only logs messages if debug.Text is true.
 type debugLogger struct {
 	*log.Logger
 }
@@ -265,9 +187,6 @@ func newShaperImpl(systemFonts bool, collection []FontFace) *shaperImpl {
 	return &shaper
 }
 
-// Load registers the provided FontFace with the shaper, if it is compatible.
-// It returns whether the face is now available for use. FontFaces are prioritized
-// in the order in which they are loaded, with the first face being the default.
 func (s *shaperImpl) Load(f FontFace) {
 	desc := opentype.FontToDescription(f.Font)
 	s.fontMap.AddFace(f.Face.Face(), fontscan.Location{File: fmt.Sprint(desc)}, desc)
@@ -285,9 +204,6 @@ func (s *shaperImpl) addFace(f *font.Face, md giofont.Font) {
 	s.faceMeta = append(s.faceMeta, md)
 }
 
-// splitByScript divides the inputs into new, smaller inputs on script boundaries
-// and correctly sets the text direction per-script. It will
-// use buf as the backing memory for the returned slice if buf is non-nil.
 func splitByScript(inputs []shaping.Input, documentDir di.Direction, buf []shaping.Input) []shaping.Input {
 	var splitInputs []shaping.Input
 	if buf == nil {
@@ -324,10 +240,7 @@ func splitByScript(inputs []shaping.Input, documentDir di.Direction, buf []shapi
 			currentInput = input
 			currentInput.RunStart = i
 			currentInput.Script = runeScript
-			// In the future, it may make sense to try to guess the language of the text here as well,
-			// but this is a complex process.
 		}
-		// close and add the last input
 		currentInput.RunEnd = input.RunEnd
 		splitInputs = append(splitInputs, currentInput)
 	}
@@ -366,9 +279,6 @@ func (s *shaperImpl) splitBidi(input shaping.Input) []shaping.Input {
 	return splitInputs
 }
 
-// ResolveFace allows shaperImpl to implement shaping.FontMap, wrapping its fontMap
-// field and ensuring that any faces loaded as part of the search are registered with
-// ids so that they can be referred to by a GlyphID.
 func (s *shaperImpl) ResolveFace(r rune) *font.Face {
 	face := s.fontMap.ResolveFace(r)
 	if face != nil {
@@ -383,8 +293,6 @@ func (s *shaperImpl) ResolveFace(r rune) *font.Face {
 	return nil
 }
 
-// splitByFaces divides the inputs by font coverage in the provided faces. It will use the slice provided in buf
-// as the backing storage of the returned slice if buf is non-nil.
 func (s *shaperImpl) splitByFaces(inputs []shaping.Input, buf []shaping.Input) []shaping.Input {
 	var split []shaping.Input
 	if buf == nil {
@@ -398,26 +306,18 @@ func (s *shaperImpl) splitByFaces(inputs []shaping.Input, buf []shaping.Input) [
 	return split
 }
 
-// shapeText invokes the text shaper and returns the raw text data in the shaper's native
-// format. It does not wrap lines.
 func (s *shaperImpl) shapeText(ppem fixed.Int26_6, lc system.Locale, txt []rune) []shaping.Output {
 	lcfg := langConfig{
 		Language:  language.NewLanguage(lc.Language),
 		Direction: mapDirection(lc.Direction),
 	}
-	// Create an initial input.
 	input := toInput(nil, ppem, lcfg, txt)
 	if input.RunStart == input.RunEnd && len(s.faces) > 0 {
-		// Give the empty string a face. This is a necessary special case because
-		// the face splitting process works by resolving faces for each rune, and
-		// the empty string contains no runes.
 		input.Face = s.faces[0]
 	}
-	// Break input on font glyph coverage.
 	inputs := s.splitBidi(input)
 	inputs = s.splitByFaces(inputs, s.splitScratch1[:0])
 	inputs = splitByScript(inputs, lcfg.Direction, s.splitScratch2[:0])
-	// Shape all inputs.
 	if needed := len(inputs) - len(s.outScratchBuf); needed > 0 {
 		s.outScratchBuf = slices.Grow(s.outScratchBuf, needed)
 	}
@@ -427,8 +327,6 @@ func (s *shaperImpl) shapeText(ppem fixed.Int26_6, lc system.Locale, txt []rune)
 			s.outScratchBuf = append(s.outScratchBuf, s.shaper.Shape(input))
 		} else {
 			s.outScratchBuf = append(s.outScratchBuf, shaping.Output{
-				// Use the text size as the advance of the entire fake run so that
-				// it doesn't occupy zero space.
 				Advance: input.Size,
 				Size:    input.Size,
 				Glyphs: []shaping.Glyph{
@@ -480,7 +378,6 @@ func wrapPolicyToGoText(p WrapPolicy) shaping.LineBreakPolicy {
 	}
 }
 
-// shapeAndWrapText invokes the text shaper and returns wrapped lines in the shaper's native format.
 func (s *shaperImpl) shapeAndWrapText(params Parameters, txt []rune) (_ []shaping.Line, truncated int) {
 	wc := shaping.WrapConfig{
 		Direction:                     mapDirection(params.Locale.Direction),
@@ -506,31 +403,15 @@ func (s *shaperImpl) shapeAndWrapText(params Parameters, txt []rune) (_ []shapin
 		if len(params.Truncator) == 0 {
 			params.Truncator = "…"
 		}
-		// We only permit a single run as the truncator, regardless of whether more were generated.
-		// Just use the first one.
 		wc.Truncator = s.shapeText(params.PxPerEm, params.Locale, []rune(params.Truncator))[0]
 	}
-	// Wrap outputs into lines.
 	return s.wrapper.WrapParagraph(wc, params.MaxWidth, txt, shaping.NewSliceIterator(s.shapeText(params.PxPerEm, params.Locale, txt)))
 }
 
-// replaceControlCharacters replaces problematic unicode
-// code points with spaces to ensure proper rune accounting.
 func replaceControlCharacters(in []rune) []rune {
 	for i, r := range in {
 		switch r {
-		// ASCII File separator.
-		case '\u001C':
-		// ASCII Group separator.
-		case '\u001D':
-		// ASCII Record separator.
-		case '\u001E':
-		case '\r':
-		case '\n':
-		// Unicode "next line" character.
-		case '\u0085':
-		// Unicode "paragraph separator".
-		case '\u2029':
+		case '\u001C', '\u001D', '\u001E', '\r', '\n', '\u0085', '\u2029':
 		default:
 			continue
 		}
@@ -539,12 +420,10 @@ func replaceControlCharacters(in []rune) []rune {
 	return in
 }
 
-// Layout shapes and wraps the text, and returns the result in Gio's shaped text format.
 func (s *shaperImpl) LayoutString(params Parameters, txt string) document {
 	return s.LayoutRunes(params, []rune(txt))
 }
 
-// Layout shapes and wraps the text, and returns the result in Gio's shaped text format.
 func (s *shaperImpl) Layout(params Parameters, txt io.RuneReader) document {
 	s.scratchRunes = s.scratchRunes[:0]
 	for r, _, err := txt.ReadRune(); err != nil; r, _, err = txt.ReadRune() {
@@ -557,8 +436,6 @@ func calculateYOffsets(lines []line) {
 	if len(lines) < 1 {
 		return
 	}
-	// Ceil the first value to ensure that we don't baseline it too close to the top of the
-	// viewport and cut off the top pixel.
 	currentY := lines[0].ascent.Ceil()
 	for i := range lines {
 		if i > 0 {
@@ -568,7 +445,6 @@ func calculateYOffsets(lines []line) {
 	}
 }
 
-// LayoutRunes shapes and wraps the text, and returns the result in Gio's shaped text format.
 func (s *shaperImpl) LayoutRunes(params Parameters, txt []rune) document {
 	hasNewline := len(txt) > 0 && txt[len(txt)-1] == '\n'
 	var ls []shaping.Line
@@ -577,21 +453,16 @@ func (s *shaperImpl) LayoutRunes(params Parameters, txt []rune) document {
 		txt = txt[:len(txt)-1]
 	}
 	if params.MaxLines != 0 && hasNewline {
-		// If we might end up truncating a trailing newline, we must insert the truncator symbol
-		// on the final line (if we hit the limit).
 		params.forceTruncate = true
 	}
 	ls, truncated = s.shapeAndWrapText(params, replaceControlCharacters(txt))
 
 	hasTruncator := truncated > 0 || (params.forceTruncate && params.MaxLines == len(ls))
 	if hasTruncator && hasNewline {
-		// We have a truncator at the end of the line, so the newline is logically
-		// truncated as well.
 		truncated++
 		hasNewline = false
 	}
 
-	// Convert to Lines.
 	textLines := make([]line, len(ls))
 	maxHeight := fixed.Int26_6(0)
 	for i := range ls {
@@ -635,8 +506,6 @@ func alignWidth(minWidth int, lines []line) int {
 	return minWidth
 }
 
-// Shape converts the provided glyphs into a path. The path will enclose the forms
-// of all vector glyphs.
 func (s *shaperImpl) Shape(pathOps *op.Ops, gs []Glyph) clip.PathSpec {
 	var lastPos f32.Point
 	var x fixed.Int26_6
@@ -667,7 +536,6 @@ func (s *shaperImpl) Shape(pathOps *op.Ops, gs []Glyph) clip.PathSpec {
 			continue
 		}
 
-		// Move to glyph position.
 		pos := f32.Point{
 			X: fixedToFloat((g.X - x) - g.Offset.X),
 			Y: -fixedToFloat(g.Offset.Y),
@@ -676,7 +544,6 @@ func (s *shaperImpl) Shape(pathOps *op.Ops, gs []Glyph) clip.PathSpec {
 		lastPos = pos
 		var lastArg f32.Point
 
-		// Convert fonts.Segments to relative segments.
 		for _, fseg := range outline.Segments {
 			nargs := 1
 			switch fseg.Op {
@@ -722,10 +589,6 @@ func floatToFixed(f float32) fixed.Int26_6 {
 	return fixed.Int26_6(f * 64)
 }
 
-// Bitmaps returns an op.CallOp that will display all bitmap glyphs within gs.
-// The positioning of the bitmaps uses the same logic as Shape(), so the returned
-// CallOp can be added at the same offset as the path data returned by Shape()
-// and will align correctly.
 func (s *shaperImpl) Bitmaps(ops *op.Ops, gs []Glyph) op.CallOp {
 	var x fixed.Int26_6
 	bitmapMacro := op.Record(ops)
@@ -749,17 +612,20 @@ func (s *shaperImpl) Bitmaps(ops *op.Ops, gs []Glyph) op.CallOp {
 			bitmapData, ok := s.bitmapGlyphCache.Get(g.ID)
 			if !ok {
 				var img image.Image
+				var err error
 				switch glyphData.Format {
 				case font.PNG, font.JPG, font.TIFF:
-					img, _, _ = image.Decode(bytes.NewReader(glyphData.Data))
+					img, _, err = image.Decode(bytes.NewReader(glyphData.Data))
 				case font.BlackAndWhite:
-					// This is a complex family of uncompressed bitmaps that don't seem to be
-					// very common in practice. We can try adding support later if needed.
-					fallthrough
+					continue
 				default:
-					// Unknown format.
 					continue
 				}
+
+				if err != nil || img == nil {
+					continue
+				}
+
 				imgOp = paint.NewImageOp(img)
 				imgSize = img.Bounds().Size()
 				s.bitmapGlyphCache.Put(g.ID, bitmap{img: imgOp, size: imgSize})
@@ -797,17 +663,12 @@ func (s *shaperImpl) Bitmaps(ops *op.Ops, gs []Glyph) op.CallOp {
 	return bitmapMacro.Stop()
 }
 
-// langConfig describes the language and writing system of a body of text.
 type langConfig struct {
-	// Language the text is written in.
 	language.Language
-	// Writing system used to represent the text.
 	language.Script
-	// Direction of the text, usually driven by the writing system.
 	di.Direction
 }
 
-// toInput converts its parameters into a shaping.Input.
 func toInput(face *font.Face, ppem fixed.Int26_6, lc langConfig, runes []rune) shaping.Input {
 	var input shaping.Input
 	input.Direction = lc.Direction
@@ -841,13 +702,9 @@ func unmapDirection(d di.Direction) system.TextDirection {
 	return system.LTR
 }
 
-// toGioGlyphs converts text shaper glyphs into the minimal representation
-// that Gio needs.
 func toGioGlyphs(in []shaping.Glyph, ppem fixed.Int26_6, faceIdx int) []glyph {
 	out := make([]glyph, 0, len(in))
 	for _, g := range in {
-		// To better understand how to calculate the bounding box, see here:
-		// https://freetype.org/freetype2/docs/glyphs/glyph-metrics-3.svg
 		var bounds fixed.Rectangle26_6
 		bounds.Min.X = g.XBearing
 		bounds.Min.Y = -g.YBearing
@@ -867,7 +724,6 @@ func toGioGlyphs(in []shaping.Glyph, ppem fixed.Int26_6, faceIdx int) []glyph {
 	return out
 }
 
-// toLine converts the output into a Line with the provided dominant text direction.
 func toLine(faceToIndex map[*font.Font]int, o shaping.Line, dir system.TextDirection) line {
 	if len(o) < 1 {
 		return line{}
@@ -910,7 +766,6 @@ func toLine(faceToIndex map[*font.Font]int, o shaping.Line, dir system.TextDirec
 		}
 	}
 	line.lineHeight = maxSize
-	// Iterate and resolve the X of each run.
 	x := fixed.Int26_6(0)
 	for _, runIdx := range line.visualOrder {
 		line.runs[runIdx].X = x
