@@ -412,6 +412,7 @@ func (s *shaperImpl) shapeAndWrapText(params Parameters, txt []rune) (_ []shapin
 func replaceControlCharacters(in []rune) []rune {
 	for i, r := range in {
 		if r == '\t' {
+			in[i] = '\u2003'
 			continue
 		}
 
@@ -421,9 +422,7 @@ func replaceControlCharacters(in []rune) []rune {
 		}
 
 		switch r {
-		case '\u001C', '\u001D', '\u001E', '\r', '\u0085', '\u2029':
-			in[i] = ' '
-		case '\u200B', '\u200C', '\u200D', '\u2060', '\uFEFF':
+		case '\u001C', '\u001D', '\u001E', '\u200B', '\u200C', '\u200D', '\u2060', '\uFEFF':
 			in[i] = ' '
 		}
 	}
