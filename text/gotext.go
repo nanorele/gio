@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"slices"
+	"unicode"
 
 	"github.com/go-text/typesetting/di"
 	"github.com/go-text/typesetting/font"
@@ -410,12 +411,21 @@ func (s *shaperImpl) shapeAndWrapText(params Parameters, txt []rune) (_ []shapin
 
 func replaceControlCharacters(in []rune) []rune {
 	for i, r := range in {
-		switch r {
-		case '\u001C', '\u001D', '\u001E', '\r', '\n', '\u0085', '\u2029':
-		default:
+		if r == '\t' {
 			continue
 		}
-		in[i] = ' '
+
+		if unicode.IsSpace(r) {
+			in[i] = ' '
+			continue
+		}
+
+		switch r {
+		case '\u001C', '\u001D', '\u001E', '\r', '\u0085', '\u2029':
+			in[i] = ' '
+		case '\u200B', '\u200C', '\u200D', '\u2060', '\uFEFF':
+			in[i] = ' '
+		}
 	}
 	return in
 }
