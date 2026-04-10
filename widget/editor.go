@@ -230,7 +230,10 @@ func (e *Editor) processPointer(gtx layout.Context) (EditorEvent, bool) {
 	}
 	var scrollX, scrollY pointer.ScrollRange
 	textDims := e.text.FullDimensions()
+
 	visibleDims := e.text.Dimensions()
+	visibleDims.Size = gtx.Constraints.Constrain(visibleDims.Size)
+
 	if e.SingleLine {
 		scrollOffX := e.text.ScrollOff().X
 		scrollX.Min = min(-scrollOffX, 0)
@@ -269,7 +272,6 @@ func (e *Editor) processPointer(gtx layout.Context) (EditorEvent, bool) {
 			return ev, ok
 		}
 	}
-
 	if (sdist > 0 && soff >= smax) || (sdist < 0 && soff <= smin) {
 		e.scroller.Stop()
 	}
@@ -653,7 +655,17 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, siz
 		}
 	}
 
+	origMax := gtx.Constraints.Max
+	if e.SingleLine {
+		gtx.Constraints.Max.X = 1 << 24
+	}
+
 	e.text.Layout(gtx, lt, font, size)
+
+	if e.SingleLine {
+		gtx.Constraints.Max = origMax
+	}
+
 	return e.layout(gtx, textMaterial, selectMaterial)
 }
 
@@ -701,22 +713,20 @@ func (e *Editor) updateSnippet(gtx layout.Context, start, end int) {
 }
 
 func (e *Editor) layout(gtx layout.Context, textMaterial, selectMaterial op.CallOp) layout.Dimensions {
-	// Adjust scrolling for new viewport and layout.
 	e.text.ScrollRel(0, 0)
-
 	if e.scrollCaret {
 		e.scrollCaret = false
 		e.text.ScrollToCaret()
 	}
+
 	visibleDims := e.text.Dimensions()
+	visibleDims.Size = gtx.Constraints.Constrain(visibleDims.Size)
 
 	defer clip.Rect(image.Rectangle{Max: visibleDims.Size}).Push(gtx.Ops).Pop()
 	pointer.CursorText.Add(gtx.Ops)
 	event.Op(gtx.Ops, e)
 	key.InputHintOp{Tag: e, Hint: e.InputHint}.Add(gtx.Ops)
-
 	e.scroller.Add(gtx.Ops)
-
 	e.clicker.Add(gtx.Ops)
 	e.dragger.Add(gtx.Ops)
 	e.showCaret = false
