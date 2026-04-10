@@ -535,25 +535,11 @@ func (w *window) scrollEvent(wParam, lParam uintptr, horizontal bool, kmods key.
 func (w *window) runLoop() {
 	msg := new(windows.Msg)
 
-	refreshRate := windows.GetDeviceCaps(w.hdc, windows.VREFRESH)
-	if refreshRate <= 1 {
-		refreshRate = 60
-	}
-	frameDuration := time.Second / time.Duration(refreshRate)
-	lastDraw := time.Now()
-
 loop:
 	for {
 		anim := w.animating
 		if anim && !w.minimized && !windows.PeekMessage(msg, 0, 0, 0, windows.PM_NOREMOVE) {
-			now := time.Now()
-			elapsed := now.Sub(lastDraw)
-			if elapsed >= frameDuration {
-				w.draw(false)
-				lastDraw = now
-			} else {
-				time.Sleep(frameDuration - elapsed)
-			}
+			w.draw(false)
 			continue
 		}
 		switch ret := windows.GetMessage(msg, 0, 0, 0); ret {
