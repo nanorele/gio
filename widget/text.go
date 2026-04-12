@@ -251,7 +251,7 @@ func (e *textView) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, s
 	}
 	maxWidth := gtx.Constraints.Max.X
 	if e.SingleLine {
-		maxWidth = math.MaxInt
+		maxWidth = 1 << 24
 	}
 	minWidth := gtx.Constraints.Min.X
 	if maxWidth != e.params.MaxWidth {
