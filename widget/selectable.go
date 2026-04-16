@@ -182,79 +182,74 @@ func (l *Selectable) handleEvents(gtx layout.Context) (selectionChanged bool) {
 }
 
 func (e *Selectable) processPointer(gtx layout.Context) {
-	for _, evt := range e.clickDragEvents(gtx) {
-		switch evt := evt.(type) {
-		case gesture.ClickEvent:
-			switch {
-			case evt.Kind == gesture.KindPress && evt.Source == pointer.Mouse,
-				evt.Kind == gesture.KindClick && evt.Source != pointer.Mouse:
-				prevCaretPos, _ := e.text.Selection()
-				e.text.MoveCoord(image.Point{
-					X: int(math.Round(float64(evt.Position.X))),
-					Y: int(math.Round(float64(evt.Position.Y))),
-				})
-				gtx.Execute(key.FocusCmd{Tag: e})
-				if evt.Modifiers == key.ModShift {
-					start, end := e.text.Selection()
-
-					if abs(end-start) < abs(start-prevCaretPos) {
-						e.text.SetCaret(start, prevCaretPos)
-					}
-				} else {
-					e.text.ClearSelection()
-				}
-				e.dragging = true
-
-				switch {
-				case evt.NumClicks == 2:
-					e.text.MoveWord(-1, selectionClear)
-					e.text.MoveWord(1, selectionExtend)
-					e.dragging = false
-				case evt.NumClicks >= 3:
-					e.text.MoveLineStart(selectionClear)
-					e.text.MoveLineEnd(selectionExtend)
-					e.dragging = false
-				}
-			}
-		case pointer.Event:
-			release := false
-			switch {
-			case evt.Kind == pointer.Release && evt.Source == pointer.Mouse:
-				release = true
-				fallthrough
-			case evt.Kind == pointer.Drag && evt.Source == pointer.Mouse:
-				if e.dragging {
-					e.text.MoveCoord(image.Point{
-						X: int(math.Round(float64(evt.Position.X))),
-						Y: int(math.Round(float64(evt.Position.Y))),
-					})
-
-					if release {
-						e.dragging = false
-					}
-				}
-			}
-		}
-	}
-}
-
-func (e *Selectable) clickDragEvents(gtx layout.Context) []event.Event {
-	var combinedEvents []event.Event
 	for {
 		evt, ok := e.clicker.Update(gtx.Source)
 		if !ok {
 			break
 		}
-		combinedEvents = append(combinedEvents, evt)
+		e.processClickEvent(gtx, evt)
 	}
 	for {
 		evt, ok := e.dragger.Update(gtx.Metric, gtx.Source, gesture.Both)
 		if !ok {
 			break
 		}
-		combinedEvents = append(combinedEvents, evt)
+		e.processDragEvent(evt)
 	}
-	return combinedEvents
+}
+
+func (e *Selectable) processClickEvent(gtx layout.Context, evt gesture.ClickEvent) {
+	switch {
+	case evt.Kind == gesture.KindPress && evt.Source == pointer.Mouse,
+		evt.Kind == gesture.KindClick && evt.Source != pointer.Mouse:
+		prevCaretPos, _ := e.text.Selection()
+		e.text.MoveCoord(image.Point{
+			X: int(math.Round(float64(evt.Position.X))),
+			Y: int(math.Round(float64(evt.Position.Y))),
+		})
+		gtx.Execute(key.FocusCmd{Tag: e})
+		if evt.Modifiers == key.ModShift {
+			start, end := e.text.Selection()
+
+			if abs(end-start) < abs(start-prevCaretPos) {
+				e.text.SetCaret(start, prevCaretPos)
+			}
+		} else {
+			e.text.ClearSelection()
+		}
+		e.dragging = true
+
+		switch {
+		case evt.NumClicks == 2:
+			e.text.MoveWord(-1, selectionClear)
+			e.text.MoveWord(1, selectionExtend)
+			e.dragging = false
+		case evt.NumClicks >= 3:
+			e.text.MoveLineStart(selectionClear)
+			e.text.MoveLineEnd(selectionExtend)
+			e.dragging = false
+		}
+	}
+}
+
+func (e *Selectable) processDragEvent(evt pointer.Event) {
+	release := false
+	switch {
+	case evt.Kind == pointer.Release && evt.Source == pointer.Mouse:
+		release = true
+		fallthrough
+	case evt.Kind == pointer.Drag && evt.Source == pointer.Mouse:
+		if e.dragging {
+			e.text.MoveCoord(image.Point{
+				X: int(math.Round(float64(evt.Position.X))),
+				Y: int(math.Round(float64(evt.Position.Y))),
+			})
+
+			if release {
+				e.dragging = false
+			}
+		}
+	}
 }
 
 func (e *Selectable) processKey(gtx layout.Context) {

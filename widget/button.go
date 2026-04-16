@@ -88,12 +88,17 @@ func (b *Clickable) Update(gtx layout.Context) (Click, bool) {
 }
 
 func (b *Clickable) update(t event.Tag, gtx layout.Context) (Click, bool) {
-	for len(b.history) > 0 {
-		c := b.history[0]
+	// Trim expired history entries in one batch instead of O(n) per entry.
+	expired := 0
+	for expired < len(b.history) {
+		c := b.history[expired]
 		if c.End.IsZero() || gtx.Now.Sub(c.End) < 1*time.Second {
 			break
 		}
-		n := copy(b.history, b.history[1:])
+		expired++
+	}
+	if expired > 0 {
+		n := copy(b.history, b.history[expired:])
 		b.history = b.history[:n]
 	}
 	if c := b.requestClicks; c > 0 {

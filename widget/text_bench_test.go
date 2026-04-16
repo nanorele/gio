@@ -243,6 +243,94 @@ func FuzzEditorEditing(f *testing.F) {
 	})
 }
 
+func BenchmarkEditorReplace(b *testing.B) {
+	size := image.Pt(200, 1000)
+	gtx := layout.Context{
+		Ops: new(op.Ops),
+		Constraints: layout.Constraints{
+			Max: size,
+		},
+		Locale: english,
+	}
+	cache := text.NewShaper(text.NoSystemFonts(), text.WithCollection(benchFonts))
+	fontSize := unit.Sp(10)
+	fnt := font.Font{}
+	runes := []rune(latinDocument)[:500]
+
+	b.Run("no-filter", func(b *testing.B) {
+		e := Editor{}
+		e.SetText(string(runes))
+		e.Layout(gtx, cache, fnt, fontSize, op.CallOp{}, op.CallOp{})
+		gtx.Ops.Reset()
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			e.SetCaret(10, 10)
+			e.Insert("hello world")
+			e.Layout(gtx, cache, fnt, fontSize, op.CallOp{}, op.CallOp{})
+			gtx.Ops.Reset()
+		}
+	})
+	b.Run("with-filter", func(b *testing.B) {
+		e := Editor{Filter: "abcdefghijklmnopqrstuvwxyz "}
+		e.SetText(string(runes))
+		e.Layout(gtx, cache, fnt, fontSize, op.CallOp{}, op.CallOp{})
+		gtx.Ops.Reset()
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			e.SetCaret(10, 10)
+			e.Insert("hello world 123!")
+			e.Layout(gtx, cache, fnt, fontSize, op.CallOp{}, op.CallOp{})
+			gtx.Ops.Reset()
+		}
+	})
+	b.Run("with-maxlen", func(b *testing.B) {
+		e := Editor{MaxLen: 510}
+		e.SetText(string(runes))
+		e.Layout(gtx, cache, fnt, fontSize, op.CallOp{}, op.CallOp{})
+		gtx.Ops.Reset()
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			e.SetCaret(10, 10)
+			e.Insert("hello world")
+			e.Layout(gtx, cache, fnt, fontSize, op.CallOp{}, op.CallOp{})
+			gtx.Ops.Reset()
+		}
+	})
+}
+
+func BenchmarkGlyphIndex(b *testing.B) {
+	size := image.Pt(200, 1000)
+	gtx := layout.Context{
+		Ops: new(op.Ops),
+		Constraints: layout.Constraints{
+			Max: size,
+		},
+		Locale: english,
+	}
+	cache := text.NewShaper(text.NoSystemFonts(), text.WithCollection(benchFonts))
+	fontSize := unit.Sp(10)
+	fnt := font.Font{}
+
+	for _, runeCount := range []int{100, 500, 1000} {
+		runes := []rune(latinDocument)[:runeCount]
+		runesStr := string(runes)
+		b.Run(fmt.Sprintf("%d-runes", runeCount), func(b *testing.B) {
+			e := Editor{}
+			e.SetText(runesStr)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for b.Loop() {
+				e.SetText(runesStr)
+				e.Layout(gtx, cache, fnt, fontSize, op.CallOp{}, op.CallOp{})
+				gtx.Ops.Reset()
+			}
+		})
+	}
+}
+
 const (
 	latinDocument = `Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
 Porttitor eget dolor morbi non arcu risus quis.

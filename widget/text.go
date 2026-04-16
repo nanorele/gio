@@ -55,6 +55,7 @@ type textView struct {
 	seekCursor int64
 	rr         textSource
 	maskReader maskReader
+	runeBuf    [utf8.UTFMax]byte
 
 	graphemes []int
 
@@ -99,8 +100,7 @@ func (e *textView) SetSource(source textSource) {
 }
 
 func (e *textView) ReadRuneAt(off int64) (rune, int, error) {
-	var buf [utf8.UTFMax]byte
-	b := buf[:]
+	b := e.runeBuf[:utf8.UTFMax]
 	n, err := e.rr.ReadAt(b, off)
 	b = b[:n]
 	r, s := utf8.DecodeRune(b)
@@ -108,8 +108,7 @@ func (e *textView) ReadRuneAt(off int64) (rune, int, error) {
 }
 
 func (e *textView) ReadRuneBefore(off int64) (rune, int, error) {
-	var buf [utf8.UTFMax]byte
-	b := buf[:]
+	b := e.runeBuf[:utf8.UTFMax]
 	if off < utf8.UTFMax {
 		b = b[:off]
 		off = 0
@@ -434,6 +433,10 @@ func (e *textView) layoutText(lt *text.Shaper) {
 		r = &e.maskReader
 	}
 	e.index.reset()
+	// Pre-allocate index slices based on source size to reduce allocations.
+	if sz := e.rr.Size(); sz > 0 {
+		e.index.ensureCapacity(int(sz))
+	}
 	it := textIterator{viewport: image.Rectangle{Max: image.Point{X: math.MaxInt, Y: math.MaxInt}}}
 	if lt != nil {
 		lt.Layout(e.params, r)
@@ -455,6 +458,9 @@ func (e *textView) layoutText(lt *text.Shaper) {
 	}
 	e.paragraphReader.SetSource(e.rr)
 	e.graphemes = e.graphemes[:0]
+	if sz := e.rr.Size(); sz > 0 && cap(e.graphemes) < int(sz) {
+		e.graphemes = make([]int, 0, int(sz)+1)
+	}
 	for g := e.paragraphReader.Graphemes(); len(g) > 0; g = e.paragraphReader.Graphemes() {
 		if len(e.graphemes) > 0 && g[0] == e.graphemes[len(e.graphemes)-1] {
 			g = g[1:]

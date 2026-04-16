@@ -60,6 +60,27 @@ func (g *glyphIndex) reset() {
 	g.midCluster = false
 }
 
+// ensureCapacity pre-allocates internal slices based on expected glyph count
+// to avoid repeated slice growth during Glyph() calls.
+func (g *glyphIndex) ensureCapacity(glyphHint int) {
+	if glyphHint <= 0 {
+		return
+	}
+	if cap(g.glyphs) < glyphHint {
+		g.glyphs = make([]text.Glyph, 0, glyphHint)
+	}
+	// Positions are roughly 1:1 with glyphs plus some extras.
+	posHint := glyphHint + glyphHint/4
+	if cap(g.positions) < posHint {
+		g.positions = make([]combinedPos, 0, posHint)
+	}
+	// Estimate ~1 line per 40 glyphs.
+	lineHint := glyphHint/40 + 1
+	if cap(g.lines) < lineHint {
+		g.lines = make([]lineInfo, 0, lineHint)
+	}
+}
+
 type screenPos struct {
 	col  int
 	line int

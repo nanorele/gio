@@ -314,14 +314,6 @@ func (e *Editor) processPointerEvent(gtx layout.Context, ev event.Event) (Editor
 	return nil, false
 }
 
-func condFilter(pred bool, f key.Filter) event.Filter {
-	if pred {
-		return f
-	} else {
-		return nil
-	}
-}
-
 func (e *Editor) processKey(gtx layout.Context) (EditorEvent, bool) {
 	if e.text.Changed() {
 		return ChangeEvent{}, true
@@ -332,30 +324,51 @@ func (e *Editor) processKey(gtx layout.Context) (EditorEvent, bool) {
 	if gtx.Locale.Direction.Progression() != system.FromOrigin {
 		atEnd, atBeginning = atBeginning, atEnd
 	}
-	filters := []event.Filter{
-		key.FocusFilter{Target: e},
-		transfer.TargetFilter{Target: e, Type: "application/text"},
-		key.Filter{Focus: e, Name: key.NameEnter, Optional: key.ModShift},
-		key.Filter{Focus: e, Name: key.NameReturn, Optional: key.ModShift},
-
-		key.Filter{Focus: e, Name: "Z", Required: key.ModShortcut, Optional: key.ModShift},
-		key.Filter{Focus: e, Name: "C", Required: key.ModShortcut},
-		key.Filter{Focus: e, Name: "V", Required: key.ModShortcut},
-		key.Filter{Focus: e, Name: "X", Required: key.ModShortcut},
-		key.Filter{Focus: e, Name: "A", Required: key.ModShortcut},
-
-		key.Filter{Focus: e, Name: key.NameDeleteBackward, Optional: key.ModShortcutAlt | key.ModShift},
-		key.Filter{Focus: e, Name: key.NameDeleteForward, Optional: key.ModShortcutAlt | key.ModShift},
-
-		key.Filter{Focus: e, Name: key.NameHome, Optional: key.ModShortcut | key.ModShift},
-		key.Filter{Focus: e, Name: key.NameEnd, Optional: key.ModShortcut | key.ModShift},
-		key.Filter{Focus: e, Name: key.NamePageDown, Optional: key.ModShift},
-		key.Filter{Focus: e, Name: key.NamePageUp, Optional: key.ModShift},
-		condFilter(!atBeginning, key.Filter{Focus: e, Name: key.NameLeftArrow, Optional: key.ModShortcutAlt | key.ModShift}),
-		condFilter(!atBeginning, key.Filter{Focus: e, Name: key.NameUpArrow, Optional: key.ModShortcutAlt | key.ModShift}),
-		condFilter(!atEnd, key.Filter{Focus: e, Name: key.NameRightArrow, Optional: key.ModShortcutAlt | key.ModShift}),
-		condFilter(!atEnd, key.Filter{Focus: e, Name: key.NameDownArrow, Optional: key.ModShortcutAlt | key.ModShift}),
+	var filtersBuf [20]event.Filter
+	n := 0
+	filtersBuf[n] = key.FocusFilter{Target: e}
+	n++
+	filtersBuf[n] = transfer.TargetFilter{Target: e, Type: "application/text"}
+	n++
+	filtersBuf[n] = key.Filter{Focus: e, Name: key.NameEnter, Optional: key.ModShift}
+	n++
+	filtersBuf[n] = key.Filter{Focus: e, Name: key.NameReturn, Optional: key.ModShift}
+	n++
+	filtersBuf[n] = key.Filter{Focus: e, Name: "Z", Required: key.ModShortcut, Optional: key.ModShift}
+	n++
+	filtersBuf[n] = key.Filter{Focus: e, Name: "C", Required: key.ModShortcut}
+	n++
+	filtersBuf[n] = key.Filter{Focus: e, Name: "V", Required: key.ModShortcut}
+	n++
+	filtersBuf[n] = key.Filter{Focus: e, Name: "X", Required: key.ModShortcut}
+	n++
+	filtersBuf[n] = key.Filter{Focus: e, Name: "A", Required: key.ModShortcut}
+	n++
+	filtersBuf[n] = key.Filter{Focus: e, Name: key.NameDeleteBackward, Optional: key.ModShortcutAlt | key.ModShift}
+	n++
+	filtersBuf[n] = key.Filter{Focus: e, Name: key.NameDeleteForward, Optional: key.ModShortcutAlt | key.ModShift}
+	n++
+	filtersBuf[n] = key.Filter{Focus: e, Name: key.NameHome, Optional: key.ModShortcut | key.ModShift}
+	n++
+	filtersBuf[n] = key.Filter{Focus: e, Name: key.NameEnd, Optional: key.ModShortcut | key.ModShift}
+	n++
+	filtersBuf[n] = key.Filter{Focus: e, Name: key.NamePageDown, Optional: key.ModShift}
+	n++
+	filtersBuf[n] = key.Filter{Focus: e, Name: key.NamePageUp, Optional: key.ModShift}
+	n++
+	if !atBeginning {
+		filtersBuf[n] = key.Filter{Focus: e, Name: key.NameLeftArrow, Optional: key.ModShortcutAlt | key.ModShift}
+		n++
+		filtersBuf[n] = key.Filter{Focus: e, Name: key.NameUpArrow, Optional: key.ModShortcutAlt | key.ModShift}
+		n++
 	}
+	if !atEnd {
+		filtersBuf[n] = key.Filter{Focus: e, Name: key.NameRightArrow, Optional: key.ModShortcutAlt | key.ModShift}
+		n++
+		filtersBuf[n] = key.Filter{Focus: e, Name: key.NameDownArrow, Optional: key.ModShortcutAlt | key.ModShift}
+		n++
+	}
+	filters := filtersBuf[:n]
 
 	var adjust int
 	for {
@@ -843,19 +856,40 @@ func (e *Editor) replace(start, end int, s string, addHistory bool) int {
 	replaceSize := end - start
 	el := e.Len()
 	var sc int
-	idx := 0
-	for idx < len(s) {
-		if e.MaxLen > 0 && el-replaceSize+sc >= e.MaxLen {
-			s = s[:idx]
-			break
+	if e.Filter != "" || e.MaxLen > 0 {
+		// Use a builder to avoid O(n²) string concatenation when filtering.
+		var b strings.Builder
+		filtered := false // true if any rune was skipped by Filter
+		idx := 0
+		for idx < len(s) {
+			if e.MaxLen > 0 && el-replaceSize+sc >= e.MaxLen {
+				s = s[:idx]
+				if filtered {
+					s = b.String()
+				}
+				break
+			}
+			_, n := utf8.DecodeRuneInString(s[idx:])
+			if e.Filter != "" && !strings.Contains(e.Filter, s[idx:idx+n]) {
+				if !filtered {
+					filtered = true
+					b.Grow(len(s))
+					b.WriteString(s[:idx])
+				}
+				idx += n
+				continue
+			}
+			if filtered {
+				b.WriteString(s[idx : idx+n])
+			}
+			idx += n
+			sc++
 		}
-		_, n := utf8.DecodeRuneInString(s[idx:])
-		if e.Filter != "" && !strings.Contains(e.Filter, s[idx:idx+n]) {
-			s = s[:idx] + s[idx+n:]
-			continue
+		if filtered && idx >= len(s) {
+			s = b.String()
 		}
-		idx += n
-		sc++
+	} else {
+		sc = utf8.RuneCountInString(s)
 	}
 
 	if addHistory {
