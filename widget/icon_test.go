@@ -11,6 +11,13 @@ import (
 	"golang.org/x/exp/shiny/materialdesign/icons"
 )
 
+func TestNewIcon_Error(t *testing.T) {
+	_, err := NewIcon([]byte("invalid"))
+	if err == nil {
+		t.Error("expected error for invalid icon data")
+	}
+}
+
 func TestIcon_Alpha(t *testing.T) {
 	icon, err := NewIcon(icons.ToggleCheckBox)
 	if err != nil {

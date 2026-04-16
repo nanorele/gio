@@ -35,6 +35,9 @@ func TestClickable(t *testing.T) {
 		layout()
 		r.Frame(gtx.Ops)
 	}
+	if b1.Hovered() || b1.Pressed() {
+		t.Error("Clickable should not be hovered or pressed initially")
+	}
 	gtx.Execute(key.FocusCmd{Tag: &b1})
 	frame()
 	if !gtx.Focused(&b1) {
@@ -43,6 +46,7 @@ func TestClickable(t *testing.T) {
 	if gtx.Focused(&b2) {
 		t.Error("button 2 should not have focus")
 	}
+	_ = b1.History()
 	r.Queue(
 		key.Event{
 			Name:  key.NameReturn,
@@ -56,6 +60,7 @@ func TestClickable(t *testing.T) {
 	if !b1.Clicked(gtx) {
 		t.Error("button 1 did not get clicked when it got return press & release")
 	}
+
 	if b2.Clicked(gtx) {
 		t.Error("button 2 got clicked when it did not have focus")
 	}

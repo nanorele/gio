@@ -3,3 +3,8 @@
 *I.md
 cov
 coverage
+*.exe
+*.out
+*I.md
+*_cover
+*_cover.*

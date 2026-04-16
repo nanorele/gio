@@ -43,10 +43,10 @@ func TestPanicStrings(t *testing.T) {
 		f()
 	}
 
-	checkPanic("Kind.String()", func() { (Kind(0x1000)).String() })
-	checkPanic("Priority.String()", func() { (Priority(100)).String() })
-	checkPanic("Source.String()", func() { (Source(100)).String() })
-	checkPanic("Cursor.String()", func() { (Cursor(100)).String() })
+	checkPanic("Kind.String()", func() { _ = (Kind(0x1000)).String() })
+	checkPanic("Priority.String()", func() { _ = (Priority(100)).String() })
+	checkPanic("Source.String()", func() { _ = (Source(100)).String() })
+	checkPanic("Cursor.String()", func() { _ = (Cursor(100)).String() })
 }
 
 func TestScrollRange_Union(t *testing.T) {

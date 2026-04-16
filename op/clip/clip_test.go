@@ -1,6 +1,7 @@
 package clip_test
 
 import (
+	"image"
 	"image/color"
 	"math"
 	"testing"
@@ -77,3 +78,52 @@ func newWindow(t testing.TB, width, height int) *headless.Window {
 	}
 	return w
 }
+
+func TestPathMethods(t *testing.T) {
+	ops := new(op.Ops)
+	var p clip.Path
+	p.Begin(ops)
+	p.Move(f32.Pt(10, 10))
+	p.Line(f32.Pt(20, 0))
+	p.Quad(f32.Pt(10, 10), f32.Pt(20, 0))
+	p.Cube(f32.Pt(5, 5), f32.Pt(15, 5), f32.Pt(20, 0))
+	p.Arc(f32.Pt(10, 0), f32.Pt(0, 10), math.Pi/2)
+	p.Close()
+	spec := p.End()
+	_ = spec
+}
+
+func TestShapes(t *testing.T) {
+	ops := new(op.Ops)
+	t.Run("Rect", func(t *testing.T) {
+		r := clip.Rect{Max: image.Pt(100, 100)}
+		r.Op().Push(ops).Pop()
+		r.Push(ops).Pop()
+	})
+	t.Run("RRect", func(t *testing.T) {
+		rr := clip.UniformRRect(image.Rect(0, 0, 100, 100), 10)
+		rr.Op(ops).Push(ops).Pop()
+		rr.Push(ops).Pop()
+
+		zero := clip.RRect{Rect: image.Rect(0, 0, 100, 100)}
+		zero.Op(ops).Push(ops).Pop()
+	})
+	t.Run("Ellipse", func(t *testing.T) {
+		el := clip.Ellipse(image.Rect(0, 0, 100, 50))
+		el.Op(ops).Push(ops).Pop()
+		el.Push(ops).Pop()
+
+		empty := clip.Ellipse{}
+		empty.Op(ops).Push(ops).Pop()
+	})
+}
+
+func TestStroke(t *testing.T) {
+	ops := new(op.Ops)
+	r := clip.Rect{Max: image.Pt(100, 100)}
+	clip.Stroke{
+		Path:  r.Path(),
+		Width: 5,
+	}.Op().Push(ops).Pop()
+}
+

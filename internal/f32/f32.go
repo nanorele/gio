@@ -30,7 +30,7 @@ func Rect(x0, y0, x1, y1 float32) Rectangle {
 	if y0 > y1 {
 		y0, y1 = y1, y0
 	}
-	return Rectangle{Point{x0, y0}, Point{x1, y1}}
+	return Rectangle{Point{X: x0, Y: y0}, Point{X: x1, Y: y1}}
 }
 
 var Pt = f32.Pt
@@ -104,15 +104,15 @@ func (r Rectangle) Empty() bool {
 
 func (r Rectangle) Add(p Point) Rectangle {
 	return Rectangle{
-		Point{r.Min.X + p.X, r.Min.Y + p.Y},
-		Point{r.Max.X + p.X, r.Max.Y + p.Y},
+		Point{X: r.Min.X + p.X, Y: r.Min.Y + p.Y},
+		Point{X: r.Max.X + p.X, Y: r.Max.Y + p.Y},
 	}
 }
 
 func (r Rectangle) Sub(p Point) Rectangle {
 	return Rectangle{
-		Point{r.Min.X - p.X, r.Min.Y - p.Y},
-		Point{r.Max.X - p.X, r.Max.Y - p.Y},
+		Point{X: r.Min.X - p.X, Y: r.Min.Y - p.Y},
+		Point{X: r.Max.X - p.X, Y: r.Max.Y - p.Y},
 	}
 }
 
@@ -136,9 +136,8 @@ func FRect(r image.Rectangle) Rectangle {
 }
 
 func FPt(p image.Point) Point {
-	return Point{
-		X: float32(p.X), Y: float32(p.Y),
-	}
+	return Point{X: float32(p.X), Y: float32(p.Y)}
+
 }
 
 func ceil(v float32) int {

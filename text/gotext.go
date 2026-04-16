@@ -33,6 +33,9 @@ import (
 
 type document struct {
 	lines           []line
+	runs            []runLayout
+	glyphs          []glyph
+	visual          []int
 	alignment       Alignment
 	alignWidth      int
 	unreadRuneCount int
@@ -40,12 +43,18 @@ type document struct {
 
 func (l *document) append(other document) {
 	l.lines = append(l.lines, other.lines...)
+	l.runs = append(l.runs, other.runs...)
+	l.glyphs = append(l.glyphs, other.glyphs...)
+	l.visual = append(l.visual, other.visual...)
 	l.alignWidth = max(l.alignWidth, other.alignWidth)
 	calculateYOffsets(l.lines)
 }
 
 func (l *document) reset() {
 	l.lines = l.lines[:0]
+	l.runs = l.runs[:0]
+	l.glyphs = l.glyphs[:0]
+	l.visual = l.visual[:0]
 	l.alignment = Start
 	l.alignWidth = 0
 	l.unreadRuneCount = 0
@@ -148,6 +157,10 @@ type shaperImpl struct {
 	splitScratch2    []shaping.Input
 	outScratchBuf    []shaping.Output
 	scratchRunes     []rune
+	scratchLines     []line
+	scratchRuns      []runLayout
+	scratchGlyphs    []glyph
+	scratchVisual    []int
 	bitmapGlyphCache bitmapCache
 }
 
@@ -430,12 +443,20 @@ func replaceControlCharacters(in []rune) []rune {
 }
 
 func (s *shaperImpl) LayoutString(params Parameters, txt string) document {
-	return s.LayoutRunes(params, []rune(txt))
+	s.scratchRunes = s.scratchRunes[:0]
+	for _, r := range txt {
+		s.scratchRunes = append(s.scratchRunes, r)
+	}
+	return s.LayoutRunes(params, s.scratchRunes)
 }
 
 func (s *shaperImpl) Layout(params Parameters, txt io.RuneReader) document {
 	s.scratchRunes = s.scratchRunes[:0]
-	for r, _, err := txt.ReadRune(); err != nil; r, _, err = txt.ReadRune() {
+	for {
+		r, _, err := txt.ReadRune()
+		if err != nil {
+			break
+		}
 		s.scratchRunes = append(s.scratchRunes, r)
 	}
 	return s.LayoutRunes(params, s.scratchRunes)
@@ -472,13 +493,106 @@ func (s *shaperImpl) LayoutRunes(params Parameters, txt []rune) document {
 		hasNewline = false
 	}
 
-	textLines := make([]line, len(ls))
+	totalRuns := 0
+	totalGlyphs := 0
+	for _, l := range ls {
+		totalRuns += len(l)
+		for _, r := range l {
+			totalGlyphs += len(r.Glyphs)
+		}
+	}
+
+	if needed := len(ls); needed > len(s.scratchLines) {
+		s.scratchLines = slices.Grow(s.scratchLines, needed)
+	}
+	if needed := totalRuns; needed > len(s.scratchRuns) {
+		s.scratchRuns = slices.Grow(s.scratchRuns, needed)
+	}
+	if needed := totalGlyphs; needed > len(s.scratchGlyphs) {
+		s.scratchGlyphs = slices.Grow(s.scratchGlyphs, needed)
+	}
+	if needed := totalRuns; needed > len(s.scratchVisual) {
+		s.scratchVisual = slices.Grow(s.scratchVisual, needed)
+	}
+
+	resLines := make([]line, len(ls))
+	resRuns := make([]runLayout, totalRuns)
+	resGlyphs := make([]glyph, totalGlyphs)
+	resVisual := make([]int, totalRuns)
+
+	runIdx := 0
+	glyphIdx := 0
 	maxHeight := fixed.Int26_6(0)
 	for i := range ls {
-		otLine := toLine(s.faceToIndex, ls[i], params.Locale.Direction)
-		if otLine.lineHeight > maxHeight {
-			maxHeight = otLine.lineHeight
+		l := ls[i]
+		lineRuns := resRuns[runIdx : runIdx+len(l)]
+		lineVisual := resVisual[runIdx : runIdx+len(l)]
+		runIdx += len(l)
+
+		otLine := line{
+			runs:        lineRuns,
+			visualOrder: lineVisual,
+			direction:   params.Locale.Direction,
 		}
+
+		for j := range l {
+			run := l[j]
+			if run.Size > maxHeight {
+				maxHeight = run.Size
+			}
+			var font *font.Font
+			if run.Face != nil {
+				font = run.Face.Font
+			}
+
+			runGlyphs := resGlyphs[glyphIdx : glyphIdx+len(run.Glyphs)]
+			glyphIdx += len(run.Glyphs)
+
+			for k, g := range run.Glyphs {
+				var bounds fixed.Rectangle26_6
+				bounds.Min.X = g.XBearing
+				bounds.Min.Y = -g.YBearing
+				bounds.Max = bounds.Min.Add(fixed.Point26_6{X: g.Width, Y: -g.Height})
+				runGlyphs[k] = glyph{
+					id:           newGlyphID(run.Size, s.faceToIndex[font], g.GlyphID),
+					clusterIndex: g.ClusterIndex,
+					runeCount:    g.RuneCount,
+					glyphCount:   g.GlyphCount,
+					xAdvance:     g.XAdvance,
+					yAdvance:     g.YAdvance,
+					xOffset:      g.XOffset,
+					yOffset:      g.YOffset,
+					bounds:       bounds,
+				}
+			}
+
+			lineRuns[j] = runLayout{
+				Glyphs:         runGlyphs,
+				Runes:          Range{Count: run.Runes.Count, Offset: otLine.runeCount},
+				Direction:      unmapDirection(run.Direction),
+				face:           run.Face,
+				Advance:        run.Advance,
+				PPEM:           run.Size,
+				VisualPosition: int(run.VisualIndex),
+			}
+			lineVisual[run.VisualIndex] = j
+			otLine.runeCount += run.Runes.Count
+			otLine.width += run.Advance
+			if otLine.ascent < run.LineBounds.Ascent {
+				otLine.ascent = run.LineBounds.Ascent
+			}
+			if otLine.descent < -run.LineBounds.Descent+run.LineBounds.Gap {
+				otLine.descent = -run.LineBounds.Descent + run.LineBounds.Gap
+			}
+		}
+
+		otLine.lineHeight = maxHeight
+		x := fixed.Int26_6(0)
+		for _, idx := range lineVisual {
+			lineRuns[idx].X = x
+			x += lineRuns[idx].Advance
+		}
+
 		if isFinalLine := i == len(ls)-1; isFinalLine {
 			if hasNewline {
 				otLine.insertTrailingSyntheticNewline(len(txt))
@@ -487,8 +601,9 @@ func (s *shaperImpl) LayoutRunes(params Parameters, txt []rune) document {
 				otLine.setTruncatedCount(truncated)
 			}
 		}
-		textLines[i] = otLine
+		resLines[i] = otLine
 	}
+
 	if params.LineHeight != 0 {
 		maxHeight = params.LineHeight
 	}
@@ -497,14 +612,17 @@ func (s *shaperImpl) LayoutRunes(params Parameters, txt []rune) document {
 	}
 
 	maxHeight = floatToFixed(fixedToFloat(maxHeight) * params.LineHeightScale)
-	for i := range textLines {
-		textLines[i].lineHeight = maxHeight
+	for i := range resLines {
+		resLines[i].lineHeight = maxHeight
 	}
-	calculateYOffsets(textLines)
+	calculateYOffsets(resLines)
 	return document{
-		lines:      textLines,
+		lines:      resLines,
+		runs:       resRuns,
+		glyphs:     resGlyphs,
+		visual:     resVisual,
 		alignment:  params.Alignment,
-		alignWidth: alignWidth(params.MinWidth, textLines),
+		alignWidth: alignWidth(params.MinWidth, resLines),
 	}
 }
 
@@ -701,16 +819,6 @@ func mapDirection(d system.TextDirection) di.Direction {
 	return di.DirectionLTR
 }
 
-func unmapDirection(d di.Direction) system.TextDirection {
-	switch d {
-	case di.DirectionLTR:
-		return system.LTR
-	case di.DirectionRTL:
-		return system.RTL
-	}
-	return system.LTR
-}
-
 func toGioGlyphs(in []shaping.Glyph, ppem fixed.Int26_6, faceIdx int) []glyph {
 	out := make([]glyph, 0, len(in))
 	for _, g := range in {
@@ -781,4 +889,14 @@ func toLine(faceToIndex map[*font.Font]int, o shaping.Line, dir system.TextDirec
 		x += line.runs[runIdx].Advance
 	}
 	return line
+}
+
+func unmapDirection(d di.Direction) system.TextDirection {
+	switch d {
+	case di.DirectionLTR:
+		return system.LTR
+	case di.DirectionRTL:
+		return system.RTL
+	}
+	return system.LTR
 }

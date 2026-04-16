@@ -2,6 +2,7 @@ package widget_test
 
 import (
 	"image"
+	"image/color"
 	"testing"
 
 	"github.com/nanorele/gio/f32"
@@ -12,6 +13,23 @@ import (
 	"github.com/nanorele/gio/op"
 	"github.com/nanorele/gio/widget"
 )
+
+func TestBorder(t *testing.T) {
+	gtx := layout.Context{
+		Ops: new(op.Ops),
+		Constraints: layout.Exact(image.Pt(100, 100)),
+	}
+	border := widget.Border{
+		Color: color.NRGBA{A: 255},
+		Width: 2,
+	}
+	dims := border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Dimensions{Size: image.Pt(50, 50)}
+	})
+	if dims.Size != image.Pt(50, 50) {
+		t.Errorf("expected size (50, 50), got %v", dims.Size)
+	}
+}
 
 func TestBool(t *testing.T) {
 	var (
@@ -28,6 +46,9 @@ func TestBool(t *testing.T) {
 			semantic.DescriptionOp("description").Add(gtx.Ops)
 			return layout.Dimensions{Size: image.Pt(100, 100)}
 		})
+	}
+	if b.Hovered() || b.Pressed() {
+		t.Error("Bool should not be hovered or pressed initially")
 	}
 	layout()
 	r.Frame(gtx.Ops)
@@ -57,4 +78,5 @@ func TestBool(t *testing.T) {
 	if !b.Value || !n.Selected {
 		t.Error("click did not select")
 	}
+	_ = b.History()
 }

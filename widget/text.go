@@ -301,7 +301,7 @@ func (e *textView) PaintText(gtx layout.Context, material op.CallOp) {
 		}
 		startGlyph += line.glyphs
 	}
-	var glyphs [32]text.Glyph
+	var glyphs [512]text.Glyph
 	line := glyphs[:0]
 	for _, g := range e.index.glyphs[startGlyph:] {
 		var ok bool

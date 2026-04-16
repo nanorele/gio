@@ -72,6 +72,8 @@ type Editor struct {
 
 	history []modification
 
+	historyScratch []rune
+
 	nextHistoryIdx int
 
 	pending []EditorEvent
@@ -857,7 +859,10 @@ func (e *Editor) replace(start, end int, s string, addHistory bool) int {
 	}
 
 	if addHistory {
-		deleted := make([]rune, 0, replaceSize)
+		if needed := replaceSize; needed > cap(e.historyScratch) {
+			e.historyScratch = make([]rune, 0, needed)
+		}
+		deleted := e.historyScratch[:0]
 		readPos := e.text.ByteOffset(start)
 		for range replaceSize {
 			ru, s, _ := e.text.ReadRuneAt(int64(readPos))

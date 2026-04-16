@@ -7,6 +7,26 @@ import (
 	"github.com/nanorele/gio/op"
 )
 
+func TestBackground(t *testing.T) {
+	gtx := Context{
+		Ops: new(op.Ops),
+		Constraints: Constraints{
+			Max: image.Pt(100, 100),
+		},
+	}
+	dims := Background{}.Layout(gtx,
+		func(gtx Context) Dimensions {
+			return Dimensions{Size: gtx.Constraints.Min}
+		},
+		func(gtx Context) Dimensions {
+			return Dimensions{Size: image.Pt(50, 50)}
+		},
+	)
+	if dims.Size != image.Pt(50, 50) {
+		t.Errorf("expected size (50, 50), got %v", dims.Size)
+	}
+}
+
 func BenchmarkStack(b *testing.B) {
 	gtx := Context{
 		Ops: new(op.Ops),

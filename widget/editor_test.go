@@ -33,6 +33,51 @@ var english = system.Locale{
 	Direction: system.LTR,
 }
 
+func TestEditor_Basic(t *testing.T) {
+	e := new(Editor)
+	e.SetText("hello")
+	if e.Text() != "hello" {
+		t.Error("SetText/Text failed")
+	}
+}
+
+
+func TestEditor_Scroll(t *testing.T) {
+	e := new(Editor)
+	e.SetText("line 1\nline 2\nline 3\nline 4\nline 5")
+	gtx := layout.Context{
+		Ops:         new(op.Ops),
+		Constraints: layout.Exact(image.Pt(100, 20)), // Short viewport
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+	}
+	cache := text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
+	e.Layout(gtx, cache, font.Font{}, unit.Sp(10), op.CallOp{}, op.CallOp{})
+	
+	e.SetScrollY(10)
+	if got := e.GetScrollY(); got != 10 {
+		t.Errorf("SetScrollY/GetScrollY failed: got %d", got)
+	}
+	_ = e.GetScrollX()
+	_ = e.GetScrollBounds()
+}
+
+func TestEditor_Regions(t *testing.T) {
+	e := new(Editor)
+	e.SetText("hello")
+	gtx := layout.Context{
+		Ops:         new(op.Ops),
+		Constraints: layout.Exact(image.Pt(100, 100)),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+	}
+	cache := text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
+	e.Layout(gtx, cache, font.Font{}, unit.Sp(10), op.CallOp{}, op.CallOp{})
+	
+	regs := e.Regions(0, 5, nil)
+	if len(regs) == 0 {
+		t.Error("Regions returned nothing")
+	}
+}
+
 func TestEditorHistory(t *testing.T) {
 	e := new(Editor)
 

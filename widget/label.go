@@ -64,7 +64,7 @@ func (l Label) LayoutDetailed(gtx layout.Context, lt *text.Shaper, font font.Fon
 		material: textMaterial,
 	}
 	semantic.LabelOp(txt).Add(gtx.Ops)
-	var glyphs [32]text.Glyph
+	var glyphs [512]text.Glyph
 	line := glyphs[:0]
 	for g, ok := lt.NextGlyph(); ok; g, ok = lt.NextGlyph() {
 		var ok bool

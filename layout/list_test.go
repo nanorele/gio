@@ -60,6 +60,33 @@ func TestListScrollToEnd(t *testing.T) {
 	}
 }
 
+func TestListScroll(t *testing.T) {
+	var l List
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(20, 10)),
+	}
+	el := func(gtx Context, idx int) Dimensions {
+		return Dimensions{Size: image.Pt(10, 10)}
+	}
+	l.ScrollTo(1)
+	l.Layout(gtx, 5, el)
+	if l.Position.First != 1 {
+		t.Errorf("ScrollTo(1) failed, first is %d", l.Position.First)
+	}
+	
+	l.ScrollBy(1.5) // scroll by 1.5 items? No, ScrollBy is float items.
+	l.Layout(gtx, 5, el)
+	// ScrollBy(1.5) from first=1 should be first=2, offset=5 (since width=10)
+	if l.Position.First != 2 || l.Position.Offset != 5 {
+		t.Errorf("ScrollBy(1.5) failed: First=%d, Offset=%d", l.Position.First, l.Position.Offset)
+	}
+
+	if l.Dragging() {
+		t.Error("list should not be dragging")
+	}
+}
+
 func TestListPosition(t *testing.T) {
 	_s := func(e ...event.Event) []event.Event { return e }
 	r := new(input.Router)

@@ -116,8 +116,116 @@ func mouseClickEvents(times ...time.Duration) []event.Event {
 	return events
 }
 
+func TestScroll_Complete(t *testing.T) {
+	var s Scroll
+	var ops op.Ops
+	
+	rect := image.Rect(0, 0, 100, 100)
+	stack := clip.Rect(rect).Push(&ops)
+	s.Add(&ops)
+	stack.Pop()
+
+	var r input.Router
+	cfg := unit.Metric{PxPerDp: 1, PxPerSp: 1}
+	tm := time.Now()
+
+	// 1. Mouse Scroll
+	s.Update(cfg, r.Source(), tm, Vertical, pointer.ScrollRange{}, pointer.ScrollRange{Min: -100, Max: 100})
+	r.Frame(&ops)
+	r.Queue(pointer.Event{
+		Kind:     pointer.Scroll,
+		Source:   pointer.Mouse,
+		Position: f32.Pt(50, 50),
+		Scroll:   f32.Pt(0, 20),
+	})
+	dist := s.Update(cfg, r.Source(), tm, Vertical, pointer.ScrollRange{Min: -100, Max: 100}, pointer.ScrollRange{Min: -100, Max: 100})
+	if dist != 20 {
+		t.Errorf("Mouse scroll: expected 20, got %d", dist)
+	}
+
+	// 2. Touch Drag (Scroll)
+	r.Queue(
+		pointer.Event{Kind: pointer.Press, Source: pointer.Touch, PointerID: 1, Position: f32.Pt(50, 50)},
+	)
+	// Process press first to start dragging
+	_ = s.Update(cfg, r.Source(), tm, Vertical, pointer.ScrollRange{Min: -100, Max: 100}, pointer.ScrollRange{Min: -100, Max: 100})
+
+	r.Queue(
+		pointer.Event{Kind: pointer.Move, Source: pointer.Touch, PointerID: 1, Position: f32.Pt(50, 30), Priority: pointer.Grabbed},
+	)
+	dist = s.Update(cfg, r.Source(), tm, Vertical, pointer.ScrollRange{Min: -100, Max: 100}, pointer.ScrollRange{Min: -100, Max: 100})
+
+	// last=50, current=30, dist = 50-30 = 20
+	if dist != 20 {
+		t.Errorf("Touch drag: expected 20, got %d", dist)
+	}
+	if s.State() != StateDragging {
+		t.Errorf("expected dragging state, got %v", s.State())
+	}
+}
+
+func TestDrag_Complete(t *testing.T) {
+	var d Drag
+	var ops op.Ops
+	
+	rect := image.Rect(0, 0, 100, 100)
+	stack := clip.Rect(rect).Push(&ops)
+	d.Add(&ops)
+	stack.Pop()
+
+	var r input.Router
+	cfg := unit.Metric{PxPerDp: 1, PxPerSp: 1}
+
+	d.Update(cfg, r.Source(), Both)
+	r.Frame(&ops)
+	r.Queue(
+		pointer.Event{Kind: pointer.Press, Source: pointer.Touch, PointerID: 1, Position: f32.Pt(50, 50)},
+		pointer.Event{Kind: pointer.Move, Source: pointer.Touch, PointerID: 1, Position: f32.Pt(70, 80), Priority: pointer.Grabbed},
+	)
+
+	
+	ev, ok := d.Update(cfg, r.Source(), Both)
+	if !ok || ev.Kind != pointer.Press {
+		t.Errorf("expected Press, got %v (ok=%v)", ev, ok)
+	}
+	ev, ok = d.Update(cfg, r.Source(), Both)
+	if !ok || ev.Kind != pointer.Drag {
+		t.Errorf("expected Drag, got %v (ok=%v)", ev, ok)
+	}
+	if ev.Position != f32.Pt(70, 80) {
+		t.Errorf("expected pos (70, 80), got %v", ev.Position)
+	}
+}
+
+
+func TestScroll_Both(t *testing.T) {
+	var s Scroll
+	var ops op.Ops
+	rect := image.Rect(0, 0, 100, 100)
+	stack := clip.Rect(rect).Push(&ops)
+	s.Add(&ops)
+	stack.Pop()
+
+	var r input.Router
+	cfg := unit.Metric{PxPerDp: 1, PxPerSp: 1}
+	tm := time.Now()
+
+	s.Update(cfg, r.Source(), tm, Both, pointer.ScrollRange{Min: -100, Max: 100}, pointer.ScrollRange{Min: -100, Max: 100})
+	r.Frame(&ops)
+	r.Queue(pointer.Event{
+		Kind:     pointer.Scroll,
+		Source:   pointer.Mouse,
+		Position: f32.Pt(50, 50),
+		Scroll:   f32.Pt(10, 20),
+	})
+	dist := s.Update(cfg, r.Source(), tm, Both, pointer.ScrollRange{Min: -100, Max: 100}, pointer.ScrollRange{Min: -100, Max: 100})
+	if dist != 30 { // 10 + 20
+		t.Errorf("Both axis scroll: expected 30, got %d", dist)
+	}
+}
+
 func TestStrings(t *testing.T) {
-	if Horizontal.String() != "Horizontal" || Vertical.String() != "Vertical" {
+	if Horizontal.String() != "Horizontal" || Vertical.String() != "Vertical" || Both.String() != "Both" {
 		t.Errorf("Axis.String() failed")
 	}
 	if KindPress.String() != "KindPress" || KindClick.String() != "KindClick" || KindCancel.String() != "KindCancel" {
@@ -128,6 +236,8 @@ func TestStrings(t *testing.T) {
 	}
 	ClickEvent{}.ImplementsEvent()
 }
+
+
 
 func TestClickProperties(t *testing.T) {
 	var c Click
@@ -240,4 +350,35 @@ func TestScroll(t *testing.T) {
 	}
 
 	s.Stop()
+}
+
+func TestDrag_Axis(t *testing.T) {
+	var d Drag
+	var ops op.Ops
+	d.Add(&ops)
+
+	var r input.Router
+	cfg := unit.Metric{PxPerDp: 1, PxPerSp: 1}
+
+	r.Frame(&ops)
+	r.Queue(
+		pointer.Event{Kind: pointer.Press, Source: pointer.Touch, PointerID: 1, Position: f32.Pt(10, 10)},
+		pointer.Event{Kind: pointer.Move, Source: pointer.Touch, PointerID: 1, Position: f32.Pt(20, 20), Priority: pointer.Grabbed},
+	)
+
+	ev, _ := d.Update(cfg, r.Source(), Horizontal)
+	if ev.Kind == pointer.Drag && ev.Position.Y != 10 {
+		t.Errorf("expected Y to be locked to 10, got %v", ev.Position.Y)
+	}
+
+	d = Drag{}
+	d.Add(&ops)
+	r.Queue(
+		pointer.Event{Kind: pointer.Press, Source: pointer.Touch, PointerID: 2, Position: f32.Pt(10, 10)},
+		pointer.Event{Kind: pointer.Move, Source: pointer.Touch, PointerID: 2, Position: f32.Pt(20, 20), Priority: pointer.Grabbed},
+	)
+	ev, _ = d.Update(cfg, r.Source(), Vertical)
+	if ev.Kind == pointer.Drag && ev.Position.X != 10 {
+		t.Errorf("expected X to be locked to 10, got %v", ev.Position.X)
+	}
 }

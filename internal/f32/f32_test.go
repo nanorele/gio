@@ -7,10 +7,10 @@ import (
 
 func TestRectangle(t *testing.T) {
 	r := Rect(10, 20, 30, 40)
-	if got, want := r.Min, (Point{10, 20}); got != want {
+	if got, want := r.Min, (Point{X: 10, Y: 20}); got != want {
 		t.Errorf("got %v, want %v", got, want)
 	}
-	if got, want := r.Max, (Point{30, 40}); got != want {
+	if got, want := r.Max, (Point{X: 30, Y: 40}); got != want {
 		t.Errorf("got %v, want %v", got, want)
 	}
 
@@ -23,7 +23,7 @@ func TestRectangle(t *testing.T) {
 		t.Errorf("got %s, want %s", got, want)
 	}
 
-	if got, want := r.Size(), (Point{20, 20}); got != want {
+	if got, want := r.Size(), (Point{X: 20, Y: 20}); got != want {
 		t.Errorf("got %v, want %v", got, want)
 	}
 
@@ -70,8 +70,8 @@ func TestRectangle(t *testing.T) {
 	tests3 := []struct {
 		r, want Rectangle
 	}{
-		{Rectangle{Point{30, 40}, Point{10, 20}}, Rect(10, 20, 30, 40)},
-		{Rectangle{Point{10, 40}, Point{30, 20}}, Rect(10, 20, 30, 40)},
+		{Rectangle{Point{X: 30, Y: 40}, Point{X: 10, Y: 20}}, Rect(10, 20, 30, 40)},
+		{Rectangle{Point{X: 10, Y: 40}, Point{X: 30, Y: 20}}, Rect(10, 20, 30, 40)},
 	}
 	for _, tc := range tests3 {
 		if got := tc.r.Canon(); got != tc.want {
@@ -88,7 +88,7 @@ func TestRectangle(t *testing.T) {
 	}
 
 	// Add/Sub
-	p := Point{5, 5}
+	p := Point{X: 5, Y: 5}
 	if got, want := r.Add(p), Rect(15, 25, 35, 45); got != want {
 		t.Errorf("Add: got %v, want %v", got, want)
 	}

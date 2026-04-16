@@ -21,6 +21,7 @@ type entry[K comparable, V any] struct {
 type lru[K comparable, V any] struct {
 	m          map[K]*entry[K, V]
 	head, tail *entry[K, V]
+	onEvict    func(V)
 }
 
 func (l *lru[K, V]) Get(k K) (V, bool) {
@@ -48,6 +49,9 @@ func (l *lru[K, V]) Put(k K, v V) {
 		oldest := l.tail.next
 		l.remove(oldest)
 		delete(l.m, oldest.key)
+		if l.onEvict != nil {
+			l.onEvict(oldest.v)
+		}
 	}
 }
 

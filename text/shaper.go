@@ -157,6 +157,9 @@ type Shaper struct {
 
 	advance fixed.Int26_6
 
+	pathOps   *op.Ops
+	bitmapOps *op.Ops
+
 	done bool
 	err  error
 }
@@ -176,7 +179,10 @@ func WithCollection(collection []FontFace) ShaperOption {
 }
 
 func NewShaper(options ...ShaperOption) *Shaper {
-	l := &Shaper{}
+	l := &Shaper{
+		pathOps:   new(op.Ops),
+		bitmapOps: new(op.Ops),
+	}
 	for _, opt := range options {
 		opt(l)
 	}
@@ -189,6 +195,12 @@ func (l *Shaper) init() {
 		return
 	}
 	l.initialized = true
+	if l.pathOps == nil {
+		l.pathOps = new(op.Ops)
+	}
+	if l.bitmapOps == nil {
+		l.bitmapOps = new(op.Ops)
+	}
 	l.reader = bufio.NewReader(nil)
 	l.shaper = *newShaperImpl(!l.config.disableSystemFonts, l.config.collection)
 }
@@ -309,7 +321,7 @@ func (l *Shaper) layoutParagraph(params Parameters, asStr string, asBytes []byte
 	if l, ok := l.layoutCache.Get(lk); ok {
 		return l
 	}
-	lines := l.shaper.LayoutRunes(params, []rune(asStr))
+	lines := l.shaper.LayoutString(params, asStr)
 	l.layoutCache.Put(lk, lines)
 	return lines
 }
@@ -480,8 +492,7 @@ func (l *Shaper) Shape(gs []Glyph) clip.PathSpec {
 	if ok {
 		return shape
 	}
-	pathOps := new(op.Ops)
-	shape = l.shaper.Shape(pathOps, gs)
+	shape = l.shaper.Shape(l.pathOps, gs)
 	l.pathCache.Put(key, gs, shape)
 	return shape
 }
@@ -493,8 +504,7 @@ func (l *Shaper) Bitmaps(gs []Glyph) op.CallOp {
 	if ok {
 		return call
 	}
-	callOps := new(op.Ops)
-	call = l.shaper.Bitmaps(callOps, gs)
+	call = l.shaper.Bitmaps(l.bitmapOps, gs)
 	l.bitmapShapeCache.Put(key, gs, call)
 	return call
 }

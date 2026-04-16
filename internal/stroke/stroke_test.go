@@ -1,11 +1,13 @@
 package stroke
 
 import (
+	"encoding/binary"
 	"math"
 	"strconv"
 	"testing"
 
 	"github.com/nanorele/gio/internal/f32"
+	"github.com/nanorele/gio/internal/scene"
 )
 
 func TestNormPt(t *testing.T) {
@@ -15,38 +17,32 @@ func TestNormPt(t *testing.T) {
 	}
 
 	scenarios := []scenario{
-
 		{l: 10, ptIn: f32.Point{X: 0, Y: 0}, ptOut: f32.Point{X: 0, Y: 0}},
 		{l: -10, ptIn: f32.Point{X: 0, Y: 0}, ptOut: f32.Point{X: 0, Y: 0}},
-
 		{l: +20, ptIn: f32.Point{X: +30, Y: 0}, ptOut: f32.Point{X: +20, Y: 0}},
 		{l: +20, ptIn: f32.Point{X: +20, Y: 0}, ptOut: f32.Point{X: +20, Y: 0}},
 		{l: +20, ptIn: f32.Point{X: +10, Y: 0}, ptOut: f32.Point{X: +20, Y: 0}},
 		{l: +20, ptIn: f32.Point{X: -10, Y: 0}, ptOut: f32.Point{X: -20, Y: 0}},
 		{l: +20, ptIn: f32.Point{X: -20, Y: 0}, ptOut: f32.Point{X: -20, Y: 0}},
 		{l: +20, ptIn: f32.Point{X: -30, Y: 0}, ptOut: f32.Point{X: -20, Y: 0}},
-
 		{l: -20, ptIn: f32.Point{X: +30, Y: 0}, ptOut: f32.Point{X: -20, Y: 0}},
 		{l: -20, ptIn: f32.Point{X: +20, Y: 0}, ptOut: f32.Point{X: -20, Y: 0}},
 		{l: -20, ptIn: f32.Point{X: +10, Y: 0}, ptOut: f32.Point{X: -20, Y: 0}},
 		{l: -20, ptIn: f32.Point{X: -10, Y: 0}, ptOut: f32.Point{X: +20, Y: 0}},
 		{l: -20, ptIn: f32.Point{X: -20, Y: 0}, ptOut: f32.Point{X: +20, Y: 0}},
 		{l: -20, ptIn: f32.Point{X: -30, Y: 0}, ptOut: f32.Point{X: +20, Y: 0}},
-
 		{l: +20, ptIn: f32.Point{X: 0, Y: +30}, ptOut: f32.Point{X: 0, Y: +20}},
 		{l: +20, ptIn: f32.Point{X: 0, Y: +20}, ptOut: f32.Point{X: 0, Y: +20}},
 		{l: +20, ptIn: f32.Point{X: 0, Y: +10}, ptOut: f32.Point{X: 0, Y: +20}},
 		{l: +20, ptIn: f32.Point{X: 0, Y: -10}, ptOut: f32.Point{X: 0, Y: -20}},
 		{l: +20, ptIn: f32.Point{X: 0, Y: -20}, ptOut: f32.Point{X: 0, Y: -20}},
 		{l: +20, ptIn: f32.Point{X: 0, Y: -30}, ptOut: f32.Point{X: 0, Y: -20}},
-
 		{l: -20, ptIn: f32.Point{X: 0, Y: +30}, ptOut: f32.Point{X: 0, Y: -20}},
 		{l: -20, ptIn: f32.Point{X: 0, Y: +20}, ptOut: f32.Point{X: 0, Y: -20}},
 		{l: -20, ptIn: f32.Point{X: 0, Y: +10}, ptOut: f32.Point{X: 0, Y: -20}},
 		{l: -20, ptIn: f32.Point{X: 0, Y: -10}, ptOut: f32.Point{X: 0, Y: +20}},
 		{l: -20, ptIn: f32.Point{X: 0, Y: -20}, ptOut: f32.Point{X: 0, Y: +20}},
 		{l: -20, ptIn: f32.Point{X: 0, Y: -30}, ptOut: f32.Point{X: 0, Y: +20}},
-
 		{l: +20, ptIn: f32.Point{X: +90, Y: +90}, ptOut: f32.Point{X: +14.142137, Y: +14.142137}},
 		{l: +20, ptIn: f32.Point{X: +30, Y: +30}, ptOut: f32.Point{X: +14.142136, Y: +14.142136}},
 		{l: +20, ptIn: f32.Point{X: +20, Y: +20}, ptOut: f32.Point{X: +14.142136, Y: +14.142136}},
@@ -55,7 +51,6 @@ func TestNormPt(t *testing.T) {
 		{l: +20, ptIn: f32.Point{X: -20, Y: -20}, ptOut: f32.Point{X: -14.142136, Y: -14.142136}},
 		{l: +20, ptIn: f32.Point{X: -30, Y: -30}, ptOut: f32.Point{X: -14.142136, Y: -14.142136}},
 		{l: +20, ptIn: f32.Point{X: -90, Y: -90}, ptOut: f32.Point{X: -14.142137, Y: -14.142137}},
-
 		{l: +20, ptIn: f32.Point{X: +90, Y: -90}, ptOut: f32.Point{X: +14.142137, Y: -14.142137}},
 		{l: +20, ptIn: f32.Point{X: +30, Y: -30}, ptOut: f32.Point{X: +14.142136, Y: -14.142136}},
 		{l: +20, ptIn: f32.Point{X: +20, Y: -20}, ptOut: f32.Point{X: +14.142136, Y: -14.142136}},
@@ -64,7 +59,6 @@ func TestNormPt(t *testing.T) {
 		{l: +20, ptIn: f32.Point{X: -20, Y: +20}, ptOut: f32.Point{X: -14.142136, Y: +14.142136}},
 		{l: +20, ptIn: f32.Point{X: -30, Y: +30}, ptOut: f32.Point{X: -14.142136, Y: +14.142136}},
 		{l: +20, ptIn: f32.Point{X: -90, Y: +90}, ptOut: f32.Point{X: -14.142137, Y: +14.142137}},
-
 		{l: -20, ptIn: f32.Point{X: +90, Y: +90}, ptOut: f32.Point{X: -14.142137, Y: -14.142137}},
 		{l: -20, ptIn: f32.Point{X: +30, Y: +30}, ptOut: f32.Point{X: -14.142136, Y: -14.142136}},
 		{l: -20, ptIn: f32.Point{X: +20, Y: +20}, ptOut: f32.Point{X: -14.142136, Y: -14.142136}},
@@ -73,7 +67,6 @@ func TestNormPt(t *testing.T) {
 		{l: -20, ptIn: f32.Point{X: -20, Y: -20}, ptOut: f32.Point{X: +14.142136, Y: +14.142136}},
 		{l: -20, ptIn: f32.Point{X: -30, Y: -30}, ptOut: f32.Point{X: +14.142136, Y: +14.142136}},
 		{l: -20, ptIn: f32.Point{X: -90, Y: -90}, ptOut: f32.Point{X: +14.142137, Y: +14.142137}},
-
 		{l: -20, ptIn: f32.Point{X: +90, Y: -90}, ptOut: f32.Point{X: -14.142137, Y: +14.142137}},
 		{l: -20, ptIn: f32.Point{X: +30, Y: -30}, ptOut: f32.Point{X: -14.142136, Y: +14.142136}},
 		{l: -20, ptIn: f32.Point{X: +20, Y: -20}, ptOut: f32.Point{X: -14.142136, Y: +14.142136}},
@@ -82,7 +75,6 @@ func TestNormPt(t *testing.T) {
 		{l: -20, ptIn: f32.Point{X: -20, Y: +20}, ptOut: f32.Point{X: +14.142136, Y: -14.142136}},
 		{l: -20, ptIn: f32.Point{X: -30, Y: +30}, ptOut: f32.Point{X: +14.142136, Y: -14.142136}},
 		{l: -20, ptIn: f32.Point{X: -90, Y: +90}, ptOut: f32.Point{X: +14.142137, Y: -14.142137}},
-
 		{l: 5, ptIn: f32.Point{X: 3, Y: 4}, ptOut: f32.Point{X: 3, Y: 4}},
 		{l: 5, ptIn: f32.Point{X: 3, Y: -4}, ptOut: f32.Point{X: 3, Y: -4}},
 		{l: 5, ptIn: f32.Point{X: -3, Y: -4}, ptOut: f32.Point{X: -3, Y: -4}},
@@ -101,9 +93,9 @@ func TestNormPt(t *testing.T) {
 			}
 		})
 	}
-	}
+}
 
-	func TestStrokeQuads_LineTo(t *testing.T) {
+func TestStrokeQuads_LineTo(t *testing.T) {
 	qs := StrokeQuads{
 		{Quad: QuadSegment{To: f32.Point{X: 0, Y: 0}}},
 	}
@@ -114,36 +106,36 @@ func TestNormPt(t *testing.T) {
 	if qs[1].Quad.To != (f32.Point{X: 10, Y: 0}) {
 		t.Errorf("expected end point (10, 0), got %v", qs[1].Quad.To)
 	}
-	}
+}
 
-	func TestStrokeQuads_Close(t *testing.T) {
+func TestStrokeQuads_Close(t *testing.T) {
 	qs := StrokeQuads{
-		{Quad: QuadSegment{From: f32.Point{0, 0}, To: f32.Point{10, 0}}},
+		{Quad: QuadSegment{From: f32.Point{X: 0, Y: 0}, To: f32.Point{X: 10, Y: 0}}},
 	}
 	qs.close()
 	if len(qs) != 2 {
 		t.Errorf("expected 2 quads after close, got %d", len(qs))
 	}
-	if qs[1].Quad.To != (f32.Point{0, 0}) {
+	if qs[1].Quad.To != (f32.Point{X: 0, Y: 0}) {
 		t.Errorf("expected close quad to end at (0, 0), got %v", qs[1].Quad.To)
 	}
 
 	// Already closed
 	qs2 := StrokeQuads{
-		{Quad: QuadSegment{From: f32.Point{0, 0}, To: f32.Point{10, 0}}},
-		{Quad: QuadSegment{From: f32.Point{10, 0}, To: f32.Point{0, 0}}},
+		{Quad: QuadSegment{From: f32.Point{X: 0, Y: 0}, To: f32.Point{X: 10, Y: 0}}},
+		{Quad: QuadSegment{From: f32.Point{X: 10, Y: 0}, To: f32.Point{X: 0, Y: 0}}},
 	}
 	qs2.close()
 	if len(qs2) != 2 {
 		t.Errorf("expected still 2 quads, got %d", len(qs2))
 	}
-	}
+}
 
-	func TestStrokeQuads_Split(t *testing.T) {
+func TestStrokeQuads_Split(t *testing.T) {
 	qs := StrokeQuads{
-		{Contour: 0, Quad: QuadSegment{To: f32.Point{10, 0}}},
-		{Contour: 0, Quad: QuadSegment{To: f32.Point{10, 10}}},
-		{Contour: 1, Quad: QuadSegment{To: f32.Point{20, 20}}},
+		{Contour: 0, Quad: QuadSegment{To: f32.Point{X: 10, Y: 0}}},
+		{Contour: 0, Quad: QuadSegment{To: f32.Point{X: 10, Y: 10}}},
+		{Contour: 1, Quad: QuadSegment{To: f32.Point{X: 20, Y: 20}}},
 	}
 	parts := qs.split()
 	if len(parts) != 2 {
@@ -152,52 +144,117 @@ func TestNormPt(t *testing.T) {
 	if len(parts[0]) != 2 || len(parts[1]) != 1 {
 		t.Errorf("expected parts lengths 2 and 1, got %d and %d", len(parts[0]), len(parts[1]))
 	}
+}
+
+func TestStrokeQuads_Stroke(t *testing.T) {
+	qs := StrokeQuads{
+		{Quad: QuadSegment{From: f32.Point{X: 0, Y: 0}, To: f32.Point{X: 10, Y: 0}}},
+	}
+	style := StrokeStyle{Width: 2}
+	stroked := qs.stroke(style)
+	if len(stroked) == 0 {
+		t.Error("stroke returned no quads")
+	}
+}
+
+func TestStrokeQuads_Arc(t *testing.T) {
+	qs := StrokeQuads{
+		{Quad: QuadSegment{To: f32.Point{X: 0, Y: 0}}},
+	}
+	qs.arc(f32.Point{X: 10, Y: 0}, f32.Point{X: 0, Y: 10}, math.Pi/2)
+	if len(qs) <= 1 {
+		t.Errorf("expected more than 1 quad after arc, got %d", len(qs))
+	}
+}
+
+func TestStrokeQuads_CCW(t *testing.T) {
+	// CCW rectangle (in Y-up)
+	qs := StrokeQuads{
+		{Quad: QuadSegment{From: f32.Point{X: 0, Y: 0}, To: f32.Point{X: 10, Y: 0}}},
+		{Quad: QuadSegment{From: f32.Point{X: 10, Y: 0}, To: f32.Point{X: 10, Y: 10}}},
+		{Quad: QuadSegment{From: f32.Point{X: 10, Y: 10}, To: f32.Point{X: 0, Y: 10}}},
+		{Quad: QuadSegment{From: f32.Point{X: 0, Y: 10}, To: f32.Point{X: 0, Y: 0}}},
+	}
+	if !qs.ccw() {
+		t.Error("expected CCW rectangle to be CCW")
 	}
 
-	func TestStrokeQuads_Stroke(t *testing.T) {
-		qs := StrokeQuads{
-			{Quad: QuadSegment{From: f32.Point{0, 0}, To: f32.Point{10, 0}}},
-		}
-		style := StrokeStyle{Width: 2}
-		stroked := qs.stroke(style)
-		if len(stroked) == 0 {
-			t.Error("stroke returned no quads")
-		}
+	// CW rectangle (in Y-up)
+	qsCW := StrokeQuads{
+		{Quad: QuadSegment{From: f32.Point{X: 0, Y: 0}, To: f32.Point{X: 0, Y: 10}}},
+		{Quad: QuadSegment{From: f32.Point{X: 0, Y: 10}, To: f32.Point{X: 10, Y: 10}}},
+		{Quad: QuadSegment{From: f32.Point{X: 10, Y: 10}, To: f32.Point{X: 10, Y: 0}}},
+		{Quad: QuadSegment{From: f32.Point{X: 10, Y: 0}, To: f32.Point{X: 0, Y: 0}}},
+	}
+	if qsCW.ccw() {
+		t.Error("expected CW rectangle to NOT be CCW")
+	}
+}
+
+func TestStrokeQuads_ReverseAppend(t *testing.T) {
+	qs := StrokeQuads{
+		{Quad: QuadSegment{From: f32.Point{X: 0, Y: 0}, To: f32.Point{X: 10, Y: 0}}},
+	}
+	rev := qs.reverse()
+	if rev[0].Quad.From != (f32.Point{X: 10, Y: 0}) || rev[0].Quad.To != (f32.Point{X: 0, Y: 0}) {
+		t.Error("reverse failed")
 	}
 
-	func TestStrokeQuads_Arc(t *testing.T) {
-		qs := StrokeQuads{
-			{Quad: QuadSegment{To: f32.Point{0, 0}}},
+	appended := qs.append(rev)
+	if len(appended) != 2 {
+		t.Errorf("expected 2 quads (1+1 and no glue since endpoints match), got %d", len(appended))
+	}
+}
+
+func TestQuadSegment_Transform(t *testing.T) {
+	q := QuadSegment{
+		From: f32.Point{X: 0, Y: 0},
+		Ctrl: f32.Point{X: 5, Y: 5},
+		To:   f32.Point{X: 10, Y: 0},
+	}
+	trans := f32.AffineId().Offset(f32.Point{X: 10, Y: 10})
+	q2 := q.Transform(trans)
+	if q2.From != (f32.Point{X: 10, Y: 10}) || q2.To != (f32.Point{X: 20, Y: 10}) {
+		t.Error("transform failed")
+	}
+}
+
+func TestStrokePathCommands(t *testing.T) {
+	style := StrokeStyle{Width: 2}
+
+	encode := func(contour uint32, cmd scene.Command) []byte {
+		data := make([]byte, 4+scene.CommandSize)
+		binary.LittleEndian.PutUint32(data, contour)
+		for i, v := range cmd {
+			binary.LittleEndian.PutUint32(data[4+i*4:], v)
 		}
-		qs.arc(f32.Point{10, 0}, f32.Point{0, 10}, math.Pi/2)
-		if len(qs) <= 1 {
-			t.Errorf("expected more than 1 quad after arc, got %d", len(qs))
-		}
+		return data
 	}
 
-	func TestStrokeQuads_CCW(t *testing.T) {
-		// CCW rectangle (in Y-up)
-		qs := StrokeQuads{
-			{Quad: QuadSegment{From: f32.Point{0, 0}, To: f32.Point{10, 0}}},
-			{Quad: QuadSegment{From: f32.Point{10, 0}, To: f32.Point{10, 10}}},
-			{Quad: QuadSegment{From: f32.Point{10, 10}, To: f32.Point{0, 10}}},
-			{Quad: QuadSegment{From: f32.Point{0, 10}, To: f32.Point{0, 0}}},
-		}
-		if !qs.ccw() {
-			t.Error("expected CCW rectangle to be CCW")
-		}
+	var data []byte
+	data = append(data, encode(1, scene.Line(f32.Pt(0, 0), f32.Pt(10, 0)))...)
+	data = append(data, encode(1, scene.Quad(f32.Pt(10, 0), f32.Pt(15, 5), f32.Pt(20, 0)))...)
+	data = append(data, encode(1, scene.Cubic(f32.Pt(20, 0), f32.Pt(25, -5), f32.Pt(30, -5), f32.Pt(35, 0)))...)
+	data = append(data, encode(1, scene.Gap(f32.Pt(35, 0), f32.Pt(0, 0)))...)
 
-		// CW rectangle (in Y-up)
-		qsCW := StrokeQuads{
-			{Quad: QuadSegment{From: f32.Point{0, 0}, To: f32.Point{0, 10}}},
-			{Quad: QuadSegment{From: f32.Point{0, 10}, To: f32.Point{10, 10}}},
-			{Quad: QuadSegment{From: f32.Point{10, 10}, To: f32.Point{10, 0}}},
-			{Quad: QuadSegment{From: f32.Point{10, 0}, To: f32.Point{0, 0}}},
-		}
-		if qsCW.ccw() {
-			t.Error("expected CW rectangle to NOT be CCW")
-		}
+	stroked := StrokePathCommands(style, data)
+	if len(stroked) == 0 {
+		t.Error("expected stroked quads")
 	}
+}
+
+func TestCurvature(t *testing.T) {
+	c := strokePathCurv(f32.Point{X: 0, Y: 0}, f32.Point{X: 5, Y: 5}, f32.Point{X: 10, Y: 0}, 0.5)
+	if math.IsNaN(float64(c)) {
+		t.Error("curvature is NaN")
+	}
+
+	flat := strokePathCurv(f32.Point{X: 0, Y: 0}, f32.Point{X: 5, Y: 0}, f32.Point{X: 10, Y: 0}, 0.5)
+	if !math.IsNaN(float64(flat)) {
+		t.Error("expected NaN curvature for flat line")
+	}
+}
+
 func BenchmarkSplitCubic(b *testing.B) {
 	type scenario struct {
 		segments               int
@@ -244,7 +301,6 @@ func BenchmarkSplitCubic(b *testing.B) {
 				quads = SplitCubic(from, ctrl0, ctrl1, to, quads[:0])
 			}
 			if len(quads) != s.segments {
-
 				b.Fatalf("expected %d but got %d", s.segments, len(quads))
 			}
 		})

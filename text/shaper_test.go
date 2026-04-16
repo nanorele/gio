@@ -11,12 +11,12 @@ import (
 	"github.com/nanorele/gio/font/gofont"
 	"github.com/nanorele/gio/font/opentype"
 	"github.com/nanorele/gio/io/system"
+	typesettingfont "github.com/go-text/typesetting/font"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/math/fixed"
 )
 
 func TestWrappingTruncation(t *testing.T) {
-
 	textInput := "Lorem ipsum dolor sit amet, consectetur adipiscing elit,\nsed do eiusmod tempor incididunt ut labore et\ndolore magna aliqua.\n"
 	ltrFace, _ := opentype.Parse(goregular.TTF)
 	collection := []FontFace{{Face: ltrFace}}
@@ -60,7 +60,6 @@ func TestWrappingTruncation(t *testing.T) {
 				}
 			}
 			if lastGlyphWasLineBreak && truncatedRunes == 0 {
-
 				lineCount--
 			}
 			if i <= untruncatedCount {
@@ -80,7 +79,6 @@ func TestWrappingTruncation(t *testing.T) {
 }
 
 func TestWrappingForcedTruncation(t *testing.T) {
-
 	textInput := "Lorem ipsum\ndolor sit\namet"
 	ltrFace, _ := opentype.Parse(goregular.TTF)
 	collection := []FontFace{{Face: ltrFace}}
@@ -564,5 +562,48 @@ func TestShapeStringRuneAccounting(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestFlagsString(t *testing.T) {
+	f := FlagParagraphStart | FlagLineBreak | FlagTruncator
+	s := f.String()
+	if !strings.Contains(s, "S") || !strings.Contains(s, "L") || !strings.Contains(s, "…") {
+		t.Errorf("Flags.String() failed: %s", s)
+	}
+	if strings.Contains(s, "P") || strings.Contains(s, "T") || strings.Contains(s, "R") || strings.Contains(s, "C") {
+		t.Errorf("Flags.String() included unexpected flags: %s", s)
+	}
+}
+
+func TestGlyphID(t *testing.T) {
+	ppem := fixed.Int26_6(12 << 6)
+	faceIdx := 5
+	gid := typesettingfont.GID(123)
+	id := newGlyphID(ppem, faceIdx, gid)
+	
+	p, f, g := splitGlyphID(id)
+	if p != ppem || f != faceIdx || g != gid {
+		t.Errorf("GlyphID conversion failed: got %v %v %v, want %v %v %v", p, f, g, ppem, faceIdx, gid)
+	}
+}
+
+func TestShaper_Shape(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	collection := []FontFace{{Face: ltrFace}}
+	shaper := NewShaper(NoSystemFonts(), WithCollection(collection))
+	
+	gs := []Glyph{
+		{ID: newGlyphID(fixed.I(10), 0, 1), X: 0, Advance: fixed.I(10)},
+	}
+	
+	_ = shaper.Shape(gs)
+	_ = shaper.Bitmaps(gs)
+}
+
+func TestShaperOptions(t *testing.T) {
+	sh := NewShaper(NoSystemFonts())
+	if !sh.config.disableSystemFonts {
+		t.Error("NoSystemFonts option failed")
 	}
 }

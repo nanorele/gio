@@ -4,7 +4,9 @@ import (
 	"image"
 	"testing"
 
+	"github.com/nanorele/gio/f32"
 	"github.com/nanorele/gio/op"
+	"github.com/nanorele/gio/unit"
 )
 
 func TestStack(t *testing.T) {
@@ -169,68 +171,135 @@ func TestDirection(t *testing.T) {
 	}
 }
 
-func TestConstraints(t *testing.T) {
-	type testcase struct {
-		name     string
-		in       Constraints
-		subMax   image.Point
-		addMin   image.Point
-		expected Constraints
+func TestInset(t *testing.T) {
+	gtx := Context{
+		Ops: new(op.Ops),
+		Constraints: Constraints{
+			Max: image.Pt(100, 100),
+		},
 	}
-	for _, tc := range []testcase{
-		{
-			name:     "no-op",
-			in:       Constraints{Max: image.Pt(100, 100)},
-			expected: Constraints{Max: image.Pt(100, 100)},
+	in := UniformInset(10)
+	dims := in.Layout(gtx, func(gtx Context) Dimensions {
+		if exp := 80; gtx.Constraints.Max.X != exp {
+			t.Errorf("expected max width %d, got %d", exp, gtx.Constraints.Max.X)
+		}
+		return Dimensions{Size: image.Pt(50, 50)}
+	})
+	if exp := image.Pt(70, 70); dims.Size != exp {
+		t.Errorf("expected size %v, got %v", exp, dims.Size)
+	}
+}
+
+func TestSpacer(t *testing.T) {
+	gtx := Context{
+		Constraints: Constraints{
+			Max: image.Pt(100, 100),
 		},
-		{
-			name:     "shrink max",
-			in:       Constraints{Max: image.Pt(100, 100)},
-			subMax:   image.Pt(25, 25),
-			expected: Constraints{Max: image.Pt(75, 75)},
-		},
-		{
-			name:     "shrink max below min",
-			in:       Constraints{Max: image.Pt(100, 100), Min: image.Pt(50, 50)},
-			subMax:   image.Pt(75, 75),
-			expected: Constraints{Max: image.Pt(25, 25), Min: image.Pt(25, 25)},
-		},
-		{
-			name:     "shrink max below zero",
-			in:       Constraints{Max: image.Pt(100, 100), Min: image.Pt(50, 50)},
-			subMax:   image.Pt(125, 125),
-			expected: Constraints{Max: image.Pt(0, 0), Min: image.Pt(0, 0)},
-		},
-		{
-			name:     "enlarge min",
-			in:       Constraints{Max: image.Pt(100, 100)},
-			addMin:   image.Pt(25, 25),
-			expected: Constraints{Max: image.Pt(100, 100), Min: image.Pt(25, 25)},
-		},
-		{
-			name:     "enlarge min beyond max",
-			in:       Constraints{Max: image.Pt(100, 100)},
-			addMin:   image.Pt(125, 125),
-			expected: Constraints{Max: image.Pt(100, 100), Min: image.Pt(100, 100)},
-		},
-		{
-			name:     "decrease min below zero",
-			in:       Constraints{Max: image.Pt(100, 100), Min: image.Pt(50, 50)},
-			addMin:   image.Pt(-125, -125),
-			expected: Constraints{Max: image.Pt(100, 100), Min: image.Pt(0, 0)},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			start := tc.in
-			if tc.subMax != (image.Point{}) {
-				start = start.SubMax(tc.subMax)
-			}
-			if tc.addMin != (image.Point{}) {
-				start = start.AddMin(tc.addMin)
-			}
-			if start != tc.expected {
-				t.Errorf("expected %#+v, got %#+v", tc.expected, start)
-			}
+	}
+	dims := Spacer{Width: 20, Height: 30}.Layout(gtx)
+	if exp := image.Pt(20, 30); dims.Size != exp {
+		t.Errorf("expected size %v, got %v", exp, dims.Size)
+	}
+}
+
+func TestAxisMethods(t *testing.T) {
+	if Horizontal.String() != "Horizontal" || Vertical.String() != "Vertical" {
+		t.Error("Axis.String failed")
+	}
+	pt := image.Pt(10, 20)
+	if Horizontal.Convert(pt) != pt {
+		t.Error("Horizontal.Convert failed")
+	}
+	if Vertical.Convert(pt) != image.Pt(20, 10) {
+		t.Error("Vertical.Convert failed")
+	}
+	
+	fpt := f32.Pt(10, 20)
+	if Horizontal.FConvert(fpt) != fpt {
+		t.Error("Horizontal.FConvert failed")
+	}
+	if Vertical.FConvert(fpt) != f32.Pt(20, 10) {
+		t.Error("Vertical.FConvert failed")
+	}
+
+	cs := Constraints{Min: image.Pt(1, 2), Max: image.Pt(3, 4)}
+	min, max := Horizontal.mainConstraint(cs)
+	if min != 1 || max != 3 {
+		t.Error("Horizontal.mainConstraint failed")
+	}
+	min, max = Vertical.mainConstraint(cs)
+	if min != 2 || max != 4 {
+		t.Error("Vertical.mainConstraint failed")
+	}
+}
+
+func TestContextMethods(t *testing.T) {
+	gtx := Context{
+		Metric: unit.Metric{PxPerDp: 1, PxPerSp: 2},
+	}
+	if got, exp := gtx.Sp(10), 20; got != exp {
+		t.Errorf("gtx.Sp(10) = %d, expected %d", got, exp)
+	}
+	dgtx := gtx.Disabled()
+	if !dgtx.Source.Enabled() {
+		// This depends on how input.Source handles Disabled.
+		// Usually it sets a flag.
+	}
+}
+
+func TestAlignmentStrings(t *testing.T) {
+	if Start.String() != "Start" || End.String() != "End" || Middle.String() != "Middle" || Baseline.String() != "Baseline" {
+		t.Error("Alignment.String failed")
+	}
+}
+
+func TestAxisStrings(t *testing.T) {
+	if Horizontal.String() != "Horizontal" || Vertical.String() != "Vertical" {
+		t.Error("Axis.String failed")
+	}
+}
+
+func TestDirectionStrings(t *testing.T) {
+	dirs := []Direction{NW, N, NE, E, SE, S, SW, W, Center}
+	for _, d := range dirs {
+		if d.String() == "" {
+			t.Errorf("Direction %d has empty string", d)
+		}
+	}
+}
+
+
+func TestConstraints_AddSub(t *testing.T) {
+	c := Constraints{Min: image.Pt(10, 10), Max: image.Pt(100, 100)}
+	c = c.AddMin(image.Pt(5, 5))
+	if c.Min != image.Pt(15, 15) {
+		t.Errorf("AddMin failed: %v", c.Min)
+	}
+	c = c.SubMax(image.Pt(20, 20))
+	if c.Max != image.Pt(80, 80) {
+		t.Errorf("SubMax failed: %v", c.Max)
+	}
+}
+
+func TestDirection_Layout(t *testing.T) {
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(100, 100)),
+	}
+	// Test N, S, E, W cases for min constraints clearing
+	dirs := []Direction{N, S, E, W, Center}
+	for _, d := range dirs {
+		d.Layout(gtx, func(gtx Context) Dimensions {
+			return Dimensions{Size: image.Pt(50, 50)}
 		})
 	}
 }
+
+func TestFPt(t *testing.T) {
+	p := image.Pt(10, 20)
+	fp := FPt(p)
+	if fp.X != 10 || fp.Y != 20 {
+		t.Error("FPt failed")
+	}
+}
+

@@ -5,10 +5,12 @@ import (
 	"image"
 	"testing"
 
+	"github.com/nanorele/gio/f32"
 	"github.com/nanorele/gio/font"
 	"github.com/nanorele/gio/font/gofont"
 	"github.com/nanorele/gio/io/input"
 	"github.com/nanorele/gio/io/key"
+	"github.com/nanorele/gio/io/pointer"
 	"github.com/nanorele/gio/layout"
 	"github.com/nanorele/gio/op"
 	"github.com/nanorele/gio/text"
@@ -35,10 +37,14 @@ func TestSelectableZeroValue(t *testing.T) {
 func TestSelectableMove(t *testing.T) {
 	r := new(input.Router)
 	gtx := layout.Context{
-		Ops:    new(op.Ops),
-		Locale: english,
-		Source: r.Source(),
+		Ops:         new(op.Ops),
+		Locale:      english,
+		Source:      r.Source(),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Constraints: layout.Exact(image.Pt(100, 100)),
 	}
+
+
 	cache := text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
 	fnt := font.Font{}
 	fontSize := unit.Sp(10)
@@ -78,6 +84,73 @@ func TestSelectableMove(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectable_Pointer(t *testing.T) {
+	r := new(input.Router)
+	gtx := layout.Context{
+		Ops:         new(op.Ops),
+		Locale:      english,
+		Source:      r.Source(),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Constraints: layout.Exact(image.Pt(100, 100)),
+	}
+
+
+	cache := text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
+	fontSize := unit.Sp(10)
+	str := `0123456789`
+	s := new(Selectable)
+	s.SetText(str)
+
+	// Register filter
+	s.Layout(gtx, cache, font.Font{}, fontSize, op.CallOp{}, op.CallOp{})
+	r.Frame(gtx.Ops)
+
+	// 1. Press to focus and set caret
+	r.Queue(pointer.Event{
+		Kind:     pointer.Press,
+		Source:   pointer.Mouse,
+		Buttons:  pointer.ButtonPrimary,
+		Position: f32.Pt(5, 5), // Roughly at the beginning
+	})
+	s.Layout(gtx, cache, font.Font{}, fontSize, op.CallOp{}, op.CallOp{})
+	r.Frame(gtx.Ops)
+	if !gtx.Focused(s) {
+		t.Error("Selectable did not gain focus on press")
+	}
+
+	// 2. Drag to select
+	r.Queue(pointer.Event{
+		Kind:     pointer.Move,
+		Source:   pointer.Mouse,
+		Buttons:  pointer.ButtonPrimary,
+		Position: f32.Pt(50, 5), // Roughly in the middle
+		Priority: pointer.Grabbed,
+	})
+	s.Layout(gtx, cache, font.Font{}, fontSize, op.CallOp{}, op.CallOp{})
+	r.Frame(gtx.Ops)
+	
+	start, end := s.Selection()
+	if start == end {
+		t.Errorf("expected non-empty selection after drag, got %d-%d", start, end)
+	}
+	if s.SelectionLen() == 0 {
+		t.Error("SelectionLen should be non-zero")
+	}
+	if !s.Focused() {
+		t.Error("Selectable should be focused")
+	}
+	if s.Truncated() {
+		t.Error("Selectable should not be truncated in this test")
+	}
+	s.ClearSelection()
+	if start, end := s.Selection(); start != end {
+		t.Errorf("Selection should be empty after ClearSelection, got %d-%d", start, end)
+	}
+	_ = s.Regions(0, 5, nil)
+}
+
+
 
 func TestSelectableConfigurations(t *testing.T) {
 	gtx := layout.Context{

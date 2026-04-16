@@ -704,7 +704,7 @@ func (w *window) Configure(options []Option) {
 			width = r.Right - r.Left
 			height = r.Bottom - r.Top
 		} else {
-			windows.DwmExtendFrameIntoClientArea(w.hwnd, windows.Margins{-1, -1, -1, -1})
+			windows.DwmExtendFrameIntoClientArea(w.hwnd, windows.Margins{CxLeftWidth: -1, CxRightWidth: -1, CyTopHeight: -1, CyBottomHeight: -1})
 		}
 
 	case Fullscreen:

@@ -407,6 +407,8 @@ func (a Axis) String() string {
 		return "Horizontal"
 	case Vertical:
 		return "Vertical"
+	case Both:
+		return "Both"
 	default:
 		panic("invalid Axis")
 	}
