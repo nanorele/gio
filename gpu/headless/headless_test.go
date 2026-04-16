@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package headless
 
 import (
@@ -21,7 +19,7 @@ func TestHeadless(t *testing.T) {
 	col := color.NRGBA{A: 0xff, R: 0xca, G: 0xfe}
 	var ops op.Ops
 	paint.ColorOp{Color: col}.Add(&ops)
-	// Paint only part of the screen to avoid the glClear optimization.
+
 	paint.FillShape(&ops, col, clip.Rect(image.Rect(0, 0, sz.X-100, sz.Y-100)).Op())
 	if err := w.Frame(&ops); err != nil {
 		t.Fatal(err)

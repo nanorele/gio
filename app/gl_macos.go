@@ -1,6 +1,4 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-//go:build darwin && !ios && nometal
+//go:build darwin && nometal
 
 package app
 
@@ -91,13 +89,13 @@ func (c *glContext) Release() {
 }
 
 func (c *glContext) Present() error {
-	// Assume the caller already locked the context.
+
 	C.glFlush(c.glFlush)
 	return nil
 }
 
 func (c *glContext) Lock() error {
-	// OpenGL contexts are implicit and thread-local. Lock the OS thread.
+
 	runtime.LockOSThread()
 
 	C.gio_lockContext(c.ctx)

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package layout
 
 import (
@@ -8,25 +6,18 @@ import (
 	"github.com/nanorele/gio/op"
 )
 
-// Flex lays out child elements along an axis,
-// according to alignment and weights.
 type Flex struct {
-	// Axis is the main axis, either Horizontal or Vertical.
 	Axis Axis
-	// Spacing controls the distribution of space left after
-	// layout.
+
 	Spacing Spacing
-	// Alignment is the alignment in the cross axis.
+
 	Alignment Alignment
-	// WeightSum is the sum of weights used for the weighted
-	// size of Flexed children. If WeightSum is zero, the sum
-	// of all Flexed weights is used.
+
 	WeightSum float32
-	// Gap is the space in pixels between children.
+
 	Gap int
 }
 
-// FlexChild is the descriptor for a Flex child.
 type FlexChild struct {
 	flex   bool
 	weight float32
@@ -34,39 +25,28 @@ type FlexChild struct {
 	widget Widget
 }
 
-// Spacing determine the spacing mode for a Flex.
 type Spacing uint8
 
 const (
-	// SpaceEnd leaves space at the end.
 	SpaceEnd Spacing = iota
-	// SpaceStart leaves space at the start.
+
 	SpaceStart
-	// SpaceSides shares space between the start and end.
+
 	SpaceSides
-	// SpaceAround distributes space evenly between children,
-	// with half as much space at the start and end.
+
 	SpaceAround
-	// SpaceBetween distributes space evenly between children,
-	// leaving no space at the start and end.
+
 	SpaceBetween
-	// SpaceEvenly distributes space evenly between children and
-	// at the start and end.
+
 	SpaceEvenly
 )
 
-// Rigid returns a Flex child with a maximal constraint of the
-// remaining space.
 func Rigid(widget Widget) FlexChild {
 	return FlexChild{
 		widget: widget,
 	}
 }
 
-// Flexed returns a Flex child forced to take up weight fraction of the
-// space left over from Rigid children. The fraction is weight
-// divided by either the weight sum of all Flexed children or the Flex
-// WeightSum if non zero.
 func Flexed(weight float32, widget Widget) FlexChild {
 	return FlexChild{
 		flex:   true,
@@ -75,16 +55,13 @@ func Flexed(weight float32, widget Widget) FlexChild {
 	}
 }
 
-// Layout a list of children. The position of the children are
-// determined by the specified order, but Rigid children are laid out
-// before Flexed children.
 func (f Flex) Layout(gtx Context, children ...FlexChild) Dimensions {
 	size := 0
 	cs := gtx.Constraints
 	mainMin, mainMax := f.Axis.mainConstraint(cs)
 	crossMin, crossMax := f.Axis.crossConstraint(cs)
 	remaining := mainMax
-	// Reserve space for gaps between children.
+
 	if len(children) > 1 && f.Gap > 0 {
 		totalGap := f.Gap * (len(children) - 1)
 		remaining -= totalGap
@@ -94,13 +71,7 @@ func (f Flex) Layout(gtx Context, children ...FlexChild) Dimensions {
 	}
 	var totalWeight float32
 	cgtx := gtx
-	// Note: previously the scratch space was inside FlexChild.
-	// child.call.Add(gtx.Ops) confused the go escape analysis and caused the
-	// entired children slice to be allocated on the heap, including all widgets
-	// in it. This produced a lot of object allocations. Now the scratch space
-	// is separate from children, and for cases len(children) <= 32, we will
-	// allocate the scratch space on the stack. For cases len(children) > 32,
-	// only the scratch space gets allocated from the heap, during append.
+
 	type scratchSpace struct {
 		call op.CallOp
 		dims Dimensions
@@ -115,7 +86,7 @@ func (f Flex) Layout(gtx Context, children ...FlexChild) Dimensions {
 	} else {
 		scratch = make([]scratchSpace, len(children))
 	}
-	// Lay out Rigid children.
+
 	for i, child := range children {
 		if child.flex {
 			totalWeight += child.weight
@@ -137,18 +108,17 @@ func (f Flex) Layout(gtx Context, children ...FlexChild) Dimensions {
 	if w := f.WeightSum; w != 0 {
 		totalWeight = w
 	}
-	// fraction is the rounding error from a Flex weighting.
+
 	var fraction float32
 	flexTotal := remaining
-	// Lay out Flexed children.
+
 	for i, child := range children {
 		if !child.flex {
 			continue
 		}
 		var flexSize int
 		if remaining > 0 && totalWeight > 0 {
-			// Apply weight and add any leftover fraction from a
-			// previous Flexed.
+
 			childSize := float32(flexTotal) * child.weight / totalWeight
 			flexSize = int(childSize + fraction + .5)
 			fraction = childSize - float32(flexSize)

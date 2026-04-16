@@ -1,7 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-// Package byteslice provides byte slice views of other Go values  such as
-// slices and structs.
 package byteslice
 
 import (
@@ -9,14 +5,12 @@ import (
 	"unsafe"
 )
 
-// Struct returns a byte slice view of a struct.
 func Struct(s any) []byte {
 	v := reflect.ValueOf(s)
 	sz := int(v.Elem().Type().Size())
 	return unsafe.Slice((*byte)(unsafe.Pointer(v.Pointer())), sz)
 }
 
-// Uint32 returns a byte slice view of a uint32 slice.
 func Uint32(s []uint32) []byte {
 	n := len(s)
 	if n == 0 {
@@ -26,7 +20,6 @@ func Uint32(s []uint32) []byte {
 	return unsafe.Slice((*byte)(unsafe.Pointer(&s[0])), blen)
 }
 
-// Slice returns a byte slice view of a slice.
 func Slice(s any) []byte {
 	v := reflect.ValueOf(s)
 	first := v.Index(0)

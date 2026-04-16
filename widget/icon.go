@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package widget
 
 import (
@@ -18,7 +16,7 @@ import (
 
 type Icon struct {
 	src []byte
-	// Cached values.
+
 	op       paint.ImageOp
 	imgSize  int
 	imgColor color.NRGBA
@@ -26,7 +24,6 @@ type Icon struct {
 
 const defaultIconSize = unit.Dp(24)
 
-// NewIcon returns a new Icon from IconVG data.
 func NewIcon(data []byte) (*Icon, error) {
 	_, err := iconvg.DecodeMetadata(data)
 	if err != nil {
@@ -35,7 +32,6 @@ func NewIcon(data []byte) (*Icon, error) {
 	return &Icon{src: data}, nil
 }
 
-// Layout displays the icon with its size set to the X minimum constraint.
 func (ic *Icon) Layout(gtx layout.Context, color color.NRGBA) layout.Dimensions {
 	sz := gtx.Constraints.Min.X
 	if sz == 0 {

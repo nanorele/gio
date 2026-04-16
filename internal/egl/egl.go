@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 //go:build linux || windows || freebsd || openbsd
 // +build linux windows freebsd openbsd
 
@@ -78,9 +76,7 @@ func NewContext(disp NativeDisplayType) (*Context, error) {
 		return nil, err
 	}
 	eglDisp := eglGetDisplay(disp)
-	// eglGetDisplay can return EGL_NO_DISPLAY yet no error
-	// (EGL_SUCCESS), in which case a default EGL display might be
-	// available.
+
 	if eglDisp == nilEGLDisplay {
 		eglDisp = eglGetDisplay(EGL_DEFAULT_DISPLAY)
 	}
@@ -110,7 +106,7 @@ func (c *Context) ReleaseSurface() {
 	if c.eglSurf == nilEGLSurface {
 		return
 	}
-	// Make sure any in-flight GL commands are complete.
+
 	eglWaitClient()
 	c.ReleaseCurrent()
 	eglDestroySurface(c.disp, c.eglSurf)
@@ -134,7 +130,7 @@ func (c *Context) ReleaseCurrent() {
 }
 
 func (c *Context) MakeCurrent() error {
-	// OpenGL contexts are implicit and thread-local. Lock the OS thread.
+
 	runtime.LockOSThread()
 
 	if c.eglSurf == nilEGLSurface && !c.eglCtx.surfaceless {
@@ -163,7 +159,7 @@ func createContext(disp _EGLDisplay) (*eglContext, error) {
 	if !ret {
 		return nil, fmt.Errorf("eglInitialize failed: 0x%x", eglGetError())
 	}
-	// sRGB framebuffer support on EGL 1.5 or if EGL_KHR_gl_colorspace is supported.
+
 	exts := strings.Split(eglQueryString(disp, _EGL_EXTENSIONS), " ")
 	srgb := major > 1 || minor >= 5 || hasExtension(exts, "EGL_KHR_gl_colorspace")
 	attribs := []_EGLint{
@@ -175,11 +171,8 @@ func createContext(disp _EGLDisplay) (*eglContext, error) {
 		_EGL_CONFIG_CAVEAT, _EGL_NONE,
 	}
 	if srgb {
-		if runtime.GOOS == "linux" || runtime.GOOS == "android" {
-			// Some Mesa drivers crash if an sRGB framebuffer is requested without alpha.
-			// https://bugs.freedesktop.org/show_bug.cgi?id=107782.
-			//
-			// Also, some Android devices (Samsung S9) need alpha for sRGB to work.
+		if runtime.GOOS == "linux" {
+
 			attribs = append(attribs, _EGL_ALPHA_SIZE, 8)
 		}
 	}
@@ -208,7 +201,7 @@ func createContext(disp _EGLDisplay) (*eglContext, error) {
 	}
 	eglCtx := eglCreateContext(disp, eglCfg, nilEGLContext, ctxAttribs)
 	if eglCtx == nilEGLContext {
-		// Fall back to OpenGL ES 2 and rely on extensions.
+
 		ctxAttribs := []_EGLint{
 			_EGL_CONTEXT_CLIENT_VERSION, 2,
 			_EGL_NONE,
@@ -235,7 +228,7 @@ func createSurface(disp _EGLDisplay, eglCtx *eglContext, win NativeWindowType) (
 	surfAttribs = append(surfAttribs, _EGL_NONE)
 	eglSurf := eglCreateWindowSurface(disp, eglCtx.config, win, surfAttribs)
 	if eglSurf == nilEGLSurface && eglCtx.srgb {
-		// Try again without sRGB.
+
 		eglCtx.srgb = false
 		surfAttribs = []_EGLint{_EGL_NONE}
 		eglSurf = eglCreateWindowSurface(disp, eglCtx.config, win, surfAttribs)

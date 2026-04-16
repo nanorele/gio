@@ -1,12 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-// Package semantic provides operations for semantic descriptions of a user
-// interface, to facilitate presentation and interaction in external software
-// such as screen readers.
-//
-// Semantic descriptions are organized in a tree, with clip operations as
-// nodes. Operations in this package are associated with the current semantic
-// node, that is the most recent pushed clip operation.
 package semantic
 
 import (
@@ -14,13 +5,10 @@ import (
 	"github.com/nanorele/gio/op"
 )
 
-// LabelOp provides the content of a textual component.
 type LabelOp string
 
-// DescriptionOp describes a component.
 type DescriptionOp string
 
-// ClassOp provides the component class.
 type ClassOp int
 
 const (
@@ -32,11 +20,8 @@ const (
 	Switch
 )
 
-// SelectedOp describes the selected state for components that have
-// boolean state.
 type SelectedOp bool
 
-// EnabledOp describes the enabled state.
 type EnabledOp bool
 
 func (l LabelOp) Add(o *op.Ops) {

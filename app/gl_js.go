@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package app
 
 import (
@@ -18,8 +16,7 @@ type glContext struct {
 
 func newContext(w *window) (*glContext, error) {
 	args := map[string]interface{}{
-		// Enable low latency rendering.
-		// See https://developers.google.com/web/updates/2019/05/desynchronized.
+
 		"desynchronized":        true,
 		"preserveDrawingBuffer": true,
 	}

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package input
 
 import (
@@ -24,9 +22,7 @@ type pointerQueue struct {
 	semantic struct {
 		idsAssigned bool
 		lastID      SemanticID
-		// contentIDs maps semantic content to a list of semantic IDs
-		// previously assigned. It is used to maintain stable IDs across
-		// frames.
+
 		contentIDs map[semanticContent][]semanticID
 	}
 }
@@ -35,12 +31,10 @@ type hitNode struct {
 	next int
 	area int
 
-	// For handler nodes.
 	tag  event.Tag
 	pass bool
 }
 
-// pointerState is the input state related to pointer events.
 type pointerState struct {
 	cursor   pointer.Cursor
 	pointers []pointerInfo
@@ -50,29 +44,24 @@ type pointerInfo struct {
 	id       pointer.ID
 	pressed  bool
 	handlers []event.Tag
-	// last tracks the last pointer event received,
-	// used while processing frame events.
+
 	last pointer.Event
 
-	// entered tracks the tags that contain the pointer.
 	entered []event.Tag
 
-	dataSource event.Tag // dragging source tag
-	dataTarget event.Tag // dragging target tag
+	dataSource event.Tag
+	dataTarget event.Tag
 }
 
 type pointerHandler struct {
-	// areaPlusOne is the index into the list of pointerQueue.areas, plus 1.
 	areaPlusOne int
-	// setup tracks whether the handler has received
-	// the pointer.Cancel event that resets its state.
+
 	setup bool
 }
 
-// pointerFilter represents the union of a set of pointer filters.
 type pointerFilter struct {
 	kinds pointer.Kind
-	// min and max horizontal/vertical scroll
+
 	scrollX, scrollY pointer.ScrollRange
 
 	sourceMimes []string
@@ -90,7 +79,6 @@ type areaNode struct {
 
 	cursor pointer.Cursor
 
-	// Tree indices, with -1 being the sentinel.
 	parent     int
 	firstChild int
 	lastChild  int
@@ -106,17 +94,13 @@ type areaNode struct {
 
 type areaKind uint8
 
-// collectState represents the state for pointerCollector.
 type collectState struct {
 	t f32.Affine2D
-	// nodePlusOne is the current node index, plus one to
-	// make the zero value collectState the initial state.
+
 	nodePlusOne int
 	pass        int
 }
 
-// pointerCollector tracks the state needed to update an pointerQueue
-// from pointer ops.
 type pointerCollector struct {
 	q         *pointerQueue
 	state     collectState
@@ -148,7 +132,7 @@ func (c *pointerCollector) resetState() {
 		t: f32.AffineId(),
 	}
 	c.nodeStack = c.nodeStack[:0]
-	// Pop every node except the root.
+
 	if len(c.q.hitTree) > 0 {
 		c.state.nodePlusOne = 0 + 1
 	}
@@ -233,7 +217,6 @@ func (c *pointerCollector) addHitNode(n hitNode) {
 	c.state.nodePlusOne = len(c.q.hitTree) - 1 + 1
 }
 
-// newHandler returns the current handler or a new one for tag.
 func (c *pointerCollector) newHandler(tag event.Tag, state *pointerHandler) {
 	areaID := c.currentArea()
 	c.addHitNode(hitNode{
@@ -260,12 +243,12 @@ func (q *pointerQueue) grab(state pointerState, req pointer.GrabCmd) (pointerSta
 		if !p.pressed || p.id != req.ID {
 			continue
 		}
-		// Verify that the grabber is among the handlers.
+
 		found := slices.Contains(p.handlers, req.Tag)
 		if !found {
 			continue
 		}
-		// Drop other handlers that lost their grab.
+
 		for i := len(p.handlers) - 1; i >= 0; i-- {
 			if tag := p.handlers[i]; tag != req.Tag {
 				evts = append(evts, taggedEvent{
@@ -332,8 +315,6 @@ func (p *pointerFilter) Merge(p2 pointerFilter) {
 	p.targetMimes = append(p.targetMimes, p2.targetMimes...)
 }
 
-// clampScroll splits a scroll distance in the remaining scroll and the
-// scroll accepted by the filter.
 func (p *pointerFilter) clampScroll(scroll f32.Point) (left, scrolled f32.Point) {
 	left.X, scrolled.X = clampSplit(scroll.X, p.scrollX.Min, p.scrollX.Max)
 	left.Y, scrolled.Y = clampSplit(scroll.Y, p.scrollY.Min, p.scrollY.Max)
@@ -426,13 +407,12 @@ func (c *pointerCollector) Reset() {
 	c.ensureRoot()
 }
 
-// Ensure implicit root area for semantic descriptions to hang onto.
 func (c *pointerCollector) ensureRoot() {
 	if len(c.q.areas) > 0 {
 		return
 	}
 	c.pushArea(areaRect, image.Rect(-1e6, -1e6, 1e6, 1e6))
-	// Make it semantic to ensure a single semantic root.
+
 	c.q.areas[0].semantic.valid = true
 }
 
@@ -504,7 +484,7 @@ func (q *pointerQueue) semanticIDFor(content semanticContent) SemanticID {
 			return id.id
 		}
 	}
-	// No prior assigned ID; allocate a new one.
+
 	q.semantic.lastID++
 	id := semanticID{id: q.semantic.lastID, used: true}
 	if q.semantic.contentIDs == nil {
@@ -541,14 +521,8 @@ func (q *pointerQueue) SemanticAt(pos f32.Point) (semID SemanticID, hasSemID boo
 	return semID, hasSemID
 }
 
-// hitTest searches the hit tree for nodes matching pos. Any node matching pos will
-// have the onNode func invoked on it to allow the caller to extract whatever information
-// is necessary for further processing. onNode may return false to terminate the walk of
-// the hit tree, or true to continue. Providing this algorithm in this generic way
-// allows normal event routing and system action event routing to share the same traversal
-// logic even though they are interested in different aspects of hit nodes.
 func (q *pointerQueue) hitTest(pos f32.Point, onNode func(*hitNode) bool) pointer.Cursor {
-	// Track whether we're passing through hits.
+
 	pass := true
 	idx := len(q.hitTree) - 1
 	cursor := pointer.CursorDefault
@@ -666,7 +640,6 @@ func dropHandler(state pointerState, tag event.Tag) pointerState {
 	return state
 }
 
-// pointerOf returns the pointerInfo index corresponding to the pointer in e.
 func (s pointerState) pointerOf(e pointer.Event) (pointerState, int) {
 	for i, p := range s.pointers {
 		if p.id == e.PointerID {
@@ -678,11 +651,10 @@ func (s pointerState) pointerOf(e pointer.Event) (pointerState, int) {
 	return s, len(s.pointers) - 1
 }
 
-// Deliver is like Push, but delivers an event to a particular area.
 func (q *pointerQueue) Deliver(handlers map[event.Tag]*handler, areaIdx int, e pointer.Event) []taggedEvent {
 	scroll := e.Scroll
 	idx := len(q.hitTree) - 1
-	// Locate first potential receiver.
+
 	for idx != -1 {
 		n := &q.hitTree[idx]
 		if n.area == areaIdx {
@@ -714,7 +686,6 @@ func (q *pointerQueue) Deliver(handlers map[event.Tag]*handler, areaIdx int, e p
 	return evts
 }
 
-// SemanticArea returns the sematic content for area, and its parent area.
 func (q *pointerQueue) SemanticArea(areaIdx int) (semanticContent, int) {
 	for areaIdx != -1 {
 		a := &q.areas[areaIdx]
@@ -771,7 +742,7 @@ func (q *pointerQueue) Push(handlers map[event.Tag]*handler, state pointerState,
 	p.last = e
 
 	if !p.pressed && len(p.entered) == 0 {
-		// No longer need to track pointer.
+
 		state.pointers = slices.Concat(state.pointers[:pidx:pidx], state.pointers[pidx+1:])
 	} else {
 		state.pointers = slices.Clone(state.pointers)
@@ -811,7 +782,7 @@ func (q *pointerQueue) deliverEnterLeaveEvents(handlers map[event.Tag]*handler, 
 	changed := false
 	var hits []event.Tag
 	if e.Source != pointer.Mouse && !p.pressed && e.Kind != pointer.Press {
-		// Consider non-mouse pointers leaving when they're released.
+
 	} else {
 		var transSrc *pointerFilter
 		if p.dataSource != nil {
@@ -825,8 +796,7 @@ func (q *pointerQueue) deliverEnterLeaveEvents(handlers map[event.Tag]*handler, 
 			add := true
 			if p.pressed {
 				add = false
-				// Filter out non-participating handlers,
-				// except potential transfer targets when a transfer has been initiated.
+
 				if _, found := searchTag(p.handlers, n.tag); found {
 					add = true
 				}
@@ -846,7 +816,7 @@ func (q *pointerQueue) deliverEnterLeaveEvents(handlers map[event.Tag]*handler, 
 			p.handlers = hits
 		}
 	}
-	// Deliver Leave events.
+
 	for _, k := range p.entered {
 		if _, found := searchTag(hits, k); found {
 			continue
@@ -864,7 +834,7 @@ func (q *pointerQueue) deliverEnterLeaveEvents(handlers map[event.Tag]*handler, 
 			evts = append(evts, taggedEvent{tag: k, event: e})
 		}
 	}
-	// Deliver Enter events.
+
 	for _, k := range hits {
 		if _, found := searchTag(p.entered, k); found {
 			continue
@@ -890,15 +860,15 @@ func (q *pointerQueue) deliverDragEvent(handlers map[event.Tag]*handler, p point
 	if p.dataSource != nil {
 		return p, evts
 	}
-	// Identify the data source.
+
 	for _, k := range p.entered {
 		src := &handlers[k].filter.pointer
 		if len(src.sourceMimes) == 0 {
 			continue
 		}
-		// One data source handler per pointer.
+
 		p.dataSource = k
-		// Notify all potential targets.
+
 		for k, tgt := range handlers {
 			if _, ok := firstMimeMatch(src, &tgt.filter.pointer); ok {
 				evts = append(evts, taggedEvent{tag: k, event: transfer.InitiateEvent{}})
@@ -913,7 +883,7 @@ func (q *pointerQueue) deliverDropEvent(handlers map[event.Tag]*handler, p point
 	if p.dataSource == nil {
 		return p, evts
 	}
-	// Request data from the source.
+
 	src := &handlers[p.dataSource].filter.pointer
 	for _, k := range p.entered {
 		h := handlers[k]
@@ -923,13 +893,13 @@ func (q *pointerQueue) deliverDropEvent(handlers map[event.Tag]*handler, p point
 			return p, evts
 		}
 	}
-	// No valid target found, abort.
+
 	return q.deliverTransferCancelEvent(handlers, p, evts)
 }
 
 func (q *pointerQueue) deliverTransferCancelEvent(handlers map[event.Tag]*handler, p pointerInfo, evts []taggedEvent) (pointerInfo, []taggedEvent) {
 	evts = append(evts, taggedEvent{tag: p.dataSource, event: transfer.CancelEvent{}})
-	// Cancel all potential targets.
+
 	src := &handlers[p.dataSource].filter.pointer
 	for k, h := range handlers {
 		if _, ok := firstMimeMatch(src, &h.filter.pointer); ok {
@@ -941,7 +911,6 @@ func (q *pointerQueue) deliverTransferCancelEvent(handlers map[event.Tag]*handle
 	return p, evts
 }
 
-// ClipFor clips r to the parents of area.
 func (q *pointerQueue) ClipFor(area int, r image.Rectangle) image.Rectangle {
 	a := &q.areas[area]
 	parent := a.parent
@@ -962,7 +931,6 @@ func searchTag(tags []event.Tag, tag event.Tag) (int, bool) {
 	return 0, false
 }
 
-// addHandler adds tag to the slice if not present.
 func addHandler(tags []event.Tag, tag event.Tag) []event.Tag {
 	if slices.Contains(tags, tag) {
 		return tags
@@ -970,7 +938,6 @@ func addHandler(tags []event.Tag, tag event.Tag) []event.Tag {
 	return append(tags, tag)
 }
 
-// firstMimeMatch returns the first type match between src and tgt.
 func firstMimeMatch(src, tgt *pointerFilter) (first string, matched bool) {
 	for _, m1 := range tgt.targetMimes {
 		if slices.Contains(src.sourceMimes, m1) {
@@ -992,8 +959,7 @@ func (op *areaOp) Hit(pos f32.Point) bool {
 		ry := size.Y / 2
 		xh := pos.X - rx
 		yk := pos.Y - ry
-		// The ellipse function works in all cases because
-		// 0/0 is not <= 1.
+
 		return (xh*xh)/(rx*rx)+(yk*yk)/(ry*ry) <= 1
 	default:
 		panic("invalid area kind")

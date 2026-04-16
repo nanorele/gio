@@ -1,7 +1,5 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-//go:build ((linux && !android) || freebsd || openbsd) && !nox11
-// +build linux,!android freebsd openbsd
+//go:build (linux || freebsd || openbsd) && !nox11
+// +build linux freebsd openbsd
 // +build !nox11
 
 package app
@@ -65,35 +63,34 @@ type x11Window struct {
 	xw           C.Window
 
 	atoms struct {
-		// "UTF8_STRING".
 		utf8string C.Atom
-		// "text/plain;charset=utf-8".
+
 		plaintext C.Atom
-		// "TARGETS"
+
 		targets C.Atom
-		// "CLIPBOARD".
+
 		clipboard C.Atom
-		// "PRIMARY".
+
 		primary C.Atom
-		// "CLIPBOARD_CONTENT", the clipboard destination property.
+
 		clipboardContent C.Atom
-		// "WM_DELETE_WINDOW"
+
 		evDelWindow C.Atom
-		// "ATOM"
+
 		atom C.Atom
-		// "GTK_TEXT_BUFFER_CONTENTS"
+
 		gtk_text_buffer_contents C.Atom
-		// "_NET_WM_NAME"
+
 		wmName C.Atom
-		// "_NET_WM_STATE"
+
 		wmState C.Atom
-		// "_NET_WM_STATE_FULLSCREEN"
+
 		wmStateFullscreen C.Atom
-		// "_NET_ACTIVE_WINDOW"
+
 		wmActiveWindow C.Atom
-		// _NET_WM_STATE_MAXIMIZED_HORZ
+
 		wmStateMaximizedHorz C.Atom
-		// _NET_WM_STATE_MAXIMIZED_VERT
+
 		wmStateMaximizedVert C.Atom
 	}
 	metric unit.Metric
@@ -121,8 +118,6 @@ var (
 	newX11VulkanContext func(w *x11Window) (context, error)
 )
 
-// X11 and Vulkan doesn't work reliably on NVIDIA systems.
-// See https://github.com/nanorele/gio/issue/347.
 const vulkanBuggy = true
 
 func (w *x11Window) NewContext() (context, error) {
@@ -167,7 +162,7 @@ func (w *x11Window) Configure(options []Option) {
 	prev := w.config
 	cnf := w.config
 	cnf.apply(w.metric, options)
-	// Decorations are never disabled.
+
 	cnf.Decorated = true
 
 	switch cnf.Mode {
@@ -246,7 +241,7 @@ func (w *x11Window) setTitle(prev, cnf Config) {
 		ctitle := C.CString(title)
 		defer C.free(unsafe.Pointer(ctitle))
 		C.XStoreName(w.x, w.xw, ctitle)
-		// set _NET_WM_NAME as well for UTF-8 support in window title.
+
 		C.XSetTextProperty(w.x, w.xw,
 			&C.XTextProperty{
 				value:    (*C.uchar)(unsafe.Pointer(ctitle)),
@@ -301,7 +296,7 @@ func (w *x11Window) raise() {
 	}
 	C.XSendEvent(
 		w.x,
-		C.XDefaultRootWindow(w.x), // MUST be the root window
+		C.XDefaultRootWindow(w.x),
 		C.False,
 		C.SubstructureNotifyMask|C.SubstructureRedirectMask,
 		&xev,
@@ -324,8 +319,7 @@ func (w *x11Window) SetCursor(cursor pointer.Cursor) {
 		cursor = pointer.CursorDefault
 	}
 	w.cursor = cursor
-	// If c if null (i.e. cursor was not found),
-	// XDefineCursor will use the default cursor.
+
 	C.XDefineCursor(w.x, w.xw, c)
 }
 
@@ -335,7 +329,6 @@ func (w *x11Window) SetInputHint(_ key.InputHint) {}
 
 func (w *x11Window) EditorStateChanged(old, new editorState) {}
 
-// close the window.
 func (w *x11Window) close() {
 	var xev C.XEvent
 	ev := (*C.XClientMessageEvent)(unsafe.Pointer(&xev))
@@ -352,7 +345,6 @@ func (w *x11Window) close() {
 	C.XSendEvent(w.x, w.xw, C.False, C.NoEventMask, &xev)
 }
 
-// action is one of _NET_WM_STATE_REMOVE, _NET_WM_STATE_ADD.
 func (w *x11Window) sendWMStateEvent(action C.long, atom1, atom2 C.ulong) {
 	var xev C.XEvent
 	ev := (*C.XClientMessageEvent)(unsafe.Pointer(&xev))
@@ -367,11 +359,11 @@ func (w *x11Window) sendWMStateEvent(action C.long, atom1, atom2 C.ulong) {
 	data[0] = C.long(action)
 	data[1] = C.long(atom1)
 	data[2] = C.long(atom2)
-	data[3] = 1 // application
+	data[3] = 1
 
 	C.XSendEvent(
 		w.x,
-		C.XDefaultRootWindow(w.x), // MUST be the root window
+		C.XDefaultRootWindow(w.x),
 		C.False,
 		C.SubstructureNotifyMask|C.SubstructureRedirectMask,
 		&xev,
@@ -429,7 +421,7 @@ func (w *x11Window) window() (C.Window, int, int) {
 
 func (w *x11Window) dispatch() {
 	if w.x == nil {
-		// Only Invalidate can wake us up.
+
 		<-w.wakeups
 		w.w.Invalidate()
 		return
@@ -443,29 +435,25 @@ func (w *x11Window) dispatch() {
 
 	xfd := C.XConnectionNumber(w.x)
 
-	// Poll for events and notifications.
 	pollfds := []syscall.PollFd{
 		{Fd: int32(xfd), Events: syscall.POLLIN | syscall.POLLERR},
 		{Fd: int32(w.notify.read), Events: syscall.POLLIN | syscall.POLLERR},
 	}
 	xEvents := &pollfds[0].Revents
-	// Plenty of room for a backlog of notifications.
 
 	var syn, anim bool
-	// Check for pending draw events before checking animation or blocking.
-	// This fixes an issue on Xephyr where on startup XPending() > 0 but
-	// poll will still block. This also prevents no-op calls to poll.
+
 	syn = w.handler.handleEvents()
 	if w.x == nil {
-		// handleEvents received a close request and destroyed the window.
+
 		return
 	}
 	if !syn {
 		anim = w.animating
 		if !anim {
-			// Clear poll events.
+
 			*xEvents = 0
-			// Wait for X event or gio notification.
+
 			if _, err := syscall.Poll(pollfds, -1); err != nil && err != syscall.EINTR {
 				panic(fmt.Errorf("x11 loop: poll failed: %w", err))
 			}
@@ -479,7 +467,7 @@ func (w *x11Window) dispatch() {
 			}
 		}
 	}
-	// Clear notifications.
+
 	for {
 		_, err := syscall.Read(w.notify.read, w.buf[:])
 		if err == syscall.EAGAIN {
@@ -519,8 +507,6 @@ func (w *x11Window) destroy() {
 	w.x = nil
 }
 
-// atom is a wrapper around XInternAtom. Callers should cache the result
-// in order to limit round-trips to the X server.
 func (w *x11Window) atom(name string, onlyIfExists bool) C.Atom {
 	cname := C.CString(name)
 	defer C.free(unsafe.Pointer(cname))
@@ -531,16 +517,12 @@ func (w *x11Window) atom(name string, onlyIfExists bool) C.Atom {
 	return C.XInternAtom(w.x, cname, flag)
 }
 
-// x11EventHandler wraps static variables for the main event loop.
-// Its sole purpose is to prevent heap allocation and reduce clutter
-// in x11window.loop.
 type x11EventHandler struct {
 	w    *x11Window
 	text []byte
 	xev  *C.XEvent
 }
 
-// handleEvents returns true if the window needs to be redrawn.
 func (h *x11EventHandler) handleEvents() bool {
 	w := h.w
 	xev := h.xev
@@ -571,7 +553,7 @@ func (h *x11EventHandler) handleEvents() bool {
 			kevt := (*C.XKeyPressedEvent)(unsafe.Pointer(xev))
 			for _, e := range h.w.xkb.DispatchKey(uint32(kevt.keycode), ks) {
 				if ee, ok := e.(key.EditEvent); ok {
-					// There's no support for IME yet.
+
 					w.w.EditorInsert(ee.Text)
 				} else {
 					w.ProcessEvent(e)
@@ -603,14 +585,14 @@ func (h *x11EventHandler) handleEvents() bool {
 				btn = pointer.ButtonSecondary
 			case C.Button4:
 				ev.Kind = pointer.Scroll
-				// scroll up or left (if shift is pressed).
+
 				if ev.Modifiers == key.ModShift {
 					ev.Scroll.X = -scrollScale
 				} else {
 					ev.Scroll.Y = -scrollScale
 				}
 			case C.Button5:
-				// scroll down or right (if shift is pressed).
+
 				ev.Kind = pointer.Scroll
 				if ev.Modifiers == key.ModShift {
 					ev.Scroll.X = +scrollScale
@@ -618,12 +600,11 @@ func (h *x11EventHandler) handleEvents() bool {
 					ev.Scroll.Y = +scrollScale
 				}
 			case 6:
-				// http://xahlee.info/linux/linux_x11_mouse_button_number.html
-				// scroll left.
+
 				ev.Kind = pointer.Scroll
 				ev.Scroll.X = -scrollScale * 2
 			case 7:
-				// scroll right
+
 				ev.Kind = pointer.Scroll
 				ev.Scroll.X = +scrollScale * 2
 			default:
@@ -650,8 +631,8 @@ func (h *x11EventHandler) handleEvents() bool {
 				Time:      time.Duration(mevt.time) * time.Millisecond,
 				Modifiers: w.xkb.Modifiers(),
 			})
-		case C.Expose: // update
-			// redraw only on the last expose event
+		case C.Expose:
+
 			redraw = (*C.XExposeEvent)(unsafe.Pointer(xev)).count == 0
 		case C.FocusIn:
 			w.config.Focused = true
@@ -659,13 +640,13 @@ func (h *x11EventHandler) handleEvents() bool {
 		case C.FocusOut:
 			w.config.Focused = false
 			w.ProcessEvent(ConfigEvent{Config: w.config})
-		case C.ConfigureNotify: // window configuration change
+		case C.ConfigureNotify:
 			cevt := (*C.XConfigureEvent)(unsafe.Pointer(xev))
 			if sz := image.Pt(int(cevt.width), int(cevt.height)); sz != w.config.Size {
 				w.config.Size = sz
 				w.ProcessEvent(ConfigEvent{Config: w.config})
 			}
-			// redraw will be done by a later expose event
+
 		case C.SelectionNotify:
 			cevt := (*C.XSelectionEvent)(unsafe.Pointer(xev))
 			prop := w.atoms.clipboardContent
@@ -677,11 +658,11 @@ func (h *x11EventHandler) handleEvents() bool {
 			}
 			var text C.XTextProperty
 			if st := C.XGetTextProperty(w.x, w.xw, &text, prop); st == 0 {
-				// Failed; ignore.
+
 				break
 			}
 			if text.format != 8 || text.encoding != w.atoms.utf8string {
-				// Ignore non-utf-8 encoded strings.
+
 				break
 			}
 			str := C.GoStringN((*C.char)(unsafe.Pointer(text.value)), C.int(text.nitems))
@@ -694,7 +675,7 @@ func (h *x11EventHandler) handleEvents() bool {
 		case C.SelectionRequest:
 			cevt := (*C.XSelectionRequestEvent)(unsafe.Pointer(xev))
 			if (cevt.selection != w.atoms.clipboard && cevt.selection != w.atoms.primary) || cevt.property == C.None {
-				// Unsupported clipboard or obsolete requestor.
+
 				break
 			}
 			notify := func() {
@@ -713,20 +694,19 @@ func (h *x11EventHandler) handleEvents() bool {
 			}
 			switch cevt.target {
 			case w.atoms.targets:
-				// The requestor wants the supported clipboard
-				// formats. First write the targets...
+
 				formats := [...]C.long{
 					C.long(w.atoms.targets),
 					C.long(w.atoms.utf8string),
 					C.long(w.atoms.plaintext),
-					// GTK clients need this.
+
 					C.long(w.atoms.gtk_text_buffer_contents),
 				}
 				C.XChangeProperty(w.x, cevt.requestor, cevt.property, w.atoms.atom,
-					32 /* bitwidth of formats */, C.PropModeReplace,
+					32, C.PropModeReplace,
 					(*C.uchar)(unsafe.Pointer(&formats)), C.int(len(formats)),
 				)
-				// ...then notify the requestor.
+
 				notify()
 			case w.atoms.plaintext, w.atoms.utf8string, w.atoms.gtk_text_buffer_contents:
 				content := w.clipboard.content
@@ -735,12 +715,12 @@ func (h *x11EventHandler) handleEvents() bool {
 					ptr = (*C.uchar)(unsafe.Pointer(&content[0]))
 				}
 				C.XChangeProperty(w.x, cevt.requestor, cevt.property, cevt.target,
-					8 /* bitwidth */, C.PropModeReplace,
+					8, C.PropModeReplace,
 					ptr, C.int(len(content)),
 				)
 				notify()
 			}
-		case C.ClientMessage: // extensions
+		case C.ClientMessage:
 			cevt := (*C.XClientMessageEvent)(unsafe.Pointer(xev))
 			switch *(*C.long)(unsafe.Pointer(&cevt.data)) {
 			case C.long(w.atoms.evDelWindow):
@@ -798,16 +778,16 @@ func newX11Window(gioWin *callbacks, options []Option) error {
 
 	ppsp := x11DetectUIScale(dpy)
 	cfg := unit.Metric{PxPerDp: ppsp, PxPerSp: ppsp}
-	// Only use cnf for getting the window size.
+
 	var cnf Config
 	cnf.apply(cfg, options)
 
 	swa := C.XSetWindowAttributes{
-		event_mask: C.ExposureMask | C.FocusChangeMask | // update
-			C.KeyPressMask | C.KeyReleaseMask | // keyboard
-			C.ButtonPressMask | C.ButtonReleaseMask | // mouse clicks
-			C.PointerMotionMask | // mouse movement
-			C.StructureNotifyMask, // resize
+		event_mask: C.ExposureMask | C.FocusChangeMask |
+			C.KeyPressMask | C.KeyReleaseMask |
+			C.ButtonPressMask | C.ButtonReleaseMask |
+			C.PointerMotionMask |
+			C.StructureNotifyMask,
 		background_pixmap: C.None,
 		override_redirect: C.False,
 	}
@@ -860,25 +840,19 @@ func newX11Window(gioWin *callbacks, options []Option) error {
 	w.atoms.wmStateMaximizedHorz = w.atom("_NET_WM_STATE_MAXIMIZED_HORZ", false)
 	w.atoms.wmStateMaximizedVert = w.atom("_NET_WM_STATE_MAXIMIZED_VERT", false)
 
-	// extensions
 	C.XSetWMProtocols(dpy, win, &w.atoms.evDelWindow, 1)
 
-	// make the window visible on the screen
 	C.XMapWindow(dpy, win)
 	w.Configure(options)
 	w.ProcessEvent(X11ViewEvent{Display: unsafe.Pointer(dpy), Window: uintptr(win)})
 	return nil
 }
 
-// detectUIScale reports the system UI scale, or 1.0 if it fails.
 func x11DetectUIScale(dpy *C.Display) float32 {
-	// default fixed DPI value used in most desktop UI toolkits
+
 	const defaultDesktopDPI = 96
 	var scale float32 = 1.0
 
-	// Get actual DPI from X resource Xft.dpi (set by GTK and Qt).
-	// This value is entirely based on user preferences and conflates both
-	// screen (UI) scaling and font scale.
 	rms := C.XResourceManagerString(dpy)
 	if rms != nil {
 		db := C.XrmGetStringDatabase(rms)

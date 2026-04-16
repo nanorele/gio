@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package widget
 
 import (
@@ -9,28 +7,20 @@ import (
 	"github.com/nanorele/gio/layout"
 )
 
-// Fit scales a widget to fit and clip to the constraints.
 type Fit uint8
 
 const (
-	// Unscaled does not alter the scale of a widget.
 	Unscaled Fit = iota
-	// Contain scales widget as large as possible without cropping
-	// and it preserves aspect-ratio.
+
 	Contain
-	// Cover scales the widget to cover the constraint area and
-	// preserves aspect-ratio.
+
 	Cover
-	// ScaleDown scales the widget smaller without cropping,
-	// when it exceeds the constraint area.
-	// It preserves aspect-ratio.
+
 	ScaleDown
-	// Fill stretches the widget to the constraints and does not
-	// preserve aspect-ratio.
+
 	Fill
 )
 
-// scale computes the new dimensions and transformation required to fit dims to cs, given the position.
 func (fit Fit) scale(cs layout.Constraints, pos layout.Direction, dims layout.Dimensions) (layout.Dimensions, f32.Affine2D) {
 	widgetSize := dims.Size
 
@@ -67,7 +57,6 @@ func (fit Fit) scale(cs layout.Constraints, pos layout.Direction, dims layout.Di
 			scale.Y = scale.X
 		}
 
-		// The widget would need to be scaled up, no change needed.
 		if scale.X >= 1 {
 			dims.Size = cs.Constrain(dims.Size)
 

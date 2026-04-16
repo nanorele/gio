@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package layout
 
 import (
@@ -8,31 +6,21 @@ import (
 	"github.com/nanorele/gio/op"
 )
 
-// Stack lays out child elements on top of each other,
-// according to an alignment direction.
 type Stack struct {
-	// Alignment is the direction to align children
-	// smaller than the available space.
 	Alignment Direction
 }
 
-// StackChild represents a child for a Stack layout.
 type StackChild struct {
 	expanded bool
 	widget   Widget
 }
 
-// Stacked returns a Stack child that is laid out with no minimum
-// constraints and the maximum constraints passed to Stack.Layout.
 func Stacked(w Widget) StackChild {
 	return StackChild{
 		widget: w,
 	}
 }
 
-// Expanded returns a Stack child with the minimum constraints set
-// to the largest Stacked child. The maximum constraints are set to
-// the same as passed to Stack.Layout.
 func Expanded(w Widget) StackChild {
 	return StackChild{
 		expanded: true,
@@ -40,21 +28,12 @@ func Expanded(w Widget) StackChild {
 	}
 }
 
-// Layout a stack of children. The position of the children are
-// determined by the specified order, but Stacked children are laid out
-// before Expanded children.
 func (s Stack) Layout(gtx Context, children ...StackChild) Dimensions {
 	var maxSZ image.Point
-	// First lay out Stacked children.
+
 	cgtx := gtx
 	cgtx.Constraints.Min = image.Point{}
-	// Note: previously the scratch space was inside StackChild.
-	// child.call.Add(gtx.Ops) confused the go escape analysis and caused the
-	// entired children slice to be allocated on the heap, including all widgets
-	// in it. This produced a lot of object allocations. Now the scratch space
-	// is separate from children, and for cases len(children) <= 32, we will
-	// allocate the scratch space on the stack. For cases len(children) > 32,
-	// only the scratch space gets allocated from the heap, during append.
+
 	type scratchSpace struct {
 		call op.CallOp
 		dims Dimensions
@@ -78,7 +57,7 @@ func (s Stack) Layout(gtx Context, children ...StackChild) Dimensions {
 		scratch[i].call = call
 		scratch[i].dims = dims
 	}
-	// Then lay out Expanded children.
+
 	for i, w := range children {
 		if !w.expanded {
 			continue
@@ -129,11 +108,8 @@ func (s Stack) Layout(gtx Context, children ...StackChild) Dimensions {
 	}
 }
 
-// Background lays out single child widget on top of a background,
-// centering, if necessary.
 type Background struct{}
 
-// Layout a widget and then add a background to it.
 func (Background) Layout(gtx Context, background, widget Widget) Dimensions {
 	macro := op.Record(gtx.Ops)
 	wdims := widget(gtx)

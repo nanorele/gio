@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package headless
 
 import (
@@ -12,11 +10,11 @@ import (
 	"runtime"
 	"testing"
 
+	"gioui.org/shader"
+	"gioui.org/shader/gio"
 	"github.com/nanorele/gio/gpu/internal/driver"
 	"github.com/nanorele/gio/internal/byteslice"
 	"github.com/nanorele/gio/internal/f32color"
-	"gioui.org/shader"
-	"gioui.org/shader/gio"
 )
 
 var dumpImages = flag.Bool("saveimages", false, "save test images")
@@ -31,8 +29,7 @@ func TestFramebufferClear(t *testing.T) {
 	sz := image.Point{X: 800, Y: 600}
 	fbo := newFBO(t, b, sz)
 	d := driver.LoadDesc{
-		// ClearColor accepts linear RGBA colors, while 8-bit colors
-		// are in the sRGB color space.
+
 		ClearColor: f32color.LinearFromSRGB(clearCol),
 		Action:     driver.LoadActionClear,
 	}

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package driver
 
 import (
@@ -7,20 +5,16 @@ import (
 	"image"
 	"time"
 
-	"github.com/nanorele/gio/internal/f32color"
 	"gioui.org/shader"
+	"github.com/nanorele/gio/internal/f32color"
 )
 
-// Device represents the abstraction of underlying GPU
-// APIs such as OpenGL, Direct3D useful for rendering Gio
-// operations.
 type Device interface {
 	BeginFrame(target RenderTarget, clear bool, viewport image.Point) Texture
 	EndFrame()
 	Caps() Caps
 	NewTimer() Timer
-	// IsContinuousTime reports whether all timer measurements
-	// are valid at the point of call.
+
 	IsTimeContinuous() bool
 	NewTexture(format TextureFormat, width, height int, minFilter, magFilter TextureFilter, bindings BufferBinding) (Texture, error)
 	NewImmutableBuffer(typ BufferBinding, data []byte) (Buffer, error)
@@ -79,7 +73,6 @@ type VertexLayout struct {
 	Stride int
 }
 
-// InputDesc describes a vertex attribute as laid out in a Buffer.
 type InputDesc struct {
 	Type shader.DataType
 	Size int
@@ -108,8 +101,6 @@ type LoadAction uint8
 type Features uint
 
 type Caps struct {
-	// BottomLeftOrigin is true if the driver has the origin in the lower left
-	// corner. The OpenGL driver returns true.
 	BottomLeftOrigin bool
 	Features         Features
 	MaxTextureSize   int
@@ -161,7 +152,7 @@ const (
 	TextureFormatSRGBA TextureFormat = iota
 	TextureFormatFloat
 	TextureFormatRGBA8
-	// TextureFormatOutput denotes the format used by the output framebuffer.
+
 	TextureFormatOutput
 )
 
@@ -208,16 +199,14 @@ func DownloadImage(d Device, t Texture, img *image.RGBA) error {
 		return err
 	}
 	if d.Caps().BottomLeftOrigin {
-		// OpenGL origin is in the lower-left corner. Flip the image to
-		// match.
+
 		flipImageY(r.Dx()*4, r.Dy(), img.Pix)
 	}
 	return nil
 }
 
 func flipImageY(stride, height int, pixels []byte) {
-	// Flip image in y-direction. OpenGL's origin is in the lower
-	// left corner.
+
 	row := make([]uint8, stride)
 	for y := range height / 2 {
 		y1 := height - y - 1

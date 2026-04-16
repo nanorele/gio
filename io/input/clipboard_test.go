@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package input
 
 import (
@@ -15,7 +13,6 @@ import (
 func TestClipboardDuplicateEvent(t *testing.T) {
 	ops, r, handlers := new(op.Ops), new(Router), make([]int, 2)
 
-	// Both must receive the event once.
 	r.Source().Execute(clipboard.ReadCmd{Tag: &handlers[0]})
 	r.Source().Execute(clipboard.ReadCmd{Tag: &handlers[1]})
 
@@ -35,7 +32,7 @@ func TestClipboardDuplicateEvent(t *testing.T) {
 	r.Source().Execute(clipboard.ReadCmd{Tag: &handlers[0]})
 
 	r.Frame(ops)
-	// No ClipboardEvent sent
+
 	assertClipboardReadCmd(t, r, 1)
 	for i := range handlers {
 		f := transfer.TargetFilter{Target: &handlers[i]}
@@ -46,21 +43,17 @@ func TestClipboardDuplicateEvent(t *testing.T) {
 func TestQueueProcessReadClipboard(t *testing.T) {
 	ops, r, handler := new(op.Ops), new(Router), make([]int, 2)
 
-	// Request read
 	r.Source().Execute(clipboard.ReadCmd{Tag: &handler[0]})
 
 	assertClipboardReadCmd(t, r, 1)
 	ops.Reset()
 
 	for range 3 {
-		// No ReadCmd
-		// One receiver must still wait for response
 
 		r.Frame(ops)
 		assertClipboardReadDuplicated(t, r, 1)
 	}
 
-	// Send the clipboard event
 	event := transfer.DataEvent{
 		Type: "application/text",
 		Open: func() io.ReadCloser {

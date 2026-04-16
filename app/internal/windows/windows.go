@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 //go:build windows
 // +build windows
 
@@ -195,7 +193,7 @@ const (
 
 	CW_USEDEFAULT = -2147483648
 
-	GWL_STYLE = ^(uintptr(16) - 1) // -16
+	GWL_STYLE = ^(uintptr(16) - 1)
 
 	GCS_COMPSTR       = 0x0008
 	GCS_COMPREADSTR   = 0x0001
@@ -207,7 +205,7 @@ const (
 	CFS_POINT        = 0x0002
 	CFS_CANDIDATEPOS = 0x0040
 
-	HWND_TOPMOST = ^(uint32(1) - 1) // -1
+	HWND_TOPMOST = ^(uint32(1) - 1)
 
 	HTCAPTION     = 2
 	HTCLIENT      = 1
@@ -220,20 +218,20 @@ const (
 	HTBOTTOMLEFT  = 16
 	HTBOTTOMRIGHT = 17
 
-	IDC_APPSTARTING = 32650 // Standard arrow and small hourglass
-	IDC_ARROW       = 32512 // Standard arrow
-	IDC_CROSS       = 32515 // Crosshair
-	IDC_HAND        = 32649 // Hand
-	IDC_HELP        = 32651 // Arrow and question mark
-	IDC_IBEAM       = 32513 // I-beam
-	IDC_NO          = 32648 // Slashed circle
-	IDC_SIZEALL     = 32646 // Four-pointed arrow pointing north, south, east, and west
-	IDC_SIZENESW    = 32643 // Double-pointed arrow pointing northeast and southwest
-	IDC_SIZENS      = 32645 // Double-pointed arrow pointing north and south
-	IDC_SIZENWSE    = 32642 // Double-pointed arrow pointing northwest and southeast
-	IDC_SIZEWE      = 32644 // Double-pointed arrow pointing west and east
-	IDC_UPARROW     = 32516 // Vertical arrow
-	IDC_WAIT        = 32514 // Hour
+	IDC_APPSTARTING = 32650
+	IDC_ARROW       = 32512
+	IDC_CROSS       = 32515
+	IDC_HAND        = 32649
+	IDC_HELP        = 32651
+	IDC_IBEAM       = 32513
+	IDC_NO          = 32648
+	IDC_SIZEALL     = 32646
+	IDC_SIZENESW    = 32643
+	IDC_SIZENS      = 32645
+	IDC_SIZENWSE    = 32642
+	IDC_SIZEWE      = 32644
+	IDC_UPARROW     = 32516
+	IDC_WAIT        = 32514
 
 	INFINITE = 0xFFFFFFFF
 
@@ -654,14 +652,13 @@ func getDpiForMonitor(hmonitor syscall.Handle, dpiType uint32) int {
 	return int(dpiX)
 }
 
-// GetSystemDPI returns the effective DPI of the system.
 func GetSystemDPI() int {
-	// Check for GetDpiForMonitor, introduced in Windows 8.1.
+
 	if _GetDpiForMonitor.Find() == nil {
 		hmon := monitorFromPoint(Point{}, MONITOR_DEFAULTTOPRIMARY)
 		return getDpiForMonitor(hmon, MDT_EFFECTIVE_DPI)
 	} else {
-		// Fall back to the physical device DPI.
+
 		screenDC, err := GetDC(0)
 		if err != nil {
 			return 96
@@ -694,9 +691,8 @@ func GetSystemMetrics(nIndex int) int {
 	return int(r)
 }
 
-// GetWindowDPI returns the effective DPI of the window.
 func GetWindowDPI(hwnd syscall.Handle) int {
-	// Check for GetDpiForWindow, introduced in Windows 10.
+
 	if _GetDpiForWindow.Find() == nil {
 		dpi, _, _ := _GetDpiForWindow.Call(uintptr(hwnd))
 		return int(dpi)

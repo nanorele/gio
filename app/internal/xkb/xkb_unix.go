@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Unlicense OR MIT
+//go:build linux || freebsd || openbsd
+// +build linux freebsd openbsd
 
-//go:build (linux && !android) || freebsd || openbsd
-// +build linux,!android freebsd openbsd
-
-// Package xkb implements a Go interface for the X Keyboard Extension library.
 package xkb
 
 import (
@@ -105,8 +102,6 @@ func (x *Context) DestroyKeymapState() {
 	}
 }
 
-// SetKeymap sets the keymap and state. The context takes ownership of the
-// keymap and state and frees them in Destroy.
 func (x *Context) SetKeymap(xkbKeyMap, xkbState unsafe.Pointer) {
 	x.DestroyKeymapState()
 	x.keyMap = (*C.struct_xkb_keymap)(xkbKeyMap)
@@ -170,8 +165,7 @@ func (x *Context) DispatchKey(keyCode uint32, state key.State) (events []event.E
 			Modifiers: x.Modifiers(),
 			State:     state,
 		}
-		// Ensure that a physical backtab key is translated to
-		// Shift-Tab.
+
 		if sym == C.XKB_KEY_ISO_Left_Tab {
 			cmd.Modifiers |= key.ModShift
 		}
@@ -196,7 +190,7 @@ func (x *Context) DispatchKey(keyCode uint32, state key.State) (events []event.E
 			str = x.charsForKeycode(kc)
 		}
 	}
-	// Report only printable runes.
+
 	var n int
 	for n < len(str) {
 		r, s := utf8.DecodeRune(str)
@@ -336,17 +330,17 @@ func convertKeysym(s C.xkb_keysym_t) (key.Name, bool) {
 	case C.XKB_KEY_KP_Down:
 		n = key.NameDownArrow
 	case C.XKB_KEY_KP_Prior:
-		// not supported
+
 		return "", false
 	case C.XKB_KEY_KP_Next:
-		// not supported
+
 		return "", false
 	case C.XKB_KEY_KP_End:
 		n = key.NameEnd
 	case C.XKB_KEY_KP_Begin:
 		n = key.NameHome
 	case C.XKB_KEY_KP_Insert:
-		// not supported
+
 		return "", false
 	case C.XKB_KEY_KP_Delete:
 		n = key.NameDeleteForward
@@ -355,13 +349,12 @@ func convertKeysym(s C.xkb_keysym_t) (key.Name, bool) {
 	case C.XKB_KEY_KP_Add:
 		n = "+"
 	case C.XKB_KEY_KP_Separator:
-		// not supported
+
 		return "", false
 	case C.XKB_KEY_KP_Subtract:
 		n = "-"
 	case C.XKB_KEY_KP_Decimal:
-		// TODO(dh): does a German keyboard layout also translate the numpad key to XKB_KEY_KP_DECIMAL? Because in
-		// German, the decimal is a comma, not a period.
+
 		n = "."
 	case C.XKB_KEY_KP_Divide:
 		n = "/"

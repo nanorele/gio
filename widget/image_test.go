@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package widget
 
 import (
@@ -23,7 +21,6 @@ func TestImageScale(t *testing.T) {
 	img := image.NewNRGBA(image.Rectangle{Max: imgSize})
 	imgOp := paint.NewImageOp(img)
 
-	// Ensure the default scales correctly.
 	dims := Image{Src: imgOp}.Layout(gtx)
 	expectedSize := imgSize
 	expectedSize.X = int(float32(expectedSize.X))
@@ -32,7 +29,6 @@ func TestImageScale(t *testing.T) {
 		t.Fatalf("non-scaled image is wrong size, expected %v, got %v", expectedSize, dims.Size)
 	}
 
-	// Ensure scaling the image via the Scale field works.
 	currentScale := float32(0.5)
 	dims = Image{Src: imgOp, Scale: float32(currentScale)}.Layout(gtx)
 	expectedSize = imgSize
@@ -42,7 +38,6 @@ func TestImageScale(t *testing.T) {
 		t.Fatalf(".5 scale image is wrong size, expected %v, got %v", expectedSize, dims.Size)
 	}
 
-	// Ensure the image responds to changes in DPI.
 	currentScale = float32(1)
 	gtx.Metric.PxPerDp = 2
 	dims = Image{Src: imgOp, Scale: float32(currentScale)}.Layout(gtx)
@@ -53,7 +48,6 @@ func TestImageScale(t *testing.T) {
 		t.Fatalf("HiDPI non-scaled image is wrong size, expected %v, got %v", expectedSize, dims.Size)
 	}
 
-	// Ensure scaling the image responds to changes in DPI.
 	currentScale = float32(.5)
 	gtx.Metric.PxPerDp = 2
 	dims = Image{Src: imgOp, Scale: float32(currentScale)}.Layout(gtx)

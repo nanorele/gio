@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 //go:build darwin || linux || freebsd || openbsd
 // +build darwin linux freebsd openbsd
 
@@ -523,7 +521,6 @@ import "C"
 type Context interface{}
 
 type Functions struct {
-	// Query caches.
 	uints  [100]C.GLuint
 	ints   [100]C.GLint
 	floats [100]C.GLfloat
@@ -660,10 +657,6 @@ func (f *Functions) load(forceES bool) error {
 		libNames = []string{"/System/Library/Frameworks/OpenGL.framework/OpenGL"}
 	case runtime.GOOS == "darwin" && forceES:
 		libNames = []string{"libGLESv2.dylib"}
-	case runtime.GOOS == "ios":
-		libNames = []string{"/System/Library/Frameworks/OpenGLES.framework/OpenGLES"}
-	case runtime.GOOS == "android":
-		libNames = []string{"libGLESv2.so", "libGLESv3.so"}
 	default:
 		libNames = []string{"libGLESv2.so.2", "libGLESv2.so.3.0"}
 	}
@@ -690,7 +683,7 @@ func (f *Functions) load(forceES bool) error {
 		}
 		return ptr
 	}
-	// GL ES 2.0 functions.
+
 	f.glActiveTexture = must("glActiveTexture")
 	f.glAttachShader = must("glAttachShader")
 	f.glBindAttribLocation = must("glBindAttribLocation")
@@ -765,7 +758,6 @@ func (f *Functions) load(forceES bool) error {
 	f.glVertexAttribPointer = must("glVertexAttribPointer")
 	f.glViewport = must("glViewport")
 
-	// Extensions and GL ES 3 functions.
 	f.glBindBufferBase = load("glBindBufferBase")
 	f.glBindVertexArray = load("glBindVertexArray")
 	f.glGetIntegeri_v = load("glGetIntegeri_v")
@@ -773,7 +765,7 @@ func (f *Functions) load(forceES bool) error {
 	f.glUniformBlockBinding = load("glUniformBlockBinding")
 	f.glInvalidateFramebuffer = load("glInvalidateFramebuffer")
 	f.glGetStringi = load("glGetStringi")
-	// Fall back to EXT_invalidate_framebuffer if available.
+
 	if f.glInvalidateFramebuffer == nil {
 		f.glInvalidateFramebuffer = load("glDiscardFramebufferEXT")
 	}
@@ -1165,8 +1157,7 @@ func (f *Functions) getStringi(pname Enum, index int) string {
 func (f *Functions) GetString(pname Enum) string {
 	switch {
 	case runtime.GOOS == "darwin" && pname == EXTENSIONS:
-		// macOS OpenGL 3 core profile doesn't support glGetString(GL_EXTENSIONS).
-		// Use glGetStringi(GL_EXTENSIONS, <index>).
+
 		var exts []string
 		nexts := f.GetInteger(NUM_EXTENSIONS)
 		for i := 0; i < nexts; i++ {

@@ -1,7 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-// Package scene encodes and decodes graphics commands in the format used by the
-// compute renderer.
 package scene
 
 import (
@@ -18,7 +14,6 @@ type Op uint32
 
 type Command [sceneElemSize / 4]uint32
 
-// GPU commands from piet/scene.h in package gioui.org/shaders.
 const (
 	OpNop Op = iota
 	OpLine
@@ -34,7 +29,6 @@ const (
 	OpGap
 )
 
-// FillModes, from setup.h.
 type FillMode uint32
 
 const (

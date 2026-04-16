@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package material
 
 import (
@@ -31,7 +29,6 @@ func CheckBox(th *Theme, checkBox *widget.Bool, label string) CheckBoxStyle {
 	return c
 }
 
-// Layout updates the checkBox and displays it.
 func (c CheckBoxStyle) Layout(gtx layout.Context) layout.Dimensions {
 	return c.CheckBox.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		semantic.CheckBox.Add(gtx.Ops)

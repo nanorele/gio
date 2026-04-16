@@ -1,5 +1,3 @@
-// Package debug provides general debug feature management for Gio, including
-// the ability to toggle debug features using the GIODEBUG environment variable.
 package debug
 
 import (
@@ -16,16 +14,10 @@ const (
 	silentFeature = "silent"
 )
 
-// Text controls whether the text subsystem has debug logging enabled.
 var Text atomic.Bool
 
 var parseOnce sync.Once
 
-// Parse processes the current value of GIODEBUG. If it is unset, it does nothing.
-// Otherwise it process its value, printing usage info the stderr if the value is
-// not understood. Parse will be automatically invoked when the first application
-// window is created, allowing applications to manipulate GIODEBUG programmatically
-// before it is parsed.
 func Parse() {
 	parseOnce.Do(func() {
 		val, ok := os.LookupEnv(debugVariable)

@@ -15,11 +15,8 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
-// TestWrappingTruncation checks that the line wrapper's truncation features
-// behave as expected.
 func TestWrappingTruncation(t *testing.T) {
-	// Use a test string containing multiple newlines to ensure that they are shaped
-	// as separate paragraphs.
+
 	textInput := "Lorem ipsum dolor sit amet, consectetur adipiscing elit,\nsed do eiusmod tempor incididunt ut labore et\ndolore magna aliqua.\n"
 	ltrFace, _ := opentype.Parse(goregular.TTF)
 	collection := []FontFace{{Face: ltrFace}}
@@ -63,7 +60,7 @@ func TestWrappingTruncation(t *testing.T) {
 				}
 			}
 			if lastGlyphWasLineBreak && truncatedRunes == 0 {
-				// There was no actual line of text following this break.
+
 				lineCount--
 			}
 			if i <= untruncatedCount {
@@ -82,11 +79,8 @@ func TestWrappingTruncation(t *testing.T) {
 	}
 }
 
-// TestWrappingForcedTruncation checks that the line wrapper's truncation features
-// activate correctly on multi-paragraph text when later paragraphs are truncated.
 func TestWrappingForcedTruncation(t *testing.T) {
-	// Use a test string containing multiple newlines to ensure that they are shaped
-	// as separate paragraphs.
+
 	textInput := "Lorem ipsum\ndolor sit\namet"
 	ltrFace, _ := opentype.Parse(goregular.TTF)
 	collection := []FontFace{{Face: ltrFace}}
@@ -150,8 +144,6 @@ func TestWrappingForcedTruncation(t *testing.T) {
 	}
 }
 
-// TestShapingNewlineHandling checks that the shaper's newline splitting behaves
-// consistently and does not create spurious lines of text.
 func TestShapingNewlineHandling(t *testing.T) {
 	type testcase struct {
 		textInput         string
@@ -258,8 +250,6 @@ func TestShapingNewlineHandling(t *testing.T) {
 	}
 }
 
-// TestCacheEmptyString ensures that shaping the empty string returns a
-// single synthetic glyph with ascent/descent info.
 func TestCacheEmptyString(t *testing.T) {
 	ltrFace, _ := opentype.Parse(goregular.TTF)
 	collection := []FontFace{{Face: ltrFace}}
@@ -297,8 +287,6 @@ func TestCacheEmptyString(t *testing.T) {
 	}
 }
 
-// TestCacheAlignment ensures that shaping with different alignments or dominant
-// text directions results in different X offsets.
 func TestCacheAlignment(t *testing.T) {
 	ltrFace, _ := opentype.Parse(goregular.TTF)
 	collection := []FontFace{{Face: ltrFace}}
@@ -402,7 +390,7 @@ func TestCacheGlyphConverstion(t *testing.T) {
 						if actual.ID != glyph.id {
 							t.Errorf("glyphs[%d] expected id %d, got id %d", glyphCursor, glyph.id, actual.ID)
 						}
-						// Synthetic glyphs should only ever show up at the end of lines.
+
 						endOfLine := lastRun && endOfRun
 						synthetic := glyph.glyphCount == 0 && endOfLine
 						checkFlag(t, endOfLine, FlagLineBreak, actual, glyphCursor)
@@ -462,9 +450,6 @@ func printLinePositioning(t *testing.T, lines []line, glyphs []Glyph) {
 	}
 }
 
-// TestShapeStringRuneAccounting tries shaping the same string/parameter combinations with both
-// shaping methods and ensures that the resulting glyph stream always has the right number of
-// runes accounted for.
 func TestShapeStringRuneAccounting(t *testing.T) {
 	type testcase struct {
 		name   string

@@ -53,13 +53,10 @@ func TestListAnchorStrategies(t *testing.T) {
 	overlayDims := materialList.Layout(gtx, elements, space)
 	overlayConstraints := spaceConstraints
 
-	// Both anchor strategies should use all space available if their elements do.
 	if occupyDims != overlayDims {
 		t.Errorf("expected occupy dims (%v) to be equal to overlay dims (%v)", occupyDims, overlayDims)
 	}
-	// The overlay strategy should not reserve any space for the scroll indicator,
-	// so the constraints that it presents to its elements should be larger than
-	// those presented by the occupy strategy.
+
 	if overlayConstraints.Max.X != occupyConstraints.Max.X+indicatorWidth {
 		t.Errorf("overlay max width (%d) != occupy max width (%d) + indicator width (%d)",
 			overlayConstraints.Max.X, occupyConstraints.Max.X, indicatorWidth)

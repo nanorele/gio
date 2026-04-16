@@ -15,7 +15,6 @@ import (
 	"github.com/nanorele/gio/widget"
 )
 
-// DecorationsStyle provides the style elements for Decorations.
 type DecorationsStyle struct {
 	Decorations *widget.Decorations
 	Actions     system.Action
@@ -24,7 +23,6 @@ type DecorationsStyle struct {
 	Foreground  color.NRGBA
 }
 
-// Decorations returns the style to decorate a window.
 func Decorations(th *Theme, deco *widget.Decorations, actions system.Action, title string) DecorationsStyle {
 	titleStyle := Body1(th, title)
 	titleStyle.Color = th.Palette.ContrastFg
@@ -37,7 +35,6 @@ func Decorations(th *Theme, deco *widget.Decorations, actions system.Action, tit
 	}
 }
 
-// Layout a window with its title and action buttons.
 func (d DecorationsStyle) Layout(gtx layout.Context) layout.Dimensions {
 	rec := op.Record(gtx.Ops)
 	dims := d.layoutDecorations(gtx)
@@ -62,7 +59,7 @@ func (d DecorationsStyle) layoutDecorations(gtx layout.Context) layout.Dimension
 			})
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			// Remove the unmaximize action as it is taken care of by maximize.
+
 			actions := d.Actions &^ system.ActionUnmaximize
 			var size image.Point
 			for a := system.Action(1); actions != 0; a <<= 1 {
@@ -119,7 +116,6 @@ const (
 	winIconStroke = unit.Dp(2)
 )
 
-// minimizeWindows draws a line icon representing the minimize action.
 func minimizeWindow(gtx layout.Context) layout.Dimensions {
 	size := gtx.Dp(winIconSize)
 	size32 := float32(size)
@@ -138,7 +134,6 @@ func minimizeWindow(gtx layout.Context) layout.Dimensions {
 	return layout.Dimensions{Size: image.Pt(size, size)}
 }
 
-// maximizeWindow draws a rectangle representing the maximize action.
 func maximizeWindow(gtx layout.Context) layout.Dimensions {
 	size := gtx.Dp(winIconSize)
 	margin := gtx.Dp(winIconMargin)
@@ -161,7 +156,6 @@ func maximizeWindow(gtx layout.Context) layout.Dimensions {
 	return layout.Dimensions{Size: image.Pt(size, size)}
 }
 
-// maximizedWindow draws interleaved rectangles representing the un-maximize action.
 func maximizedWindow(gtx layout.Context) layout.Dimensions {
 	size := gtx.Dp(winIconSize)
 	margin := gtx.Dp(winIconMargin)
@@ -187,7 +181,6 @@ func maximizedWindow(gtx layout.Context) layout.Dimensions {
 	return layout.Dimensions{Size: image.Pt(size, size)}
 }
 
-// closeWindow draws a cross representing the close action.
 func closeWindow(gtx layout.Context) layout.Dimensions {
 	size := gtx.Dp(winIconSize)
 	size32 := float32(size)

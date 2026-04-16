@@ -7,36 +7,25 @@ import (
 	"github.com/nanorele/gio/op"
 )
 
-// ActionAreaOp makes the current clip area available for
-// system gestures.
-//
-// Note: only ActionMove is supported.
 type ActionInputOp Action
 
-// Action is a set of window decoration actions.
 type Action uint
 
 const (
-	// ActionMinimize minimizes a window.
 	ActionMinimize Action = 1 << iota
-	// ActionMaximize maximizes a window.
+
 	ActionMaximize
-	// ActionUnmaximize restores a maximized window.
+
 	ActionUnmaximize
-	// ActionFullscreen makes a window fullscreen.
+
 	ActionFullscreen
-	// ActionRaise requests that the platform bring this window to the top of all open windows.
-	// Some platforms do not allow this except under certain circumstances, such as when
-	// a window from the same application already has focus. If the platform does not
-	// support it, this method will do nothing.
+
 	ActionRaise
-	// ActionCenter centers the window on the screen.
-	// It is ignored in Fullscreen mode and on Wayland.
+
 	ActionCenter
-	// ActionClose closes a window.
-	// Only applicable on macOS, Windows, X11 and Wayland.
+
 	ActionClose
-	// ActionMove moves a window directed by the user.
+
 	ActionMove
 )
 

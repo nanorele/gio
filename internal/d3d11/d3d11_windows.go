@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package d3d11
 
 import (
@@ -746,16 +744,16 @@ func CreateDevice(driverType uint32, flags uint32) (*Device, *DeviceContext, uin
 		featLvl uint32
 	)
 	r, _, _ := _D3D11CreateDevice.Call(
-		0,                                 // pAdapter
-		uintptr(driverType),               // driverType
-		0,                                 // Software
-		uintptr(flags),                    // Flags
-		0,                                 // pFeatureLevels
-		0,                                 // FeatureLevels
-		SDK_VERSION,                       // SDKVersion
-		uintptr(unsafe.Pointer(&dev)),     // ppDevice
-		uintptr(unsafe.Pointer(&featLvl)), // pFeatureLevel
-		uintptr(unsafe.Pointer(&ctx)),     // ppImmediateContext
+		0,
+		uintptr(driverType),
+		0,
+		uintptr(flags),
+		0,
+		0,
+		SDK_VERSION,
+		uintptr(unsafe.Pointer(&dev)),
+		uintptr(unsafe.Pointer(&featLvl)),
+		uintptr(unsafe.Pointer(&ctx)),
 	)
 	if r != 0 {
 		return nil, nil, 0, ErrorCode{Name: "D3D11CreateDevice", Code: uint32(r)}
@@ -771,18 +769,18 @@ func CreateDeviceAndSwapChain(driverType uint32, flags uint32, swapDesc *DXGI_SW
 		featLvl uint32
 	)
 	r, _, _ := _D3D11CreateDeviceAndSwapChain.Call(
-		0,                                 // pAdapter
-		uintptr(driverType),               // driverType
-		0,                                 // Software
-		uintptr(flags),                    // Flags
-		0,                                 // pFeatureLevels
-		0,                                 // FeatureLevels
-		SDK_VERSION,                       // SDKVersion
-		uintptr(unsafe.Pointer(swapDesc)), // pSwapChainDesc
-		uintptr(unsafe.Pointer(&swchain)), // ppSwapChain
-		uintptr(unsafe.Pointer(&dev)),     // ppDevice
-		uintptr(unsafe.Pointer(&featLvl)), // pFeatureLevel
-		uintptr(unsafe.Pointer(&ctx)),     // ppImmediateContext
+		0,
+		uintptr(driverType),
+		0,
+		uintptr(flags),
+		0,
+		0,
+		SDK_VERSION,
+		uintptr(unsafe.Pointer(swapDesc)),
+		uintptr(unsafe.Pointer(&swchain)),
+		uintptr(unsafe.Pointer(&dev)),
+		uintptr(unsafe.Pointer(&featLvl)),
+		uintptr(unsafe.Pointer(&ctx)),
 	)
 	if r != 0 {
 		return nil, nil, nil, 0, ErrorCode{Name: "D3D11CreateDeviceAndSwapChain", Code: uint32(r)}
@@ -793,7 +791,7 @@ func CreateDeviceAndSwapChain(driverType uint32, flags uint32, swapDesc *DXGI_SW
 func DXGIGetDebugInterface1() (*IDXGIDebug, error) {
 	var dbg *IDXGIDebug
 	r, _, _ := _DXGIGetDebugInterface1.Call(
-		0, // Flags
+		0,
 		uintptr(unsafe.Pointer(&IID_IDXGIDebug)),
 		uintptr(unsafe.Pointer(&dbg)),
 	)
@@ -889,7 +887,7 @@ func (d *Device) CreatePixelShader(bytecode []byte) (*PixelShader, error) {
 		uintptr(unsafe.Pointer(d)),
 		uintptr(unsafe.Pointer(&bytecode[0])),
 		uintptr(len(bytecode)),
-		0, // pClassLinkage
+		0,
 		uintptr(unsafe.Pointer(&shader)),
 		0,
 	)
@@ -907,7 +905,7 @@ func (d *Device) CreateVertexShader(bytecode []byte) (*VertexShader, error) {
 		uintptr(unsafe.Pointer(d)),
 		uintptr(unsafe.Pointer(&bytecode[0])),
 		uintptr(len(bytecode)),
-		0, // pClassLinkage
+		0,
 		uintptr(unsafe.Pointer(&shader)),
 		0,
 	)
@@ -925,7 +923,7 @@ func (d *Device) CreateComputeShader(bytecode []byte) (*ComputeShader, error) {
 		uintptr(unsafe.Pointer(d)),
 		uintptr(unsafe.Pointer(&bytecode[0])),
 		uintptr(len(bytecode)),
-		0, // pClassLinkage
+		0,
 		uintptr(unsafe.Pointer(&shader)),
 		0,
 	)
@@ -1028,7 +1026,7 @@ func (d *Device) CreateTexture2D(desc *TEXTURE2D_DESC) (*Texture2D, error) {
 		4,
 		uintptr(unsafe.Pointer(d)),
 		uintptr(unsafe.Pointer(desc)),
-		0, // pInitialData
+		0,
 		uintptr(unsafe.Pointer(&tex)),
 		0, 0,
 	)
@@ -1045,7 +1043,7 @@ func (d *Device) CreateRenderTargetView(res *Resource) (*RenderTargetView, error
 		4,
 		uintptr(unsafe.Pointer(d)),
 		uintptr(unsafe.Pointer(res)),
-		0, // pDesc
+		0,
 		uintptr(unsafe.Pointer(&target)),
 		0, 0,
 	)
@@ -1275,7 +1273,7 @@ func (c *DeviceContext) CSSetShaderResources(startSlot uint32, s *ShaderResource
 		4,
 		uintptr(unsafe.Pointer(c)),
 		uintptr(startSlot),
-		1, // NumViews
+		1,
 		uintptr(unsafe.Pointer(&s)),
 		0, 0,
 	)
@@ -1287,7 +1285,7 @@ func (c *DeviceContext) CSSetUnorderedAccessViews(startSlot uint32, v *Unordered
 		4,
 		uintptr(unsafe.Pointer(c)),
 		uintptr(startSlot),
-		1, // NumViews
+		1,
 		uintptr(unsafe.Pointer(&v)),
 		0, 0,
 	)
@@ -1299,8 +1297,8 @@ func (c *DeviceContext) CSSetShader(s *ComputeShader) {
 		4,
 		uintptr(unsafe.Pointer(c)),
 		uintptr(unsafe.Pointer(s)),
-		0, // ppClassInstances
-		0, // NumClassInstances
+		0,
+		0,
 		0, 0,
 	)
 }
@@ -1310,7 +1308,7 @@ func (c *DeviceContext) RSSetViewports(viewport *VIEWPORT) {
 		c.Vtbl.RSSetViewports,
 		3,
 		uintptr(unsafe.Pointer(c)),
-		1, // NumViewports
+		1,
 		uintptr(unsafe.Pointer(viewport)),
 	)
 }
@@ -1321,8 +1319,8 @@ func (c *DeviceContext) VSSetShader(s *VertexShader) {
 		4,
 		uintptr(unsafe.Pointer(c)),
 		uintptr(unsafe.Pointer(s)),
-		0, // ppClassInstances
-		0, // NumClassInstances
+		0,
+		0,
 		0, 0,
 	)
 }
@@ -1332,8 +1330,8 @@ func (c *DeviceContext) VSSetConstantBuffers(b *Buffer) {
 		c.Vtbl.VSSetConstantBuffers,
 		4,
 		uintptr(unsafe.Pointer(c)),
-		0, // StartSlot
-		1, // NumBuffers
+		0,
+		1,
 		uintptr(unsafe.Pointer(&b)),
 		0, 0,
 	)
@@ -1344,8 +1342,8 @@ func (c *DeviceContext) PSSetConstantBuffers(b *Buffer) {
 		c.Vtbl.PSSetConstantBuffers,
 		4,
 		uintptr(unsafe.Pointer(c)),
-		0, // StartSlot
-		1, // NumBuffers
+		0,
+		1,
 		uintptr(unsafe.Pointer(&b)),
 		0, 0,
 	)
@@ -1357,7 +1355,7 @@ func (c *DeviceContext) PSSetShaderResources(startSlot uint32, s *ShaderResource
 		4,
 		uintptr(unsafe.Pointer(c)),
 		uintptr(startSlot),
-		1, // NumViews
+		1,
 		uintptr(unsafe.Pointer(&s)),
 		0, 0,
 	)
@@ -1369,7 +1367,7 @@ func (c *DeviceContext) PSSetSamplers(startSlot uint32, s *SamplerState) {
 		4,
 		uintptr(unsafe.Pointer(c)),
 		uintptr(startSlot),
-		1, // NumSamplers
+		1,
 		uintptr(unsafe.Pointer(&s)),
 		0, 0,
 	)
@@ -1381,8 +1379,8 @@ func (c *DeviceContext) PSSetShader(s *PixelShader) {
 		4,
 		uintptr(unsafe.Pointer(c)),
 		uintptr(unsafe.Pointer(s)),
-		0, // ppClassInstances
-		0, // NumClassInstances
+		0,
+		0,
 		0, 0,
 	)
 }
@@ -1393,7 +1391,7 @@ func (c *DeviceContext) UpdateSubresource(res *Resource, dstBox *BOX, rowPitch, 
 		7,
 		uintptr(unsafe.Pointer(c)),
 		uintptr(unsafe.Pointer(res)),
-		0, // DstSubresource
+		0,
 		uintptr(unsafe.Pointer(dstBox)),
 		uintptr(unsafe.Pointer(&data[0])),
 		uintptr(rowPitch),
@@ -1439,8 +1437,8 @@ func (c *DeviceContext) IASetVertexBuffers(buf *Buffer, stride, offset uint32) {
 		c.Vtbl.IASetVertexBuffers,
 		6,
 		uintptr(unsafe.Pointer(c)),
-		0, // StartSlot
-		1, // NumBuffers,
+		0,
+		1,
 		uintptr(unsafe.Pointer(&buf)),
 		uintptr(unsafe.Pointer(&stride)),
 		uintptr(unsafe.Pointer(&offset)),
@@ -1466,7 +1464,7 @@ func (c *DeviceContext) OMGetRenderTargets() (*RenderTargetView, *DepthStencilVi
 		c.Vtbl.OMGetRenderTargets,
 		4,
 		uintptr(unsafe.Pointer(c)),
-		1, // NumViews
+		1,
 		uintptr(unsafe.Pointer(&target)),
 		uintptr(unsafe.Pointer(&depthStencilView)),
 		0, 0,
@@ -1479,7 +1477,7 @@ func (c *DeviceContext) OMSetRenderTargets(target *RenderTargetView, depthStenci
 		c.Vtbl.OMSetRenderTargets,
 		4,
 		uintptr(unsafe.Pointer(c)),
-		1, // NumViews
+		1,
 		uintptr(unsafe.Pointer(&target)),
 		uintptr(unsafe.Pointer(depthStencil)),
 		0, 0,

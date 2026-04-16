@@ -1,12 +1,9 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package ops
 
 import (
 	"encoding/binary"
 )
 
-// Reader parses an ops list.
 type Reader struct {
 	pc        PC
 	stack     []macro
@@ -16,29 +13,24 @@ type Reader struct {
 	deferDone bool
 }
 
-// EncodedOp represents an encoded op returned by
-// Reader.
 type EncodedOp struct {
 	Key  Key
 	Data []byte
 	Refs []any
 }
 
-// Key is a unique key for a given op.
 type Key struct {
 	ops     *Ops
 	pc      uint32
 	version uint32
 }
 
-// Shadow of op.MacroOp.
 type macroOp struct {
 	ops   *Ops
 	start PC
 	end   PC
 }
 
-// PC is an instruction counter for an operation list.
 type PC struct {
 	data uint32
 	refs uint32
@@ -62,12 +54,10 @@ func (pc PC) Add(op OpType) PC {
 	}
 }
 
-// Reset start reading from the beginning of ops.
 func (r *Reader) Reset(ops *Ops) {
 	r.ResetAt(ops, PC{})
 }
 
-// ResetAt is like Reset, except it starts reading from pc.
 func (r *Reader) ResetAt(ops *Ops, pc PC) {
 	if r.stack == nil {
 		r.stack = r.stackBuf[:0]
@@ -103,7 +93,7 @@ func (r *Reader) Decode() (EncodedOp, bool) {
 				return EncodedOp{}, false
 			}
 			r.deferDone = true
-			// Execute deferred macros.
+
 			r.ops = &r.deferOps
 			r.pc = PC{}
 			continue
@@ -121,15 +111,14 @@ func (r *Reader) Decode() (EncodedOp, bool) {
 			r.pc.refs += nrefs
 			continue
 		case TypeAux:
-			// An Aux operations is always wrapped in a macro, and
-			// its length is the remaining space.
+
 			block := r.stack[len(r.stack)-1]
 			n += block.endPC.data - r.pc.data - TypeAuxLen
 			data = data[:n]
 		case TypeCall:
 			if deferring {
 				deferring = false
-				// Copy macro for deferred execution.
+
 				if nrefs != 1 {
 					panic("internal error: unexpected number of macro refs")
 				}
@@ -158,7 +147,7 @@ func (r *Reader) Decode() (EncodedOp, bool) {
 			if op.endpc != (PC{}) {
 				r.pc = op.endpc
 			} else {
-				// Treat an incomplete macro as containing all remaining ops.
+
 				r.pc.data = uint32(len(r.ops.data))
 				r.pc.refs = uint32(len(r.ops.refs))
 			}

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package app
 
 import (
@@ -61,8 +59,7 @@ type window struct {
 	inset     f32.Point
 	scale     float32
 	animating bool
-	// animRequested tracks whether a requestAnimationFrame callback
-	// is pending.
+
 	animRequested bool
 	wakeups       chan struct{}
 
@@ -134,7 +131,7 @@ func getContainer(doc js.Value) js.Value {
 func createTextArea(doc js.Value) js.Value {
 	tarea := doc.Call("createElement", "textarea")
 	style := tarea.Get("style")
-	// Position absolute so left/top coordinates actually place the element
+
 	style.Set("position", "absolute")
 	style.Set("width", "1px")
 	style.Set("height", "1px")
@@ -145,7 +142,7 @@ func createTextArea(doc js.Value) js.Value {
 	tarea.Set("autocorrect", "off")
 	tarea.Set("autocapitalize", "off")
 	tarea.Set("spellcheck", false)
-	// Enable multiline text input for better composition support on some browsers.
+
 	tarea.Set("rows", 1)
 	style.Set("resize", "none")
 	style.Set("overflow", "hidden")
@@ -164,8 +161,7 @@ func createCanvas(doc js.Value) js.Value {
 }
 
 func (w *window) cleanup() {
-	// Cleanup in the opposite order of
-	// construction.
+
 	for i := len(w.cleanfuncs) - 1; i >= 0; i-- {
 		w.cleanfuncs[i]()
 	}
@@ -182,7 +178,6 @@ func (w *window) addEventListeners() {
 		args[0].Call("preventDefault")
 		w.contextStatus = contextStatusRestored
 
-		// Resize is required to force update the canvas content when restored.
 		w.cnv.Set("width", 0)
 		w.cnv.Set("height", 0)
 		w.resize()
@@ -223,16 +218,16 @@ func (w *window) addEventListeners() {
 	w.addEventListener(w.cnv, "wheel", func(this js.Value, args []js.Value) interface{} {
 		e := args[0]
 		dx, dy := e.Get("deltaX").Float(), e.Get("deltaY").Float()
-		// horizontal scroll if shift is pressed.
+
 		if e.Get("shiftKey").Bool() {
 			dx, dy = dy, dx
 		}
 		mode := e.Get("deltaMode").Int()
 		switch mode {
-		case 0x01: // DOM_DELTA_LINE
+		case 0x01:
 			dx *= 10
 			dy *= 10
-		case 0x02: // DOM_DELTA_PAGE
+		case 0x02:
 			dx *= 120
 			dy *= 120
 		}
@@ -242,7 +237,7 @@ func (w *window) addEventListeners() {
 	w.addEventListener(w.cnv, "touchstart", func(this js.Value, args []js.Value) interface{} {
 		w.touchEvent(pointer.Press, args[0])
 		if w.requestFocus {
-			w.focus() // iOS can only focus inside a Touch event.
+			w.focus()
 			w.requestFocus = false
 		}
 		return nil
@@ -256,7 +251,7 @@ func (w *window) addEventListeners() {
 		return nil
 	})
 	w.addEventListener(w.cnv, "touchcancel", func(this js.Value, args []js.Value) interface{} {
-		// Cancel all touches even if only one touch was cancelled.
+
 		for i := range w.touches {
 			w.touches[i] = js.Null()
 		}
@@ -274,14 +269,13 @@ func (w *window) addEventListeners() {
 	})
 	w.addEventListener(w.tarea, "blur", func(this js.Value, args []js.Value) interface{} {
 		if w.composing != -1 {
-			// If we're composing, try to cancel.
-			// On Javascript is not possible to cancel the composition once started.
+
 			w.w.SetComposingRegion(key.Range{Start: -1, End: -1})
 			w.composing = -1
 		}
 
 		w.config.Focused = false
-		w.lastCursor = 0 // Reset cursor tracking on blur
+		w.lastCursor = 0
 		w.processEvent(ConfigEvent{Config: w.config})
 		w.blur()
 		return nil
@@ -309,13 +303,12 @@ func (w *window) addEventListeners() {
 		finalText := w.tarea.Get("value").String()
 
 		if w.composing != -1 && finalText != "" {
-			// Replace the entire composition range with the final text.
+
 			compEnd := w.composing + utf8.RuneCountInString(finalText)
 			replaceRange := key.Range{Start: w.composing, End: compEnd}
 			w.w.EditorReplace(replaceRange, finalText)
 			w.w.SetComposingRegion(key.Range{Start: -1, End: -1})
 
-			// Position cursor after the final composition text.
 			newEnd := w.composing + utf8.RuneCountInString(finalText)
 			w.w.SetEditorSelection(key.Range{Start: newEnd, End: newEnd})
 		}
@@ -334,7 +327,6 @@ func (w *window) addEventListeners() {
 			data = dataVal.String()
 		}
 
-		// Get the current textarea value.
 		tareaValue := w.tarea.Get("value").String()
 		st := w.w.EditorState()
 
@@ -351,14 +343,13 @@ func (w *window) addEventListeners() {
 			selectionEnd = 0
 		}
 
-		// Check if we need to expand the snippet to include the range.
 		if st.Snippet.Range.Start == 0 && st.Snippet.Range.End == 0 && tareaValue != "" {
-			// Empty snippet - set it to include the selection/cursor.
+
 			w.w.SetEditorSnippet(key.Range{Start: cursorPos, End: selectionEnd})
 			absStart = cursorPos
 			absEnd = selectionEnd
 		} else if cursorPos < snippetStart || selectionEnd > snippetEnd {
-			// Selection is outside the snippet
+
 			newStart := snippetStart
 			newEnd := snippetEnd
 			if cursorPos < newStart {
@@ -368,13 +359,13 @@ func (w *window) addEventListeners() {
 				newEnd = selectionEnd
 			}
 			w.w.SetEditorSnippet(key.Range{Start: newStart, End: newEnd})
-			// Refresh state after snippet update.
+
 			st = w.w.EditorState()
-			// Use the selection range directly.
+
 			absStart = cursorPos
 			absEnd = selectionEnd
 		} else {
-			// Selection is within snippet to absolute positions.
+
 			absStart = cursorPos
 			absEnd = selectionEnd
 		}
@@ -413,7 +404,7 @@ func (w *window) addEventListeners() {
 
 		case "insertReplacementText":
 			if w.composing != -1 {
-				// During composition, replace the entire composition.
+
 				compEnd := w.composing + utf8.RuneCountInString(data)
 				replaceRange := key.Range{Start: w.composing, End: compEnd}
 				w.w.EditorReplace(replaceRange, data)
@@ -424,7 +415,7 @@ func (w *window) addEventListeners() {
 				w.composing = -1
 				w.lastCursor = newEnd
 			} else {
-				// Safari sends "insertReplacementText" for autocorrect, but the cursor is at the end of the word, so we need to find the word start.
+
 				insertLen := utf8.RuneCountInString(data)
 				wordStart := absStart
 
@@ -476,7 +467,7 @@ func (w *window) addEventListeners() {
 				w.lastCursor = newCursor
 			}
 
-		default: // paste and other input types
+		default:
 			if w.composing != -1 {
 				compEnd := w.composing + utf8.RuneCountInString(tareaValue)
 				replaceRange := key.Range{Start: w.composing, End: compEnd}
@@ -500,7 +491,7 @@ func (w *window) addEventListeners() {
 		if w.clipboard.IsUndefined() {
 			return nil
 		}
-		// Prevents duplicated-paste, since "paste" is already handled through Clipboard API.
+
 		args[0].Call("preventDefault")
 		return nil
 	})
@@ -542,7 +533,6 @@ func (w *window) keyboard(hint key.InputHint) {
 	}
 	w.tarea.Set("inputMode", m)
 
-	// Update autocomplete / autocorrect attributes.
 	var autocomplete, autocorrect, autocapitalize string
 	var spellcheck bool
 
@@ -557,7 +547,7 @@ func (w *window) keyboard(hint key.InputHint) {
 		autocomplete, autocorrect, autocapitalize, spellcheck = "tel", "off", "off", false
 	case key.HintPassword:
 		autocomplete, autocorrect, autocapitalize, spellcheck = "current-password", "off", "off", false
-	default: // key.HintNumeric and others
+	default:
 		autocomplete, autocorrect, autocapitalize, spellcheck = "off", "off", "off", false
 	}
 
@@ -579,7 +569,7 @@ func (w *window) keyEvent(e js.Value, ks key.State) {
 				n == key.NameDeleteBackward || n == key.NameDeleteForward
 
 			if isMod || isFunc {
-				// Gio will request the browser to change the selection/carret position natively.
+
 				e.Call("preventDefault")
 			}
 		}
@@ -633,12 +623,10 @@ func (w *window) Frame(frame *op.Ops) {
 	w.w.ProcessFrame(frame, nil)
 }
 
-// modifiersFor returns the modifier set for a DOM MouseEvent or
-// KeyEvent.
 func modifiersFor(e js.Value) key.Modifiers {
 	var mods key.Modifiers
 	if e.Get("getModifierState").IsUndefined() {
-		// Some browsers doesn't support getModifierState.
+
 		return mods
 	}
 	if e.Call("getModifierState", "Alt").Bool() {
@@ -758,8 +746,6 @@ func (w *window) addEventListener(this js.Value, event string, f func(this js.Va
 	})
 }
 
-// funcOf is like js.FuncOf but adds the js.Func to a list of
-// functions to be released during cleanup.
 func (w *window) funcOf(f func(this js.Value, args []js.Value) interface{}) js.Func {
 	jsf := js.FuncOf(f)
 	w.cleanfuncs = append(w.cleanfuncs, jsf.Release)
@@ -768,21 +754,17 @@ func (w *window) funcOf(f func(this js.Value, args []js.Value) interface{}) js.F
 
 func (w *window) EditorStateChanged(old, new editorState) {
 	if w.composing != -1 {
-		// Do not interfere with browser state while composing.
-		// On Javascript is not possible to cancel the composition once started!
+
 		return
 	}
 
-	// Update textarea value to match the snippet.
 	if old.Snippet != new.Snippet {
 		w.tarea.Set("value", new.Snippet.Text)
 	}
 
-	// Update selection to match Gio's selection.
 	if old.Selection.Range != new.Selection.Range || old.Snippet != new.Snippet {
 		if new.Selection.Range.Start != -1 && new.Selection.Range.End != -1 {
-			// Calculate selection positions relative to snippet start.
-			// The textarea contains only the snippet text.
+
 			snippetStart := new.Snippet.Range.Start
 			snippetEnd := new.Snippet.Range.End
 
@@ -801,11 +783,9 @@ func (w *window) EditorStateChanged(old, new editorState) {
 				selEnd = snippetEnd
 			}
 
-			// Convert absolute rune positions to UTF-16 positions for the textarea.
 			startUTF16 := new.UTF16Index(selStart)
 			endUTF16 := new.UTF16Index(selEnd)
 
-			// Convert to snippet-relative UTF-16 positions.
 			snippetStartUTF16 := new.UTF16Index(snippetStart)
 			start := startUTF16 - snippetStartUTF16
 			end := endUTF16 - snippetStartUTF16
@@ -817,7 +797,6 @@ func (w *window) EditorStateChanged(old, new editorState) {
 				end = 0
 			}
 
-			// Calculate max UTF-16 length of snippet text.
 			textLen := new.UTF16Index(snippetEnd) - snippetStartUTF16
 			if start > textLen {
 				start = textLen
@@ -835,7 +814,6 @@ func (w *window) EditorStateChanged(old, new editorState) {
 		}
 	}
 
-	// Move DOM element to position the caret.
 	if old.Selection.Caret != new.Selection.Caret || old.Selection.Transform != new.Selection.Transform {
 		pos := new.Selection.Transform.Transform(new.Selection.Caret.Pos.Add(f32.Pt(0, new.Selection.Caret.Descent)))
 		bounds := w.cnv.Call("getBoundingClientRect")
@@ -882,7 +860,7 @@ func (w *window) Configure(options []Option) {
 	prev := w.config
 	cnf := w.config
 	cnf.apply(unit.Metric{}, options)
-	// Decorations are never disabled.
+
 	cnf.Decorated = true
 
 	if prev.Title != cnf.Title {
@@ -943,13 +921,11 @@ func (w *window) SetCursor(cursor pointer.Cursor) {
 }
 
 func (w *window) ShowTextInput(show bool) {
-	// Run in a goroutine to avoid a deadlock if the
-	// focus change result in an event.
+
 	if show {
 		w.focus()
 	} else {
-		// If we're composing, end composition first by clearing the textarea.
-		// That is a attempt to force the browser to end composition.
+
 		if w.composing != -1 {
 			w.tarea.Set("value", "")
 			w.composing = -1
@@ -1032,17 +1008,17 @@ func (w *window) windowMode(mode WindowMode) {
 	switch mode {
 	case Windowed:
 		if !w.document.Get("fullscreenElement").Truthy() {
-			return // Browser is already Windowed.
+			return
 		}
 		if !w.document.Get("exitFullscreen").Truthy() {
-			return // Browser doesn't support such feature.
+			return
 		}
 		w.document.Call("exitFullscreen")
 		w.config.Mode = Windowed
 	case Fullscreen:
 		elem := w.document.Get("documentElement")
 		if !elem.Get("requestFullscreen").Truthy() {
-			return // Browser doesn't support such feature.
+			return
 		}
 		elem.Call("requestFullscreen")
 		w.config.Mode = Fullscreen
@@ -1051,7 +1027,7 @@ func (w *window) windowMode(mode WindowMode) {
 
 func (w *window) orientation(mode Orientation) {
 	if j := w.screenOrientation; !j.Truthy() || !j.Get("unlock").Truthy() || !j.Get("lock").Truthy() {
-		return // Browser don't support Screen Orientation API.
+		return
 	}
 
 	switch mode {
@@ -1145,7 +1121,7 @@ func translateKey(k string) (key.Name, bool) {
 		n = key.NameSuper
 	default:
 		r, s := utf8.DecodeRuneInString(k)
-		// If there is exactly one printable character, return that.
+
 		if s == len(k) && unicode.IsPrint(r) {
 			return key.Name(strings.ToUpper(k)), true
 		}

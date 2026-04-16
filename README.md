@@ -1,6 +1,6 @@
 # Gio - https://github.com/nanorele/gio
 
-Immediate mode GUI programs in Go for Android, iOS, macOS, Linux,
+Immediate mode GUI programs in Go for macOS, Linux,
 FreeBSD, OpenBSD, Windows, and WebAssembly (experimental).
 
 # Installation, examples, documentation

@@ -1,13 +1,11 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 //go:build linux || freebsd || openbsd
 // +build linux freebsd openbsd
 
 package egl
 
 /*
-#cgo linux,!android  pkg-config: egl
-#cgo freebsd openbsd android LDFLAGS: -lEGL
+#cgo linux  pkg-config: egl
+#cgo freebsd openbsd LDFLAGS: -lEGL
 #cgo freebsd CFLAGS: -I/usr/local/include
 #cgo freebsd LDFLAGS: -L/usr/local/lib
 #cgo openbsd CFLAGS: -I/usr/X11R6/include

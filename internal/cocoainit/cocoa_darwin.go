@@ -1,7 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-// Package cocoainit initializes support for multithreaded
-// programs in Cocoa.
 package cocoainit
 
 /*

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package widget
 
 import (
@@ -15,7 +13,6 @@ import (
 	"github.com/nanorele/gio/op/clip"
 )
 
-// Clickable represents a clickable area.
 type Clickable struct {
 	click   gesture.Click
 	history []Press
@@ -24,31 +21,25 @@ type Clickable struct {
 	pressedKey    key.Name
 }
 
-// Click represents a click.
 type Click struct {
 	Modifiers key.Modifiers
 	NumClicks int
 }
 
-// Press represents a past pointer press.
 type Press struct {
-	// Position of the press.
 	Position image.Point
-	// Start is when the press began.
+
 	Start time.Time
-	// End is when the press was ended by a release or cancel.
-	// A zero End means it hasn't ended yet.
+
 	End time.Time
-	// Cancelled is true for cancelled presses.
+
 	Cancelled bool
 }
 
-// Click executes a simple programmatic click.
 func (b *Clickable) Click() {
 	b.requestClicks++
 }
 
-// Clicked calls Update and reports whether a click was registered.
 func (b *Clickable) Clicked(gtx layout.Context) bool {
 	return b.clicked(b, gtx)
 }
@@ -58,23 +49,18 @@ func (b *Clickable) clicked(t event.Tag, gtx layout.Context) bool {
 	return clicked
 }
 
-// Hovered reports whether a pointer is over the element.
 func (b *Clickable) Hovered() bool {
 	return b.click.Hovered()
 }
 
-// Pressed reports whether a pointer is pressing the element.
 func (b *Clickable) Pressed() bool {
 	return b.click.Pressed()
 }
 
-// History is the past pointer presses useful for drawing markers.
-// History is retained for a short duration (about a second).
 func (b *Clickable) History() []Press {
 	return b.history
 }
 
-// Layout and update the button state.
 func (b *Clickable) Layout(gtx layout.Context, w layout.Widget) layout.Dimensions {
 	return b.layout(b, gtx, w)
 }
@@ -97,8 +83,6 @@ func (b *Clickable) layout(t event.Tag, gtx layout.Context, w layout.Widget) lay
 	return dims
 }
 
-// Update the button state by processing events, and return the next
-// click, if any.
 func (b *Clickable) Update(gtx layout.Context) (Click, bool) {
 	return b.update(b, gtx)
 }
@@ -174,7 +158,7 @@ func (b *Clickable) update(t event.Tag, gtx layout.Context) (Click, bool) {
 				if b.pressedKey != e.Name {
 					break
 				}
-				// only register a key as a click if the key was pressed and released while this button was focused
+
 				b.pressedKey = ""
 				return Click{
 					Modifiers: e.Modifiers,

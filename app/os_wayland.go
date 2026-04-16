@@ -1,7 +1,5 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-//go:build ((linux && !android) || freebsd) && !nowayland
-// +build linux,!android freebsd
+//go:build (linux || freebsd) && !nowayland
+// +build linux freebsd
 // +build !nowayland
 
 package app
@@ -35,7 +33,6 @@ import (
 	"github.com/nanorele/gio/unit"
 )
 
-// Use wayland-scanner to generate glue code for the xdg-shell and xdg-decoration extensions.
 //go:generate wayland-scanner client-header /usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml wayland_xdg_shell.h
 //go:generate wayland-scanner private-code /usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml wayland_xdg_shell.c
 
@@ -45,9 +42,9 @@ import (
 //go:generate wayland-scanner client-header /usr/share/wayland-protocols/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml wayland_xdg_decoration.h
 //go:generate wayland-scanner private-code /usr/share/wayland-protocols/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml wayland_xdg_decoration.c
 
-//go:generate sed -i "1s;^;//go:build ((linux \\&\\& !android) || freebsd) \\&\\& !nowayland\\n// +build linux,!android freebsd\\n// +build !nowayland\\n\\n;" wayland_xdg_shell.c
-//go:generate sed -i "1s;^;//go:build ((linux \\&\\& !android) || freebsd) \\&\\& !nowayland\\n// +build linux,!android freebsd\\n// +build !nowayland\\n\\n;" wayland_xdg_decoration.c
-//go:generate sed -i "1s;^;//go:build ((linux \\&\\& !android) || freebsd) \\&\\& !nowayland\\n// +build linux,!android freebsd\\n// +build !nowayland\\n\\n;" wayland_text_input.c
+//go:generate sed -i "1s;^;//go:build (linux \\&\\& !nowayland) || freebsd \\&\\& !nowayland\\n// +build linux freebsd\\n// +build !nowayland\\n\\n;" wayland_xdg_shell.c
+//go:generate sed -i "1s;^;//go:build (linux \\&\\& !nowayland) || freebsd \\&\\& !nowayland\\n// +build linux freebsd\\n// +build !nowayland\\n\\n;" wayland_xdg_decoration.c
+//go:generate sed -i "1s;^;//go:build (linux \\&\\& !nowayland) || freebsd \\&\\& !nowayland\\n// +build linux freebsd\\n// +build !nowayland\\n\\n;" wayland_text_input.c
 
 /*
 #cgo linux pkg-config: wayland-client wayland-cursor
@@ -95,7 +92,6 @@ type wlDisplay struct {
 	outputMap         map[C.uint32_t]*C.struct_wl_output
 	outputConfig      map[*C.struct_wl_output]*wlOutput
 
-	// Notification pipe fds.
 	notify struct {
 		read, write int
 	}
@@ -114,28 +110,24 @@ type wlSeat struct {
 	keyboard *C.struct_wl_keyboard
 	im       *C.struct_zwp_text_input_v3
 
-	// The most recent input serial.
 	serial C.uint32_t
-	// The most recent pointer enter serial.
+
 	pointerSerial C.uint32_t
 
 	pointerFocus  *window
 	keyboardFocus *window
 	touchFoci     map[C.int32_t]*window
 
-	// Clipboard support.
 	dataDev *C.struct_wl_data_device
-	// offers is a map from active wl_data_offers to
-	// the list of mime types they support.
+
 	offers map[*C.struct_wl_data_offer][]string
-	// clipboard is the wl_data_offer for the clipboard.
+
 	clipboard *C.struct_wl_data_offer
-	// mimeType is the chosen mime type of clipboard.
+
 	mimeType string
-	// source represents the clipboard content of the most recent
-	// clipboard write, if any.
+
 	source *C.struct_wl_data_source
-	// content is the data belonging to source.
+
 	content []byte
 }
 
@@ -173,10 +165,7 @@ type window struct {
 	cursor struct {
 		theme  *C.struct_wl_cursor_theme
 		cursor *C.struct_wl_cursor
-		// system is the active cursor for system gestures
-		// such as border resizes and window moves. It
-		// is nil if the pointer is not in a system gesture
-		// area.
+
 		system  *C.struct_wl_cursor
 		surf    *C.struct_wl_surface
 		cursors struct {
@@ -204,14 +193,14 @@ type window struct {
 	lastFrameCallback *C.struct_wl_callback
 
 	animating bool
-	// The most recent configure serial waiting to be ack'ed.
+
 	serial C.uint32_t
 	scale  int
-	// size is the unscaled window size (unlike config.Size which is scaled).
+
 	size         image.Point
 	config       Config
-	wsize        image.Point // window config size before going fullscreen or maximized
-	inCompositor bool        // window is moving or being resized
+	wsize        image.Point
+	inCompositor bool
 
 	clipReads chan transfer.DataEvent
 
@@ -222,7 +211,7 @@ type window struct {
 
 type poller struct {
 	pollfds [2]syscall.PollFd
-	// buf is scratch space for draining the notification pipe.
+
 	buf [100]byte
 }
 
@@ -236,14 +225,8 @@ type wlOutput struct {
 	windows    []*window
 }
 
-// callbackMap maps Wayland native handles to corresponding Go
-// references. It is necessary because the Wayland client API
-// forces the use of callbacks and storing pointers to Go values
-// in C is forbidden.
 var callbackMap sync.Map
 
-// clipboardMimeTypes is a list of supported clipboard mime types, in
-// order of preference.
 var clipboardMimeTypes = []string{"text/plain;charset=utf8", "UTF8_STRING", "text/plain", "TEXT", "STRING"}
 
 var (
@@ -268,7 +251,6 @@ func newWLWindow(callbacks *callbacks, options []Option) error {
 	w.w = callbacks
 	w.w.SetDriver(w)
 
-	// Finish and commit setup from createNativeWindow.
 	w.Configure(options)
 	w.draw(true)
 	C.wl_surface_commit(w.surf)
@@ -285,7 +267,7 @@ func (d *wlDisplay) writeClipboard(content []byte) error {
 	if s == nil {
 		return nil
 	}
-	// Clear old offer.
+
 	if s.source != nil {
 		C.wl_data_source_destroy(s.source)
 		s.source = nil
@@ -316,8 +298,7 @@ func (d *wlDisplay) readClipboard() (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	// wl_data_offer_receive performs and implicit dup(2) of the write end
-	// of the pipe. Close our version.
+
 	defer w.Close()
 	cmimeType := C.CString(s.mimeType)
 	defer C.free(unsafe.Pointer(cmimeType))
@@ -437,7 +418,7 @@ func (w *window) loadCursor(name pointer.Cursor) *C.struct_wl_cursor {
 	defer C.free(unsafe.Pointer(cname))
 	c := C.wl_cursor_theme_get_cursor(w.cursor.theme, cname)
 	if c == nil {
-		// Fall back to default cursor.
+
 		c = w.cursor.cursors.pointer
 	}
 	return c
@@ -465,14 +446,12 @@ func gio_onSeatCapabilities(data unsafe.Pointer, seat *C.struct_wl_seat, caps C.
 	s.updateCaps(caps)
 }
 
-// flushOffers remove all wl_data_offers that isn't the clipboard
-// content.
 func (s *wlSeat) flushOffers() {
 	for o := range s.offers {
 		if o == s.clipboard {
 			continue
 		}
-		// We're only interested in clipboard offers.
+
 		delete(s.offers, o)
 		callbackDelete(unsafe.Pointer(o))
 		C.wl_data_offer_destroy(o)
@@ -641,7 +620,7 @@ func gio_onSurfaceEnter(data unsafe.Pointer, surf *C.struct_wl_surface, output *
 	}
 	w.updateOutputs()
 	if w.config.Mode == Minimized {
-		// Minimized window got brought back up: it is no longer so.
+
 		w.config.Mode = Windowed
 		w.ProcessEvent(ConfigEvent{Config: w.config})
 	}
@@ -677,7 +656,7 @@ func gio_onRegistryGlobal(data unsafe.Pointer, reg *C.struct_wl_registry, name C
 		}
 		s := (*C.struct_wl_seat)(C.wl_registry_bind(reg, name, &C.wl_seat_interface, 5))
 		if s == nil {
-			// No support for v5 protocol.
+
 			break
 		}
 		d.seat = &wlSeat{
@@ -696,9 +675,7 @@ func gio_onRegistryGlobal(data unsafe.Pointer, reg *C.struct_wl_registry, name C
 		d.wm = (*C.struct_xdg_wm_base)(C.wl_registry_bind(reg, name, &C.xdg_wm_base_interface, 1))
 	case "zxdg_decoration_manager_v1":
 		d.decor = (*C.struct_zxdg_decoration_manager_v1)(C.wl_registry_bind(reg, name, &C.zxdg_decoration_manager_v1_interface, 1))
-		// TODO: Implement and test text-input support.
-		/*case "zwp_text_input_manager_v3":
-		d.imm = (*C.struct_zwp_text_input_manager_v3)(C.wl_registry_bind(reg, name, &C.zwp_text_input_manager_v3_interface, 1))*/
+
 	case "wl_data_device_manager":
 		d.dataDeviceManager = (*C.struct_wl_data_device_manager)(C.wl_registry_bind(reg, name, &C.wl_data_device_manager_interface, 3))
 		d.bindDataDevice()
@@ -884,7 +861,7 @@ func gio_onPointerButton(data unsafe.Pointer, p *C.struct_wl_pointer, serial, t,
 	s := callbackLoad(data).(*wlSeat)
 	s.serial = serial
 	w := s.pointerFocus
-	// From Linux: include/uapi/linux/input-event-codes.h
+
 	const (
 		BTN_LEFT   = 0x110
 		BTN_RIGHT  = 0x111
@@ -926,7 +903,7 @@ func gio_onPointerButton(data unsafe.Pointer, p *C.struct_wl_pointer, serial, t,
 	case 0:
 		w.pointerBtns &^= btn
 		kind = pointer.Release
-		// Move or resize gestures no longer applies.
+
 		w.inCompositor = false
 	case 1:
 		w.pointerBtns |= btn
@@ -957,7 +934,7 @@ func gio_onPointerAxis(data unsafe.Pointer, p *C.struct_wl_pointer, t, axis C.ui
 	case C.WL_POINTER_AXIS_HORIZONTAL_SCROLL:
 		w.scroll.dist.X += v
 	case C.WL_POINTER_AXIS_VERTICAL_SCROLL:
-		// horizontal scroll if shift + mousewheel(up/down) pressed.
+
 		if w.disp.xkb.Modifiers() == key.ModShift {
 			w.scroll.dist.X += v
 		} else {
@@ -1015,7 +992,7 @@ func gio_onPointerAxisDiscrete(data unsafe.Pointer, p *C.struct_wl_pointer, axis
 	case C.WL_POINTER_AXIS_HORIZONTAL_SCROLL:
 		w.scroll.steps.X += int(discrete)
 	case C.WL_POINTER_AXIS_VERTICAL_SCROLL:
-		// horizontal scroll if shift + mousewheel(up/down) pressed.
+
 		if w.disp.xkb.Modifiers() == key.ModShift {
 			w.scroll.steps.X += int(discrete)
 		} else {
@@ -1033,7 +1010,7 @@ func (w *window) ReadClipboard() {
 	if r == nil || err != nil {
 		return
 	}
-	// Don't let slow clipboard transfers block event loop.
+
 	go func() {
 		defer r.Close()
 		data, _ := io.ReadAll(r)
@@ -1123,8 +1100,6 @@ func (w *window) setWindowConstraints() {
 	}
 }
 
-// decoHeight returns the adjustment for client-side decorations, if applicable.
-// The unit is in surface-local coordinates.
 func (w *window) decoHeight() int {
 	if !w.config.Decorated {
 		return int(w.config.decoHeight)
@@ -1142,8 +1117,7 @@ func (w *window) setTitle(prev, cnf Config) {
 }
 
 func (w *window) Perform(actions system.Action) {
-	// NB. there is no way for a minimized window to be unminimized.
-	// https://wayland.app/protocols/xdg-shell#xdg_toplevel:request:set_minimized
+
 	walkActions(actions, func(action system.Action) {
 		switch action {
 		case system.ActionClose:
@@ -1193,7 +1167,7 @@ func (w *window) setCursor(pointer *C.struct_wl_pointer, serial C.uint32_t) {
 		C.wl_pointer_set_cursor(pointer, serial, nil, 0, 0)
 		return
 	}
-	// Get images[0].
+
 	img := *c.images
 	buf := C.wl_cursor_image_get_buffer(img)
 	if buf == nil {
@@ -1220,7 +1194,7 @@ func gio_onKeyboardKeymap(data unsafe.Pointer, keyboard *C.struct_wl_keyboard, f
 		return
 	}
 	if err := s.disp.xkb.LoadKeymap(int(format), int(fd), int(size)); err != nil {
-		// TODO: Do better.
+
 		panic(err)
 	}
 }
@@ -1258,7 +1232,7 @@ func gio_onKeyboardKey(data unsafe.Pointer, keyboard *C.struct_wl_keyboard, seri
 	ks := mapXKBKeyState(uint32(state))
 	for _, e := range w.disp.xkb.DispatchKey(kc, ks) {
 		if ee, ok := e.(key.EditEvent); ok {
-			// There's no support for IME yet.
+
 			w.w.EditorInsert(ee.Text)
 		} else {
 			w.ProcessEvent(e)
@@ -1273,7 +1247,7 @@ func gio_onKeyboardKey(data unsafe.Pointer, keyboard *C.struct_wl_keyboard, seri
 }
 
 func mapXKBKeycode(keyCode uint32) uint32 {
-	// According to the xkb_v1 spec: "to determine the xkb keycode, clients must add 8 to the key event keycode."
+
 	return keyCode + 8
 }
 
@@ -1353,7 +1327,7 @@ func (r *repeatState) Repeat(d *wlDisplay) {
 		}
 		for _, e := range d.xkb.DispatchKey(r.key, key.Press) {
 			if ee, ok := e.(key.EditEvent); ok {
-				// There's no support for IME yet.
+
 				r.win.w.EditorInsert(ee.Text)
 			} else {
 				r.win.ProcessEvent(e)
@@ -1433,8 +1407,6 @@ func (w *window) Frame(frame *op.Ops) {
 	w.w.ProcessFrame(frame, nil)
 }
 
-// bindDataDevice initializes the dataDev field if and only if both
-// the seat and dataDeviceManager fields are initialized.
 func (d *wlDisplay) bindDataDevice() {
 	if d.seat != nil && d.dataDeviceManager != nil {
 		d.seat.dataDev = C.wl_data_device_manager_get_data_device(d.dataDeviceManager, d.seat.seat)
@@ -1447,13 +1419,12 @@ func (d *wlDisplay) bindDataDevice() {
 }
 
 func (d *wlDisplay) dispatch() error {
-	// wl_display_prepare_read records the current thread for
-	// use in wl_display_read_events or wl_display_cancel_events.
+
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
 	dispfd := C.wl_display_get_fd(d.disp)
-	// Poll for events and notifications.
+
 	pollfds := append(d.poller.pollfds[:0],
 		syscall.PollFd{Fd: int32(dispfd), Events: syscall.POLLIN | syscall.POLLERR},
 		syscall.PollFd{Fd: int32(d.notify.read), Events: syscall.POLLIN | syscall.POLLERR},
@@ -1466,8 +1437,7 @@ func (d *wlDisplay) dispatch() error {
 		if err != syscall.EAGAIN {
 			return fmt.Errorf("wayland: wl_display_flush failed: %v", err)
 		}
-		// EAGAIN means the output buffer was full. Poll for
-		// POLLOUT to know when we can write again.
+
 		dispFd.Events |= syscall.POLLOUT
 	}
 	if _, err := syscall.Poll(pollfds, -1); err != nil && err != syscall.EINTR {
@@ -1478,7 +1448,7 @@ func (d *wlDisplay) dispatch() error {
 		C.wl_display_cancel_read(d.disp)
 		return errors.New("wayland: display file descriptor gone")
 	}
-	// Handle events.
+
 	if dispFd.Revents&syscall.POLLIN != 0 {
 		if ret, err := C.wl_display_read_events(d.disp); ret < 0 {
 			return fmt.Errorf("wayland: wl_display_read_events failed: %v", err)
@@ -1487,7 +1457,7 @@ func (d *wlDisplay) dispatch() error {
 	} else {
 		C.wl_display_cancel_read(d.disp)
 	}
-	// Clear notifications.
+
 	for {
 		_, err := syscall.Read(d.notify.read, d.poller.buf[:])
 		if err == syscall.EAGAIN {
@@ -1508,7 +1478,6 @@ func (w *window) SetAnimating(anim bool) {
 	}
 }
 
-// Wakeup wakes up the event loop through the notification pipe.
 func (d *wlDisplay) wakeup() {
 	oneByte := make([]byte, 1)
 	if _, err := syscall.Write(d.notify.write, oneByte); err != nil && err != syscall.EAGAIN {
@@ -1631,9 +1600,7 @@ func (w *window) flushScroll() {
 		dist := float32(w.fling.anim.Tick(time.Now()))
 		fling = w.fling.dir.Mul(dist)
 	}
-	// The Wayland reported scroll distance for
-	// discrete scroll axes is only 10 pixels, where
-	// 100 seems more appropriate.
+
 	const discreteScale = 10
 	if w.scroll.steps.X != 0 {
 		w.scroll.dist.X *= discreteScale
@@ -1649,8 +1616,7 @@ func (w *window) flushScroll() {
 		w.fling.xExtrapolation.SampleDelta(w.scroll.time, -w.scroll.dist.X)
 		w.fling.yExtrapolation.SampleDelta(w.scroll.time, -w.scroll.dist.Y)
 	}
-	// Zero scroll distance prior to calling ProcessEvent, otherwise we may recursively
-	// re-process the scroll distance.
+
 	w.scroll.dist = f32.Point{}
 	w.scroll.steps = image.Point{}
 	w.ProcessEvent(pointer.Event{
@@ -1685,8 +1651,6 @@ func (w *window) onPointerMotion(x, y C.wl_fixed_t, t C.uint32_t) {
 	}
 }
 
-// updateCursor updates the system gesture cursor according to the pointer
-// position.
 func (w *window) systemGesture() (*C.struct_wl_cursor, C.uint32_t) {
 	if w.config.Mode != Windowed || w.config.Decorated {
 		return nil, 0
@@ -1775,14 +1739,14 @@ func (w *window) draw(sync bool) {
 		w.ProcessEvent(ConfigEvent{Config: w.config})
 	}
 	anim := w.animating || w.fling.anim.Active()
-	// Draw animation only when not waiting for frame callback.
+
 	redrawAnim := anim && w.lastFrameCallback == nil
 	if !redrawAnim && !sync {
 		return
 	}
 	if anim {
 		w.lastFrameCallback = C.wl_surface_frame(w.surf)
-		// Use the surface as listener data for gio_onFrameDone.
+
 		C.wl_callback_add_listener(w.lastFrameCallback, &C.gio_callback_listener, unsafe.Pointer(w.surf))
 	}
 	w.ProcessEvent(frameEvent{
@@ -1832,9 +1796,8 @@ func (w *window) NewContext() (context, error) {
 	return nil, errors.New("wayland: no available GPU backends")
 }
 
-// detectUIScale reports the system UI scale, or 1.0 if it fails.
 func detectUIScale() float32 {
-	// TODO: What about other window environments?
+
 	out, err := exec.Command("gsettings", "get", "org.gnome.desktop.interface", "text-scaling-factor").Output()
 	if err != nil {
 		return 1.0
@@ -1875,12 +1838,9 @@ func newWLDisplay() (*wlDisplay, error) {
 		return nil, errors.New("wayland: wl_display_get_registry failed")
 	}
 	C.wl_registry_add_listener(d.reg, &C.gio_registry_listener, unsafe.Pointer(d.disp))
-	// Wait for the server to register all its globals to the
-	// registry listener (gio_onRegistryGlobal).
+
 	C.wl_display_roundtrip(d.disp)
-	// Configuration listeners are added to outputs by gio_onRegistryGlobal.
-	// We need another roundtrip to get the initial output configurations
-	// through the gio_onOutput* callbacks.
+
 	C.wl_display_roundtrip(d.disp)
 	return d, nil
 }
@@ -1935,10 +1895,8 @@ func (d *wlDisplay) destroy() {
 	}
 }
 
-// fromFixed converts a Wayland wl_fixed_t 23.8 number to float32.
 func fromFixed(v C.wl_fixed_t) float32 {
-	// Convert to float64 to avoid overflow.
-	// From wayland-util.h.
+
 	b := ((1023 + 44) << 52) + (1 << 51) + uint64(v)
 	f := math.Float64frombits(b) - (3 << 43)
 	return float32(f)

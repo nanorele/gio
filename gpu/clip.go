@@ -13,22 +13,14 @@ type quadSplitter struct {
 	contour uint32
 	d       *drawOps
 
-	// scratch space used by calls to stroke.SplitCubic
 	scratch []stroke.QuadSegment
 }
 
 func encodeQuadTo(data []byte, meta uint32, from, ctrl, to f32.Point) {
-	// inlined code:
-	//   encodeVertex(data, meta, 1, -1, from, ctrl, to)
-	//   encodeVertex(data[vertStride:], meta, 1, 1, from, ctrl, to)
-	//   encodeVertex(data[vertStride*2:], meta, -1, -1, from, ctrl, to)
-	//   encodeVertex(data[vertStride*3:], meta, -1, 1, from, ctrl, to)
-	// this code needs to stay in sync with `vertex.encode`.
 
 	bo := binary.LittleEndian
 	data = data[:vertStride*4]
 
-	// encode the main template
 	bo.PutUint32(data[4:8], meta)
 	bo.PutUint32(data[8:12], math.Float32bits(from.X))
 	bo.PutUint32(data[12:16], math.Float32bits(from.Y))
@@ -86,16 +78,10 @@ func (qs *quadSplitter) splitAndEncode(quad stroke.QuadSegment) {
 	}.Canon()
 	from, ctrl, to := quad.From, quad.Ctrl, quad.To
 
-	// If the curve contain areas where a vertical line
-	// intersects it twice, split the curve in two x monotone
-	// lower and upper curves. The stencil fragment program
-	// expects only one intersection per curve.
-
-	// Find the t where the derivative in x is 0.
 	v0 := ctrl.Sub(from)
 	v1 := to.Sub(ctrl)
 	d := v0.X - v1.X
-	// t = v0 / d. Split if t is in ]0;1[.
+
 	if v0.X > 0 && d > v0.X || v0.X < 0 && d < v0.X {
 		t := v0.X / d
 		ctrl0 := from.Mul(1 - t).Add(ctrl.Mul(t))
@@ -112,7 +98,7 @@ func (qs *quadSplitter) splitAndEncode(quad stroke.QuadSegment) {
 	} else {
 		qs.encodeQuadTo(from, ctrl, to)
 	}
-	// Find the y extremum, if any.
+
 	d = v0.Y - v1.Y
 	if v0.Y > 0 && d > v0.Y || v0.Y < 0 && d < v0.Y {
 		t := v0.Y / d
@@ -128,7 +114,6 @@ func (qs *quadSplitter) splitAndEncode(quad stroke.QuadSegment) {
 	qs.bounds = unionRect(qs.bounds, cbnd)
 }
 
-// Union is like f32.Rectangle.Union but ignores empty rectangles.
 func unionRect(r, s f32.Rectangle) f32.Rectangle {
 	if r.Min.X > s.Min.X {
 		r.Min.X = s.Min.X

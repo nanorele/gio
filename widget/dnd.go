@@ -13,9 +13,7 @@ import (
 	"github.com/nanorele/gio/op/clip"
 )
 
-// Draggable makes a widget draggable.
 type Draggable struct {
-	// Type contains the MIME type and matches transfer.SourceOp.
 	Type string
 
 	drag  gesture.Drag
@@ -44,13 +42,10 @@ func (d *Draggable) Layout(gtx layout.Context, w, drag layout.Widget) layout.Dim
 	return dims
 }
 
-// Dragging returns whether d is being dragged.
 func (d *Draggable) Dragging() bool {
 	return d.drag.Dragging()
 }
 
-// Update the draggable and returns the MIME type for which the Draggable was
-// requested to offer data, if any
 func (d *Draggable) Update(gtx layout.Context) (mime string, requested bool) {
 	pos := d.pos
 	for {
@@ -80,13 +75,10 @@ func (d *Draggable) Update(gtx layout.Context) (mime string, requested bool) {
 	return "", false
 }
 
-// Offer the data ready for a drop. Must be called after being Requested.
-// The mime must be one in the requested list.
 func (d *Draggable) Offer(gtx layout.Context, mime string, data io.ReadCloser) {
 	gtx.Execute(transfer.OfferCmd{Tag: d, Type: mime, Data: data})
 }
 
-// Pos returns the drag position relative to its initial click position.
 func (d *Draggable) Pos() f32.Point {
 	return d.pos
 }

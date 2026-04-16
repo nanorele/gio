@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package metal
 
 import (
@@ -8,8 +6,8 @@ import (
 	"image"
 	"unsafe"
 
-	"github.com/nanorele/gio/gpu/internal/driver"
 	"gioui.org/shader"
+	"github.com/nanorele/gio/gpu/internal/driver"
 )
 
 /*
@@ -361,14 +359,10 @@ static CFTypeRef newRenderPipeline(CFTypeRef devRef, CFTypeRef vertFunc, CFTypeR
 		desc.fragmentFunction = ffunc;
 		desc.vertexDescriptor = vdesc;
 		for (NSUInteger i = 0; i < nvertBufs; i++) {
-			if (@available(iOS 11.0, *)) {
-				desc.vertexBuffers[i].mutability = MTLMutabilityImmutable;
-			}
+			desc.vertexBuffers[i].mutability = MTLMutabilityImmutable;
 		}
 		for (NSUInteger i = 0; i < nfragBufs; i++) {
-			if (@available(iOS 11.0, *)) {
-				desc.fragmentBuffers[i].mutability = MTLMutabilityImmutable;
-			}
+			desc.fragmentBuffers[i].mutability = MTLMutabilityImmutable;
 		}
 		desc.colorAttachments[0].pixelFormat = pixelFormat;
 		desc.colorAttachments[0].blendingEnabled = blend ? YES : NO;
@@ -402,9 +396,6 @@ type Backend struct {
 
 	indexBuf *Buffer
 
-	// bufSizes is scratch space for filling out the spvBufferSizeConstants
-	// that spirv-cross generates for emulating buffer.length expressions in
-	// shaders.
 	bufSizes []uint32
 }
 
@@ -438,7 +429,6 @@ type Buffer struct {
 	size    int
 	buffer  C.CFTypeRef
 
-	// store is the buffer contents For buffers not allocated on the GPU.
 	store []byte
 }
 
@@ -663,8 +653,8 @@ func (b *Backend) NewPipeline(desc driver.PipelineDesc) (driver.Pipeline, error)
 		C.NSUInteger(len(layout)), fmtPtr, offPtr,
 		C.NSUInteger(desc.VertexLayout.Stride),
 		blend, srcFactor, dstFactor,
-		2, // Number of vertex buffers.
-		1, // Number of fragment buffers.
+		2,
+		1,
 	)
 	if pipe == 0 {
 		return nil, errors.New("metal: pipeline construction failed")
@@ -727,11 +717,7 @@ func pixelFormatFor(f driver.TextureFormat) C.MTLPixelFormat {
 }
 
 func (b *Backend) NewBuffer(typ driver.BufferBinding, size int) (driver.Buffer, error) {
-	// Transfer buffer contents in command encoders on every use for
-	// smaller buffers. The advantage is that buffer re-use during a frame
-	// won't occur a GPU wait.
-	// We can't do this for buffers written to by the GPU and read by the client,
-	// and Metal doesn't require a buffer for indexed draws.
+
 	if size <= 4096 && typ&(driver.BufferBindingShaderStorageWrite|driver.BufferBindingIndices) == 0 {
 		return &Buffer{size: size, store: make([]byte, size)}, nil
 	}

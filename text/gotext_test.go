@@ -65,7 +65,6 @@ func TestNoFaces(t *testing.T) {
 	ppem := fixed.I(200)
 	shaper := testShaper()
 
-	// Ensure shaping text with no faces does not panic.
 	shaper.LayoutRunes(Parameters{
 		PxPerEm:  ppem,
 		MaxWidth: 2000,
@@ -141,8 +140,6 @@ func TestShapingAlignWidth(t *testing.T) {
 	}
 }
 
-// TestNewlineSynthesis ensures that the shaper correctly inserts synthetic glyphs
-// representing newline runes.
 func TestNewlineSynthesis(t *testing.T) {
 	ppem := fixed.I(10)
 	ltrFace, _ := opentype.Parse(goregular.TTF)
@@ -211,26 +208,18 @@ func TestNewlineSynthesis(t *testing.T) {
 	}
 }
 
-// simpleGlyph returns a simple square glyph with the provided cluster
-// value.
 func simpleGlyph(cluster int) shaping.Glyph {
 	return complexGlyph(cluster, 1, 1)
 }
 
-// ligatureGlyph returns a simple square glyph with the provided cluster
-// value and number of runes.
 func ligatureGlyph(cluster, runes int) shaping.Glyph {
 	return complexGlyph(cluster, runes, 1)
 }
 
-// expansionGlyph returns a simple square glyph with the provided cluster
-// value and number of glyphs.
 func expansionGlyph(cluster, glyphs int) shaping.Glyph {
 	return complexGlyph(cluster, 1, glyphs)
 }
 
-// complexGlyph returns a simple square glyph with the provided cluster
-// value, number of associated runes, and number of glyphs in the cluster.
 func complexGlyph(cluster, runes, glyphs int) shaping.Glyph {
 	return shaping.Glyph{
 		Width:        fixed.I(10),
@@ -244,8 +233,6 @@ func complexGlyph(cluster, runes, glyphs int) shaping.Glyph {
 	}
 }
 
-// copyLines performs a deep copy of the provided lines. This is necessary if you
-// want to use the line wrapper again while also using the lines.
 func copyLines(lines []shaping.Line) []shaping.Line {
 	out := make([]shaping.Line, len(lines))
 	for lineIdx, line := range lines {
@@ -259,9 +246,6 @@ func copyLines(lines []shaping.Line) []shaping.Line {
 	return out
 }
 
-// makeTestText creates a simple and complex(bidi) sample of shaped text at the given
-// font size and wrapped to the given line width. The runeLimit, if nonzero,
-// truncates the sample text to ensure shorter output for expensive tests.
 func makeTestText(shaper *shaperImpl, primaryDir system.TextDirection, fontSize, lineWidth, runeLimit int) (simpleSample, complexSample []shaping.Line) {
 	ltrFace, _ := opentype.Parse(goregular.TTF)
 	rtlFace, _ := opentype.Parse(nsareg.TTF)
@@ -271,11 +255,9 @@ func makeTestText(shaper *shaperImpl, primaryDir system.TextDirection, fontSize,
 
 	ltrSource := "The quick brown fox jumps over the lazy dog."
 	rtlSource := "الحب سماء لا تمط غير الأحلام"
-	// bidiSource is crafted to contain multiple consecutive RTL runs (by
-	// changing scripts within the RTL).
+
 	bidiSource := "The quick سماء שלום لا fox تمط שלום غير the lazy dog."
-	// bidi2Source is crafted to contain multiple consecutive LTR runs (by
-	// changing scripts within the LTR).
+
 	bidi2Source := "الحب سماء brown привет fox تمط jumps привет over غير الأحلام"
 
 	locale := english
@@ -330,7 +312,7 @@ func TestToLine(t *testing.T) {
 	type testcase struct {
 		name  string
 		lines []shaping.Line
-		// Dominant text direction.
+
 		dir system.TextDirection
 	}
 	for _, tc := range []testcase{
@@ -366,12 +348,7 @@ func TestToLine(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// We expect:
-			// - Line dimensions to be populated.
-			// - Line direction to be populated.
-			// - Runs to be ordered from lowest runes first.
-			// - Runs to have widths matching the input.
-			// - Runs to have the same total number of glyphs/runes as the input.
+
 			runesSeen := Range{}
 			shaper := testShaper(ltrFace, rtlFace)
 			for i, input := range tc.lines {
@@ -519,8 +496,6 @@ func validateLines(t *testing.T, lines []line, expectedRuneCount int) {
 	}
 }
 
-// TestTextAppend ensures that appending two texts together correctly updates the new lines'
-// y offsets.
 func TestTextAppend(t *testing.T) {
 	ltrFace, _ := opentype.Parse(goregular.TTF)
 	rtlFace, _ := opentype.Parse(nsareg.TTF)
@@ -596,9 +571,6 @@ func TestGlyphIDPacking(t *testing.T) {
 	}
 }
 
-// TestArabicDiacriticClustering verifies that Arabic diacritics (which usually have
-// script 'Inherited') are correctly clustered with their base Arabic letters,
-// rather than being split into a separate shaping run.
 func TestArabicDiacriticClustering(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -609,8 +581,7 @@ func TestArabicDiacriticClustering(t *testing.T) {
 	}{
 		{
 			name: "Arabic Letter + Diacritic",
-			// \u0628 => BEH
-			// \u0650 => KASRA (Diacritic)
+
 			input:         []rune{'\u0628', '\u0650'},
 			wantRuns:      1,
 			wantScript:    language.Arabic,
@@ -619,12 +590,12 @@ func TestArabicDiacriticClustering(t *testing.T) {
 		{
 			name: "Arabic Word with Multiple Diacritics",
 			input: []rune{
-				'\u0628', // BEH
-				'\u0650', // KASRA
-				'\u0633', // SEEN
-				'\u0652', // SUKUN
-				'\u0645', // MEEM
-				'\u0650', // KASRA
+				'\u0628',
+				'\u0650',
+				'\u0633',
+				'\u0652',
+				'\u0645',
+				'\u0650',
 			},
 			wantRuns:      1,
 			wantScript:    language.Arabic,
@@ -632,8 +603,7 @@ func TestArabicDiacriticClustering(t *testing.T) {
 		},
 		{
 			name: "Mixed Script (CONTROL Case) #1",
-			// Arabic Letter + Latin Letter
-			// THESE MUST SPLIT TO 2.
+
 			input:         []rune{'\u0628', 'A'},
 			wantRuns:      2,
 			wantScript:    language.Arabic,
@@ -641,8 +611,7 @@ func TestArabicDiacriticClustering(t *testing.T) {
 		},
 		{
 			name: "Mixed Script (CONTROL Case) #2",
-			// Arabic Letter + Diacritic + Diacritic + Latin Letter + Arabic Letter + Diacritic
-			// THESE MUST SPLIT TO 3.
+
 			input:         []rune{'\u0628', '\u0651', '\u0650', 'A', '\u0628', '\u0650'},
 			wantRuns:      3,
 			wantScript:    language.Arabic,
@@ -650,9 +619,7 @@ func TestArabicDiacriticClustering(t *testing.T) {
 		},
 		{
 			name: "Mixed Script (A little 'stress' test)",
-			// Latin 's' + Arabic Kasra + Latin 'r' + Arabic Fatha
-			// this technically valid unicode!
-			// the diacritics should inherit "Latin"
+
 			input:         []rune{'s', '\u0651', '\u0650', 'r', '\u064E'},
 			wantRuns:      1,
 			wantScript:    language.Latin,
@@ -668,7 +635,7 @@ func TestArabicDiacriticClustering(t *testing.T) {
 				RunEnd:    len(tt.input),
 				Direction: tt.wantDirection,
 				Script:    language.Arabic,
-				Face:      nil, // face doesn't really matter for splitting anyway
+				Face:      nil,
 				Size:      fixed.I(10),
 			}}
 
@@ -678,11 +645,6 @@ func TestArabicDiacriticClustering(t *testing.T) {
 				t.Fatalf("splitByScript produced %d runs, expected %d. \nRun details: %+v", len(got), tt.wantRuns, got)
 			}
 
-			// this is for the single-run cases
-			// we need to verify the integrity of the single run
-			// to ensure
-			//     - the truncation didn't happen early on (when first hitting a diacritic)
-			//     - and the right dominant script label was used
 			if tt.wantRuns == 1 {
 				run := got[0]
 				if run.RunEnd != len(tt.input) {

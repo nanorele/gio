@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package app
 
 import (
@@ -67,13 +65,12 @@ func (e *editorState) Replace(r key.Range, text string) {
 	e.Snippet = s
 }
 
-// UTF16Index converts the given index in runes into an index in utf16 characters.
 func (e *editorState) UTF16Index(runes int) int {
 	if runes == -1 {
 		return -1
 	}
 	if runes < e.Snippet.Start {
-		// Assume runes before sippet are one UTF-16 character each.
+
 		return runes
 	}
 	chars := e.Snippet.Start
@@ -88,17 +85,16 @@ func (e *editorState) UTF16Index(runes int) int {
 			chars++
 		}
 	}
-	// Assume runes after snippets are one UTF-16 character each.
+
 	return chars + runes
 }
 
-// RunesIndex converts the given index in utf16 characters to an index in runes.
 func (e *editorState) RunesIndex(chars int) int {
 	if chars == -1 {
 		return -1
 	}
 	if chars < e.Snippet.Start {
-		// Assume runes before offset are one UTF-16 character each.
+
 		return chars
 	}
 	runes := e.Snippet.Start
@@ -113,14 +109,12 @@ func (e *editorState) RunesIndex(chars int) int {
 			chars--
 		}
 	}
-	// Assume runes after snippets are one UTF-16 character each.
+
 	return runes + chars
 }
 
-// areSnippetsConsistent reports whether the content of the old snippet is
-// consistent with the content of the new.
 func areSnippetsConsistent(old, new key.Snippet) bool {
-	// Compute the overlapping range.
+
 	r := old.Range
 	r.Start = max(r.Start, new.Start)
 	r.End = max(r.End, r.Start)

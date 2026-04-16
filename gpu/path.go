@@ -1,9 +1,4 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package gpu
-
-// GPU accelerated path drawing using the algorithms from
-// Pathfinder (https://github.com/servo/pathfinder).
 
 import (
 	"encoding/binary"
@@ -11,12 +6,12 @@ import (
 	"math"
 	"unsafe"
 
+	"gioui.org/shader"
+	"gioui.org/shader/gio"
 	"github.com/nanorele/gio/gpu/internal/driver"
 	"github.com/nanorele/gio/internal/byteslice"
 	"github.com/nanorele/gio/internal/f32"
 	"github.com/nanorele/gio/internal/f32color"
-	"gioui.org/shader"
-	"gioui.org/shader/gio"
 )
 
 type pather struct {
@@ -38,18 +33,18 @@ type coverer struct {
 
 type coverTexUniforms struct {
 	coverUniforms
-	_ [12]byte // Padding to multiple of 16.
+	_ [12]byte
 }
 
 type coverColUniforms struct {
 	coverUniforms
-	_ [128 - unsafe.Sizeof(coverUniforms{}) - unsafe.Sizeof(colorUniforms{})]byte // Padding to 128 bytes.
+	_ [128 - unsafe.Sizeof(coverUniforms{}) - unsafe.Sizeof(colorUniforms{})]byte
 	colorUniforms
 }
 
 type coverLinearGradientUniforms struct {
 	coverUniforms
-	_ [128 - unsafe.Sizeof(coverUniforms{}) - unsafe.Sizeof(gradientUniforms{})]byte // Padding to 128.
+	_ [128 - unsafe.Sizeof(coverUniforms{}) - unsafe.Sizeof(gradientUniforms{})]byte
 	gradientUniforms
 }
 
@@ -79,7 +74,7 @@ type stenciler struct {
 type stencilUniforms struct {
 	transform  [4]float32
 	pathOffset [2]float32
-	_          [8]byte // Padding to multiple of 16.
+	_          [8]byte
 }
 
 type intersectUniforms struct {
@@ -103,9 +98,7 @@ type pathData struct {
 	data    driver.Buffer
 }
 
-// vertex data suitable for passing to vertex programs.
 type vertex struct {
-	// Corner encodes the corner: +0.5 for south, +.25 for east.
 	Corner       float32
 	MaxY         float32
 	FromX, FromY float32
@@ -113,7 +106,6 @@ type vertex struct {
 	ToX, ToY     float32
 }
 
-// encode needs to stay in-sync with the code in clip.go encodeQuadTo.
 func (v vertex) encode(d []byte, maxy uint32) {
 	d = d[0:32]
 	bo := binary.LittleEndian
@@ -128,9 +120,8 @@ func (v vertex) encode(d []byte, maxy uint32) {
 }
 
 const (
-	// Number of path quads per draw batch.
 	pathBatchSize = 10000
-	// Size of a vertex as sent to gpu
+
 	vertStride = 8 * 4
 )
 
@@ -160,7 +151,7 @@ func newCoverer(ctx driver.Device) *coverer {
 }
 
 func newStenciler(ctx driver.Device) *stenciler {
-	// Allocate a suitably large index buffer for drawing paths.
+
 	indices := make([]uint16, pathBatchSize*6)
 	for i := range pathBatchSize {
 		i := uint16(i)
@@ -248,15 +239,14 @@ func newStenciler(ctx driver.Device) *stenciler {
 }
 
 func (s *fboSet) resize(ctx driver.Device, format driver.TextureFormat, sizes []image.Point) {
-	// Add fbos.
+
 	for i := len(s.fbos); i < len(sizes); i++ {
 		s.fbos = append(s.fbos, FBO{})
 	}
-	// Resize fbos.
+
 	for i, sz := range sizes {
 		f := &s.fbos[i]
-		// Resizing or recreating FBOs can introduce rendering stalls.
-		// Avoid if the space waste is not too high.
+
 		resize := sz.X > f.size.X || sz.Y > f.size.Y
 		waste := float32(sz.X*sz.Y) / float32(f.size.X*f.size.Y)
 		resize = resize || waste > 1.2
@@ -264,7 +254,7 @@ func (s *fboSet) resize(ctx driver.Device, format driver.TextureFormat, sizes []
 			if f.tex != nil {
 				f.tex.Release()
 			}
-			// Add 5% extra space in each dimension to minimize resizing.
+
 			sz = sz.Mul(105).Div(100)
 			max := ctx.Caps().MaxTextureSize
 			if sz.Y > max {
@@ -282,7 +272,7 @@ func (s *fboSet) resize(ctx driver.Device, format driver.TextureFormat, sizes []
 			f.tex = tex
 		}
 	}
-	// Delete extra fbos.
+
 	s.delete(ctx, len(sizes))
 }
 
@@ -339,9 +329,7 @@ func (p *pather) stencilPath(bounds image.Rectangle, offset f32.Point, uv image.
 }
 
 func (s *stenciler) beginIntersect(sizes []image.Point) {
-	// 8 bit coverage is enough, but OpenGL ES only supports single channel
-	// floating point formats. Replace with GL_RGB+GL_UNSIGNED_BYTE if
-	// no floating point support is available.
+
 	s.intersections.resize(s.ctx, driver.TextureFormatFloat, sizes)
 }
 
@@ -355,14 +343,14 @@ func (s *stenciler) begin(sizes []image.Point) {
 
 func (s *stenciler) stencilPath(bounds image.Rectangle, offset f32.Point, uv image.Point, data pathData) {
 	s.ctx.Viewport(uv.X, uv.Y, bounds.Dx(), bounds.Dy())
-	// Transform UI coordinates to OpenGL coordinates.
+
 	texSize := f32.Point{X: float32(bounds.Dx()), Y: float32(bounds.Dy())}
 	scale := f32.Point{X: 2 / texSize.X, Y: 2 / texSize.Y}
 	orig := f32.Point{X: -1 - float32(bounds.Min.X)*2/texSize.X, Y: -1 - float32(bounds.Min.Y)*2/texSize.Y}
 	s.pipeline.uniforms.transform = [4]float32{scale.X, scale.Y, orig.X, orig.Y}
 	s.pipeline.uniforms.pathOffset = [2]float32{offset.X, offset.Y}
 	s.pipeline.pipeline.UploadUniforms(s.ctx)
-	// Draw in batches that fit in uint16 indices.
+
 	start := 0
 	nquads := data.ncurves / 4
 	for start < nquads {
@@ -416,8 +404,7 @@ func (c *coverer) cover(mat materialType, isFBO bool, col f32color.RGBA, col1, c
 }
 
 func init() {
-	// Check that struct vertex has the expected size and
-	// that it contains no padding.
+
 	if unsafe.Sizeof(*(*vertex)(nil)) != vertStride {
 		panic("unexpected struct size")
 	}

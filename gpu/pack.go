@@ -1,13 +1,9 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package gpu
 
 import (
 	"image"
 )
 
-// packer packs a set of many smaller rectangles into
-// much fewer larger atlases.
 type packer struct {
 	maxDims image.Point
 	spaces  []image.Rectangle
@@ -21,8 +17,6 @@ type placement struct {
 	Pos image.Point
 }
 
-// add adds the given rectangle to the atlases and
-// return the allocated position.
 func (p *packer) add(s image.Point) (placement, bool) {
 	if place, ok := p.tryAdd(s); ok {
 		return place, true
@@ -55,7 +49,7 @@ func (p *packer) tryAdd(s image.Point) (placement, bool) {
 		bestSize = p.maxDims
 		lastSize = p.sizes[len(p.sizes)-1]
 	)
-	// Go backwards to prioritize smaller spaces.
+
 	for i := range p.spaces {
 		space := &p.spaces[i]
 		rightSpace := space.Dx() - s.X
@@ -84,12 +78,11 @@ func (p *packer) tryAdd(s image.Point) (placement, bool) {
 	if bestIdx == nil {
 		return placement{}, false
 	}
-	// Remove space.
+
 	bestSpace := *bestIdx
 	*bestIdx = p.spaces[len(p.spaces)-1]
 	p.spaces = p.spaces[:len(p.spaces)-1]
-	// Put s in the top left corner and add the (at most)
-	// two smaller spaces.
+
 	pos := bestSpace.Min
 	if rem := bestSpace.Dy() - s.Y; rem > 0 {
 		p.spaces = append(p.spaces, image.Rectangle{

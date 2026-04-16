@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package material
 
 import (
@@ -13,28 +11,16 @@ import (
 	"github.com/nanorele/gio/widget"
 )
 
-// Palette contains the minimal set of colors that a widget may need to
-// draw itself.
 type Palette struct {
-	// Bg is the background color atop which content is currently being
-	// drawn.
 	Bg color.NRGBA
 
-	// Fg is a color suitable for drawing on top of Bg.
 	Fg color.NRGBA
 
-	// ContrastBg is a color used to draw attention to active,
-	// important, interactive widgets such as buttons.
 	ContrastBg color.NRGBA
 
-	// ContrastFg is a color suitable for content drawn on top of
-	// ContrastBg.
 	ContrastFg color.NRGBA
 }
 
-// Theme holds the general theme of an app or window. Different top-level
-// windows should have different instances of Theme (with different Shapers;
-// see the godoc for [text.Shaper]), though their other fields can be equal.
 type Theme struct {
 	Shaper *text.Shaper
 	Palette
@@ -45,14 +31,12 @@ type Theme struct {
 		RadioChecked      *widget.Icon
 		RadioUnchecked    *widget.Icon
 	}
-	// Face selects the default typeface for text.
+
 	Face font.Typeface
 
-	// FingerSize is the minimum touch target size.
 	FingerSize unit.Dp
 }
 
-// NewTheme constructs a theme (and underlying text shaper).
 func NewTheme() *Theme {
 	t := &Theme{Shaper: &text.Shaper{}}
 	t.Palette = Palette{
@@ -68,7 +52,6 @@ func NewTheme() *Theme {
 	t.Icon.RadioChecked = mustIcon(widget.NewIcon(icons.ToggleRadioButtonChecked))
 	t.Icon.RadioUnchecked = mustIcon(widget.NewIcon(icons.ToggleRadioButtonUnchecked))
 
-	// 38dp is on the lower end of possible finger size.
 	t.FingerSize = 38
 
 	return t

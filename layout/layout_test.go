@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package layout
 
 import (
@@ -52,7 +50,6 @@ func TestFlexGap(t *testing.T) {
 		},
 	}
 
-	// Two 20px children with 10px gap = 50px total.
 	dims := Flex{Gap: 10}.Layout(gtx,
 		Rigid(func(gtx Context) Dimensions {
 			return Dimensions{Size: image.Pt(20, 10)}
@@ -65,7 +62,6 @@ func TestFlexGap(t *testing.T) {
 		t.Errorf("two rigid children with gap: got width %d, expected %d", got, exp)
 	}
 
-	// Three children: gap added between each pair.
 	dims = Flex{Gap: 5}.Layout(gtx,
 		Rigid(func(gtx Context) Dimensions {
 			return Dimensions{Size: image.Pt(10, 10)}
@@ -81,7 +77,6 @@ func TestFlexGap(t *testing.T) {
 		t.Errorf("three rigid children with gap: got width %d, expected %d", got, exp)
 	}
 
-	// Single child: no gap added.
 	dims = Flex{Gap: 10}.Layout(gtx,
 		Rigid(func(gtx Context) Dimensions {
 			return Dimensions{Size: image.Pt(20, 10)}
@@ -91,7 +86,6 @@ func TestFlexGap(t *testing.T) {
 		t.Errorf("single child with gap: got width %d, expected %d", got, exp)
 	}
 
-	// Gap with flexed children: gap is reserved from available space.
 	dims = Flex{Gap: 10}.Layout(gtx,
 		Flexed(1, func(gtx Context) Dimensions {
 			return Dimensions{Size: image.Pt(gtx.Constraints.Max.X, 10)}
@@ -100,12 +94,11 @@ func TestFlexGap(t *testing.T) {
 			return Dimensions{Size: image.Pt(gtx.Constraints.Max.X, 10)}
 		}),
 	)
-	// 100px max - 10px gap = 90px for flex; 45px each.
+
 	if got, exp := dims.Size.X, 100; got != exp {
 		t.Errorf("flexed children with gap: got width %d, expected %d", got, exp)
 	}
 
-	// Vertical axis with gap.
 	dims = Flex{Axis: Vertical, Gap: 15}.Layout(gtx,
 		Rigid(func(gtx Context) Dimensions {
 			return Dimensions{Size: image.Pt(10, 20)}
@@ -127,7 +120,6 @@ func TestFlexGapConstraints(t *testing.T) {
 		},
 	}
 
-	// Verify that flexed children receive constraints with gap accounted for.
 	var flexMax int
 	Flex{Gap: 10}.Layout(gtx,
 		Rigid(func(gtx Context) Dimensions {
@@ -138,7 +130,7 @@ func TestFlexGapConstraints(t *testing.T) {
 			return Dimensions{Size: image.Pt(gtx.Constraints.Max.X, 10)}
 		}),
 	)
-	// 100 - 10 (gap) - 30 (rigid) = 60 remaining for flex.
+
 	if got, exp := flexMax, 60; got != exp {
 		t.Errorf("flex constraint with gap: got %d, expected %d", got, exp)
 	}

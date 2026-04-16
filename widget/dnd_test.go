@@ -80,7 +80,6 @@ func TestDraggable(t *testing.T) {
 	}
 }
 
-// offer satisfies io.ReadCloser for use in data transfers.
 type offer struct {
 	data   string
 	closed bool

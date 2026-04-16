@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package widget_test
 
 import (
@@ -27,7 +25,7 @@ func TestClickable(t *testing.T) {
 		b1.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: image.Pt(100, 100)}
 		})
-		// buttons are on top of each other but we only use focus and keyevents, so this is fine
+
 		b2.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: image.Pt(100, 100)}
 		})

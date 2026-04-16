@@ -1,10 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-// Package gofont exports the Go fonts as a text.Collection.
-//
-// See https://blog.golang.org/go-fonts for a description of the
-// fonts, and the golang.org/x/image/font/gofont packages for the
-// font data.
 package gofont
 
 import (
@@ -46,13 +39,11 @@ func loadRegular() {
 	})
 }
 
-// Regular returns a collection of only the Go regular font face.
 func Regular() []font.FontFace {
 	loadRegular()
 	return reg
 }
 
-// Regular returns a collection of all available Go font faces.
 func Collection() []font.FontFace {
 	loadRegular()
 	once.Do(func() {
@@ -67,7 +58,7 @@ func Collection() []font.FontFace {
 		register(gomonoitalic.TTF)
 		register(gosmallcaps.TTF)
 		register(gosmallcapsitalic.TTF)
-		// Ensure that any outside appends will not reuse the backing store.
+
 		n := len(collection)
 		collection = collection[:n:n]
 	})

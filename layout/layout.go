@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package layout
 
 import (
@@ -10,40 +8,21 @@ import (
 	"github.com/nanorele/gio/unit"
 )
 
-// Constraints represent the minimum and maximum size of a widget.
-//
-// A widget does not have to treat its constraints as "hard". For
-// example, if it's passed a constraint with a minimum size that's
-// smaller than its actual minimum size, it should return its minimum
-// size dimensions instead. Parent widgets should deal appropriately
-// with child widgets that return dimensions that do not fit their
-// constraints (for example, by clipping).
 type Constraints struct {
 	Min, Max image.Point
 }
 
-// Dimensions are the resolved size and baseline for a widget.
-//
-// Baseline is the distance from the bottom of a widget to the baseline of
-// any text it contains (or 0). The purpose is to be able to align text
-// that span multiple widgets.
 type Dimensions struct {
 	Size     image.Point
 	Baseline int
 }
 
-// Axis is the Horizontal or Vertical direction.
 type Axis uint8
 
-// Alignment is the mutual alignment of a list of widgets.
 type Alignment uint8
 
-// Direction is the alignment of widgets relative to a containing
-// space.
 type Direction uint8
 
-// Widget is a function scope for drawing, processing events and
-// computing dimensions for a user interface element.
 type Widget func(gtx Context) Dimensions
 
 const (
@@ -70,22 +49,18 @@ const (
 	Vertical
 )
 
-// Exact returns the Constraints with the minimum and maximum size
-// set to size.
 func Exact(size image.Point) Constraints {
 	return Constraints{
 		Min: size, Max: size,
 	}
 }
 
-// FPt converts an point to a f32.Point.
 func FPt(p image.Point) f32.Point {
 	return f32.Point{
 		X: float32(p.X), Y: float32(p.Y),
 	}
 }
 
-// Constrain a size so each dimension is in the range [min;max].
 func (c Constraints) Constrain(size image.Point) image.Point {
 	if min := c.Min.X; size.X < min {
 		size.X = min
@@ -102,9 +77,6 @@ func (c Constraints) Constrain(size image.Point) image.Point {
 	return size
 }
 
-// AddMin returns a copy of Constraints with the Min constraint enlarged by up to delta
-// while still fitting within the Max constraint. The Max is unchanged, and the Min constraint
-// will not go negative.
 func (c Constraints) AddMin(delta image.Point) Constraints {
 	c.Min = c.Min.Add(delta)
 	if c.Min.X < 0 {
@@ -117,9 +89,6 @@ func (c Constraints) AddMin(delta image.Point) Constraints {
 	return c
 }
 
-// SubMax returns a copy of Constraints with the Max constraint shrunk by up to delta
-// while not going negative. The values of delta are expected to be positive.
-// The Min constraint is adjusted to fit within the new Max constraint.
 func (c Constraints) SubMax(delta image.Point) Constraints {
 	c.Max = c.Max.Sub(delta)
 	if c.Max.X < 0 {
@@ -132,14 +101,10 @@ func (c Constraints) SubMax(delta image.Point) Constraints {
 	return c
 }
 
-// Inset adds space around a widget by decreasing its maximum
-// constraints. The minimum constraints will be adjusted to ensure
-// they do not exceed the maximum.
 type Inset struct {
 	Top, Bottom, Left, Right unit.Dp
 }
 
-// Layout a widget.
 func (in Inset) Layout(gtx Context, w Widget) Dimensions {
 	top := gtx.Dp(in.Top)
 	right := gtx.Dp(in.Right)
@@ -174,14 +139,10 @@ func (in Inset) Layout(gtx Context, w Widget) Dimensions {
 	}
 }
 
-// UniformInset returns an Inset with a single inset applied to all
-// edges.
 func UniformInset(v unit.Dp) Inset {
 	return Inset{Top: v, Right: v, Bottom: v, Left: v}
 }
 
-// Layout a widget according to the direction.
-// The widget is called with the context constraints minimum cleared.
 func (d Direction) Layout(gtx Context, w Widget) Dimensions {
 	macro := op.Record(gtx.Ops)
 	csn := gtx.Constraints.Min
@@ -214,7 +175,6 @@ func (d Direction) Layout(gtx Context, w Widget) Dimensions {
 	}
 }
 
-// Position calculates widget position according to the direction.
 func (d Direction) Position(widget, bounds image.Point) image.Point {
 	var p image.Point
 
@@ -235,7 +195,6 @@ func (d Direction) Position(widget, bounds image.Point) image.Point {
 	return p
 }
 
-// Spacer adds space between widgets.
 type Spacer struct {
 	Width, Height unit.Dp
 }
@@ -264,9 +223,6 @@ func (a Alignment) String() string {
 	}
 }
 
-// Convert a point in (x, y) coordinates to (main, cross) coordinates,
-// or vice versa. Specifically, Convert((x, y)) returns (x, y) unchanged
-// for the horizontal axis, or (y, x) for the vertical axis.
 func (a Axis) Convert(pt image.Point) image.Point {
 	if a == Horizontal {
 		return pt
@@ -274,9 +230,6 @@ func (a Axis) Convert(pt image.Point) image.Point {
 	return image.Pt(pt.Y, pt.X)
 }
 
-// FConvert a point in (x, y) coordinates to (main, cross) coordinates,
-// or vice versa. Specifically, FConvert((x, y)) returns (x, y) unchanged
-// for the horizontal axis, or (y, x) for the vertical axis.
 func (a Axis) FConvert(pt f32.Point) f32.Point {
 	if a == Horizontal {
 		return pt
@@ -284,7 +237,6 @@ func (a Axis) FConvert(pt f32.Point) f32.Point {
 	return f32.Pt(pt.Y, pt.X)
 }
 
-// mainConstraint returns the min and max main constraints for axis a.
 func (a Axis) mainConstraint(cs Constraints) (int, int) {
 	if a == Horizontal {
 		return cs.Min.X, cs.Max.X
@@ -292,7 +244,6 @@ func (a Axis) mainConstraint(cs Constraints) (int, int) {
 	return cs.Min.Y, cs.Max.Y
 }
 
-// crossConstraint returns the min and max cross constraints for axis a.
 func (a Axis) crossConstraint(cs Constraints) (int, int) {
 	if a == Horizontal {
 		return cs.Min.Y, cs.Max.Y
@@ -300,7 +251,6 @@ func (a Axis) crossConstraint(cs Constraints) (int, int) {
 	return cs.Min.X, cs.Max.X
 }
 
-// constraints returns the constraints for axis a.
 func (a Axis) constraints(mainMin, mainMax, crossMin, crossMax int) Constraints {
 	if a == Horizontal {
 		return Constraints{Min: image.Pt(mainMin, crossMin), Max: image.Pt(mainMax, crossMax)}

@@ -20,8 +20,6 @@ import (
 	"github.com/nanorele/gio/unit"
 )
 
-// stringSource is an immutable textSource with a fixed string
-// value.
 type stringSource struct {
 	reader *strings.Reader
 }
@@ -46,31 +44,24 @@ func (s stringSource) ReadAt(b []byte, offset int64) (int, error) {
 	return s.reader.ReadAt(b, offset)
 }
 
-// ReplaceRunes is unimplemented, as a stringSource is immutable.
 func (s stringSource) ReplaceRunes(byteOffset, runeCount int64, str string) {
 }
 
-// Selectable displays selectable text.
 type Selectable struct {
-	// Alignment controls the alignment of the text.
 	Alignment text.Alignment
-	// MaxLines is the maximum number of lines of text to be displayed.
+
 	MaxLines int
-	// Truncator is the symbol to use at the end of the final line of text
-	// if text was cut off. Defaults to "…" if left empty.
+
 	Truncator string
-	// WrapPolicy configures how displayed text will be broken into lines.
+
 	WrapPolicy text.WrapPolicy
-	// LineHeight controls the distance between the baselines of lines of text.
-	// If zero, a sensible default will be used.
+
 	LineHeight unit.Sp
-	// LineHeightScale applies a scaling factor to the LineHeight. If zero, a
-	// sensible default will be used.
+
 	LineHeightScale float32
 	initialized     bool
 	source          stringSource
-	// scratch is a buffer reused to efficiently read text out of the
-	// textView.
+
 	scratch   []byte
 	lastValue string
 	text      textView
@@ -81,9 +72,6 @@ type Selectable struct {
 	clicker gesture.Click
 }
 
-// initialize must be called at the beginning of any exported method that
-// manipulates text state. It ensures that the underlying text is safe to
-// access.
 func (l *Selectable) initialize() {
 	if !l.initialized {
 		l.source = newStringSource("")
@@ -92,12 +80,10 @@ func (l *Selectable) initialize() {
 	}
 }
 
-// Focused returns whether the label is focused or not.
 func (l *Selectable) Focused() bool {
 	return l.focused
 }
 
-// paintSelection paints the contrasting background for selected text.
 func (l *Selectable) paintSelection(gtx layout.Context, material op.CallOp) {
 	l.initialize()
 	if !l.focused {
@@ -106,56 +92,43 @@ func (l *Selectable) paintSelection(gtx layout.Context, material op.CallOp) {
 	l.text.PaintSelection(gtx, material)
 }
 
-// paintText paints the text glyphs with the provided material.
 func (l *Selectable) paintText(gtx layout.Context, material op.CallOp) {
 	l.initialize()
 	l.text.PaintText(gtx, material)
 }
 
-// SelectionLen returns the length of the selection, in runes; it is
-// equivalent to utf8.RuneCountInString(e.SelectedText()).
 func (l *Selectable) SelectionLen() int {
 	l.initialize()
 	return l.text.SelectionLen()
 }
 
-// Selection returns the start and end of the selection, as rune offsets.
-// start can be > end.
 func (l *Selectable) Selection() (start, end int) {
 	l.initialize()
 	return l.text.Selection()
 }
 
-// SetCaret moves the caret to start, and sets the selection end to end. start
-// and end are in runes, and represent offsets into the editor text.
 func (l *Selectable) SetCaret(start, end int) {
 	l.initialize()
 	l.text.SetCaret(start, end)
 }
 
-// SelectedText returns the currently selected text (if any) from the editor.
 func (l *Selectable) SelectedText() string {
 	l.initialize()
 	l.scratch = l.text.SelectedText(l.scratch)
 	return string(l.scratch)
 }
 
-// ClearSelection clears the selection, by setting the selection end equal to
-// the selection start.
 func (l *Selectable) ClearSelection() {
 	l.initialize()
 	l.text.ClearSelection()
 }
 
-// Text returns the contents of the label.
 func (l *Selectable) Text() string {
 	l.initialize()
 	l.scratch = l.text.Text(l.scratch)
 	return string(l.scratch)
 }
 
-// SetText updates the text to s if it does not already contain s. Updating the
-// text will clear the selection unless the selectable already contains s.
 func (l *Selectable) SetText(s string) {
 	l.initialize()
 	if l.lastValue != s {
@@ -165,22 +138,15 @@ func (l *Selectable) SetText(s string) {
 	}
 }
 
-// Truncated returns whether the text has been truncated by the text shaper to
-// fit within available constraints.
 func (l *Selectable) Truncated() bool {
 	return l.text.Truncated()
 }
 
-// Update the state of the selectable in response to input events. It returns whether the
-// text selection changed during event processing.
 func (l *Selectable) Update(gtx layout.Context) bool {
 	l.initialize()
 	return l.handleEvents(gtx)
 }
 
-// Layout clips to the dimensions of the selectable, updates the shaped text, configures input handling, and paints
-// the text and selection rectangles. The provided textMaterial and selectionMaterial ops are used to set the
-// paint material for the text and selection rectangles, respectively.
 func (l *Selectable) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, size unit.Sp, textMaterial, selectionMaterial op.CallOp) layout.Dimensions {
 	l.Update(gtx)
 	l.text.LineHeight = l.LineHeight
@@ -230,8 +196,7 @@ func (e *Selectable) processPointer(gtx layout.Context) {
 				gtx.Execute(key.FocusCmd{Tag: e})
 				if evt.Modifiers == key.ModShift {
 					start, end := e.text.Selection()
-					// If they clicked closer to the end, then change the end to
-					// where the caret used to be (effectively swapping start & end).
+
 					if abs(end-start) < abs(start-prevCaretPos) {
 						e.text.SetCaret(start, prevCaretPos)
 					}
@@ -240,7 +205,6 @@ func (e *Selectable) processPointer(gtx layout.Context) {
 				}
 				e.dragging = true
 
-				// Process multi-clicks.
 				switch {
 				case evt.NumClicks == 2:
 					e.text.MoveWord(-1, selectionClear)
@@ -338,13 +302,13 @@ func (e *Selectable) command(gtx layout.Context, k key.Event) {
 	}
 	if k.Modifiers == key.ModShortcut {
 		switch k.Name {
-		// Copy or Cut selection -- ignored if nothing selected.
+
 		case "C", "X":
 			e.scratch = e.text.SelectedText(e.scratch)
 			if text := string(e.scratch); text != "" {
 				gtx.Execute(clipboard.WriteCmd{Type: "application/text", Data: io.NopCloser(strings.NewReader(text))})
 			}
-		// Select all
+
 		case "A":
 			e.text.SetCaret(0, e.text.Len())
 		}
@@ -384,7 +348,6 @@ func (e *Selectable) command(gtx layout.Context, k key.Event) {
 	}
 }
 
-// Regions returns visible regions covering the rune range [start,end).
 func (l *Selectable) Regions(start, end int, regions []Region) []Region {
 	l.initialize()
 	return l.text.Regions(start, end, regions)

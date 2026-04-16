@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package f32
 
 import (
@@ -7,22 +5,11 @@ import (
 	"strconv"
 )
 
-// Affine2D represents an affine 2D transformation. The zero value of Affine2D
-// represents the identity transform.
 type Affine2D struct {
-	// in order to make the zero value of Affine2D represent the identity
-	// transform we store it with the identity matrix subtracted, that is
-	// if the actual transformation matrix is:
-	// [sx, hx, ox]
-	// [hy, sy, oy]
-	// [ 0,  0,  1]
-	// we store a = sx-1 and e = sy-1
 	a, b, c float32
 	d, e, f float32
 }
 
-// NewAffine2D creates a new Affine2D transform from the matrix elements
-// in row major order. The rows are: [sx, hx, ox], [hy, sy, oy], [0, 0, 1].
 func NewAffine2D(sx, hx, ox, hy, sy, oy float32) Affine2D {
 	return Affine2D{
 		a: sx - 1, b: hx, c: ox,
@@ -30,8 +17,6 @@ func NewAffine2D(sx, hx, ox, hy, sy, oy float32) Affine2D {
 	}
 }
 
-// AffineId returns an identity transformation matrix that represents no transformation
-// when applied.
 func AffineId() Affine2D {
 	return NewAffine2D(
 		1, 0, 0,
@@ -39,7 +24,6 @@ func AffineId() Affine2D {
 	)
 }
 
-// Offset the transformation.
 func (a Affine2D) Offset(offset Point) Affine2D {
 	return Affine2D{
 		a.a, a.b, a.c + offset.X,
@@ -47,7 +31,6 @@ func (a Affine2D) Offset(offset Point) Affine2D {
 	}
 }
 
-// Scale the transformation around the given origin.
 func (a Affine2D) Scale(origin, factor Point) Affine2D {
 	if origin == (Point{}) {
 		return a.scale(factor)
@@ -57,7 +40,6 @@ func (a Affine2D) Scale(origin, factor Point) Affine2D {
 	return a.Offset(origin)
 }
 
-// Rotate the transformation by the given angle (in radians) counter clockwise around the given origin.
 func (a Affine2D) Rotate(origin Point, radians float32) Affine2D {
 	if origin == (Point{}) {
 		return a.rotate(radians)
@@ -67,7 +49,6 @@ func (a Affine2D) Rotate(origin Point, radians float32) Affine2D {
 	return a.Offset(origin)
 }
 
-// Shear the transformation by the given angle (in radians) around the given origin.
 func (a Affine2D) Shear(origin Point, radiansX, radiansY float32) Affine2D {
 	if origin == (Point{}) {
 		return a.shear(radiansX, radiansY)
@@ -77,7 +58,6 @@ func (a Affine2D) Shear(origin Point, radiansX, radiansY float32) Affine2D {
 	return a.Offset(origin)
 }
 
-// Mul returns A*B.
 func (A Affine2D) Mul(B Affine2D) (r Affine2D) {
 	r.a = (A.a+1)*(B.a+1) + A.b*B.d - 1
 	r.b = (A.a+1)*B.b + A.b*(B.e+1)
@@ -88,8 +68,6 @@ func (A Affine2D) Mul(B Affine2D) (r Affine2D) {
 	return r
 }
 
-// Invert the transformation. Note that if the matrix is close to singular
-// numerical errors may become large or infinity.
 func (a Affine2D) Invert() Affine2D {
 	if a.a == 0 && a.b == 0 && a.d == 0 && a.e == 0 {
 		return Affine2D{a: 0, b: 0, c: -a.c, d: 0, e: 0, f: -a.f}
@@ -107,7 +85,6 @@ func (a Affine2D) Invert() Affine2D {
 	return a
 }
 
-// Transform p by returning a*p.
 func (a Affine2D) Transform(p Point) Point {
 	return Point{
 		X: p.X*(a.a+1) + p.Y*a.b + a.c,
@@ -115,14 +92,10 @@ func (a Affine2D) Transform(p Point) Point {
 	}
 }
 
-// Elems returns the matrix elements of the transform in row-major order. The
-// rows are: [sx, hx, ox], [hy, sy, oy], [0, 0, 1].
 func (a Affine2D) Elems() (sx, hx, ox, hy, sy, oy float32) {
 	return a.a + 1, a.b, a.c, a.d, a.e + 1, a.f
 }
 
-// Split a transform into two parts, one which is pure offset and the
-// other representing the scaling, shearing and rotation part.
 func (a Affine2D) Split() (srs Affine2D, offset Point) {
 	return Affine2D{
 		a: a.a, b: a.b, c: 0,
@@ -158,7 +131,6 @@ func (a Affine2D) shear(radiansX, radiansY float32) Affine2D {
 func (a Affine2D) String() string {
 	sx, hx, ox, hy, sy, oy := a.Elems()
 
-	// precision 6, one period, negative sign and space per number
 	const prec = 6
 	const charsPerFloat = prec + 2 + 1
 	s := make([]byte, 0, 6*charsPerFloat+6)

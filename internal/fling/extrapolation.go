@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package fling
 
 import (
@@ -9,20 +7,14 @@ import (
 	"time"
 )
 
-// Extrapolation computes a 1-dimensional velocity estimate
-// for a set of timestamped points using the least squares
-// fit of a 2nd order polynomial. The same method is used
-// by Android.
 type Extrapolation struct {
-	// Index into points.
 	idx int
-	// Circular buffer of samples.
+
 	samples   []sample
 	lastValue float32
-	// Pre-allocated cache for samples.
+
 	cache [historySize]sample
 
-	// Filtered values and times
 	values [historySize]float32
 	times  [historySize]float32
 }
@@ -51,13 +43,11 @@ const (
 	maxSampleGap = 40 * time.Millisecond
 )
 
-// SampleDelta adds a relative sample to the estimation.
 func (e *Extrapolation) SampleDelta(t time.Duration, delta float32) {
 	val := delta + e.lastValue
 	e.Sample(t, val)
 }
 
-// Sample adds an absolute sample to the estimation.
 func (e *Extrapolation) Sample(t time.Duration, val float32) {
 	e.lastValue = val
 	if e.samples == nil {
@@ -78,9 +68,6 @@ func (e *Extrapolation) Sample(t time.Duration, val float32) {
 	}
 }
 
-// Velocity returns an estimate of the implied velocity and
-// distance for the points sampled, or zero if the estimation method
-// failed.
 func (e *Extrapolation) Estimate() Estimate {
 	if len(e.samples) == 0 {
 		return Estimate{}
@@ -89,14 +76,12 @@ func (e *Extrapolation) Estimate() Estimate {
 	times := e.times[:0]
 	first := e.get(0)
 	t := first.t
-	// Walk backwards collecting samples.
+
 	for i := range e.samples {
 		p := e.get(-i)
 		age := first.t - p.t
 		if age >= maxAge || t-p.t >= maxSampleGap {
-			// If the samples are too old or
-			// too much time passed between samples
-			// assume they're not part of the fling.
+
 			break
 		}
 		t = p.t
@@ -119,24 +104,15 @@ func (e *Extrapolation) get(i int) sample {
 	return e.samples[idx]
 }
 
-// fit computes the least squares polynomial fit for
-// the set of points in X, Y. If the fitting fails
-// because of contradicting or insufficient data,
-// fit returns false.
 func polyFit(X, Y []float32) (coefficients, bool) {
 	if len(X) != len(Y) {
 		panic("X and Y lengths differ")
 	}
 	if len(X) <= degree {
-		// Not enough points to fit a curve.
+
 		return coefficients{}, false
 	}
 
-	// Use a method similar to Android's VelocityTracker.cpp:
-	// https://android.googlesource.com/platform/frameworks/base/+/56a2301/libs/androidfw/VelocityTracker.cpp
-	// where all weights are 1.
-
-	// First, expand the X vector to the matrix A in column-major order.
 	A := newMatrix(degree+1, len(X))
 	for i, x := range X {
 		A.set(0, i, 1)
@@ -149,10 +125,7 @@ func polyFit(X, Y []float32) (coefficients, bool) {
 	if !ok {
 		return coefficients{}, false
 	}
-	// Solve R*B = Qt*Y for B, which is then the polynomial coefficients.
-	// Since R is upper triangular, we can proceed from bottom right to
-	// upper left.
-	// https://en.wikipedia.org/wiki/Non-linear_least_squares
+
 	var B coefficients
 	for i := Q.rows - 1; i >= 0; i-- {
 		B[i] = dot(Q.col(i), Y)
@@ -164,43 +137,33 @@ func polyFit(X, Y []float32) (coefficients, bool) {
 	return B, true
 }
 
-// decomposeQR computes and returns Q, Rt where Q*transpose(Rt) = A, if
-// possible. R is guaranteed to be upper triangular and only the square
-// part of Rt is returned.
 func decomposeQR(A *matrix) (*matrix, *matrix, bool) {
-	// Gram-Schmidt QR decompose A where Q*R = A.
-	// https://en.wikipedia.org/wiki/Gram%E2%80%93Schmidt_process
-	Q := newMatrix(A.rows, A.cols)  // Column-major.
-	Rt := newMatrix(A.rows, A.rows) // R transposed, row-major.
+
+	Q := newMatrix(A.rows, A.cols)
+	Rt := newMatrix(A.rows, A.rows)
 	for i := range Q.rows {
-		// Copy A column.
+
 		for j := range Q.cols {
 			Q.set(i, j, A.get(i, j))
 		}
-		// Subtract projections. Note that int the projection
-		//
-		// proju a = <u, a>/<u, u> u
-		//
-		// the normalized column e replaces u, where <e, e> = 1:
-		//
-		// proje a = <e, a>/<e, e> e = <e, a> e
+
 		for j := range i {
 			d := dot(Q.col(j), Q.col(i))
 			for k := range Q.cols {
 				Q.set(i, k, Q.get(i, k)-d*Q.get(j, k))
 			}
 		}
-		// Normalize Q columns.
+
 		n := norm(Q.col(i))
 		if n < 0.000001 {
-			// Degenerate data, no solution.
+
 			return nil, nil, false
 		}
 		invNorm := 1 / n
 		for j := range Q.cols {
 			Q.set(i, j, Q.get(i, j)*invNorm)
 		}
-		// Update Rt.
+
 		for j := i; j < Rt.cols; j++ {
 			Rt.set(i, j, dot(Q.col(i), A.col(j)))
 		}

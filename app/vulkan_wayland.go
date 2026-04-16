@@ -1,7 +1,5 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-//go:build ((linux && !android) || freebsd) && !nowayland && !novulkan
-// +build linux,!android freebsd
+//go:build (linux || freebsd) && !nowayland && !novulkan
+// +build linux freebsd
 // +build !nowayland
 // +build !novulkan
 

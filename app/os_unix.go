@@ -1,6 +1,4 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-//go:build (linux && !android) || freebsd || openbsd
+//go:build linux || freebsd || openbsd
 
 package app
 
@@ -12,9 +10,8 @@ import (
 )
 
 type X11ViewEvent struct {
-	// Display is a pointer to the X11 Display created by XOpenDisplay.
 	Display unsafe.Pointer
-	// Window is the X11 window ID as returned by XCreateWindow.
+
 	Window uintptr
 }
 
@@ -25,9 +22,8 @@ func (x X11ViewEvent) Valid() bool {
 }
 
 type WaylandViewEvent struct {
-	// Display is the *wl_display returned by wl_display_connect.
 	Display unsafe.Pointer
-	// Surface is the *wl_surface returned by wl_compositor_create_surface.
+
 	Surface unsafe.Pointer
 }
 
@@ -43,8 +39,6 @@ func osMain() {
 
 type windowDriver func(*callbacks, []Option) error
 
-// Instead of creating files with build tags for each combination of wayland +/- x11
-// let each driver initialize these variables with their own version of createWindow.
 var wlDriver, x11Driver windowDriver
 
 func newWindow(window *callbacks, options []Option) {
@@ -67,7 +61,6 @@ func newWindow(window *callbacks, options []Option) {
 	window.ProcessEvent(DestroyEvent{Err: errFirst})
 }
 
-// xCursor contains mapping from pointer.Cursor to XCursor.
 var xCursor = [...]string{
 	pointer.CursorDefault:                  "left_ptr",
 	pointer.CursorNone:                     "",

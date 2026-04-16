@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package material
 
 import (
@@ -15,7 +13,6 @@ import (
 	"github.com/nanorele/gio/widget"
 )
 
-// Slider is for selecting a value in a range.
 func Slider(th *Theme, float *widget.Float) SliderStyle {
 	return SliderStyle{
 		Color:      th.Palette.ContrastBg,
@@ -38,10 +35,9 @@ func (s SliderStyle) Layout(gtx layout.Context) layout.Dimensions {
 	trackWidth := gtx.Dp(2)
 
 	axis := s.Axis
-	// Keep a minimum length so that the track is always visible.
+
 	minLength := tr + 3*tr + tr
-	// Try to expand to finger size, but only if the constraints
-	// allow for it.
+
 	touchSizePx := min(gtx.Dp(s.FingerSize), axis.Convert(gtx.Constraints.Max).Y)
 	sizeMain := max(axis.Convert(gtx.Constraints.Min).X, minLength)
 	sizeCross := max(2*tr, touchSizePx)
@@ -70,21 +66,18 @@ func (s SliderStyle) Layout(gtx layout.Context) layout.Dimensions {
 		return r
 	}
 
-	// Draw track before thumb.
 	track := rect(
 		tr, sizeCross/2-trackWidth/2,
 		thumbPos, sizeCross/2+trackWidth/2,
 	)
 	paint.FillShape(gtx.Ops, color, clip.Rect(track).Op())
 
-	// Draw track after thumb.
 	track = rect(
 		thumbPos, axis.Convert(track.Min).Y,
 		sizeMain-tr, axis.Convert(track.Max).Y,
 	)
 	paint.FillShape(gtx.Ops, f32color.MulAlpha(color, 96), clip.Rect(track).Op())
 
-	// Draw thumb.
 	pt := image.Pt(thumbPos, sizeCross/2)
 	thumb := rect(
 		pt.X-tr, pt.Y-tr,

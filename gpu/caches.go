@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package gpu
 
 import (
@@ -22,13 +20,9 @@ type resourceCacheValue struct {
 	resource resource
 }
 
-// opCache is like a resourceCache but using concrete types and a
-// freelist instead of two maps to avoid runtime.mapaccess2 calls
-// since benchmarking showed them as a bottleneck.
 type opCache struct {
-	// store the index + 1 in cache this key is stored in
 	index map[opKey]int
-	// list of indexes in cache that are free and can be used
+
 	freelist []int
 	cache    []opCacheValue
 }
@@ -37,7 +31,7 @@ type opCacheValue struct {
 	data pathData
 
 	bounds f32.Rectangle
-	// the fields below are handled by opCache
+
 	key  opKey
 	keep bool
 }
@@ -111,7 +105,7 @@ func (r *opCache) put(key opKey, val opCacheValue) {
 	val.keep = true
 	val.key = key
 	if v == 0 {
-		// not in cache
+
 		i := len(r.cache)
 		if len(r.freelist) > 0 {
 			i = r.freelist[len(r.freelist)-1]

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package widget
 
 import (
@@ -29,7 +27,6 @@ func TestIcon_Alpha(t *testing.T) {
 	_ = icon.Layout(gtx, col)
 }
 
-// TestWidgetConstraints tests that widgets returns dimensions within their constraints.
 func TestWidgetConstraints(t *testing.T) {
 	_cs := func(v ...layout.Constraints) []layout.Constraints { return v }
 	for _, tc := range []struct {

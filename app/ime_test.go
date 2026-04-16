@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package app
 
 import (
@@ -33,7 +31,7 @@ func FuzzIME(f *testing.F) {
 		var r input.Router
 		gtx := layout.Context{Ops: new(op.Ops), Source: r.Source()}
 		gtx.Execute(key.FocusCmd{Tag: e})
-		// Layout once to register focus.
+
 		e.Layout(gtx, cache, font.Font{}, unit.Sp(10), op.CallOp{}, op.CallOp{})
 		r.Frame(gtx.Ops)
 
@@ -106,9 +104,9 @@ func FuzzIME(f *testing.F) {
 			e.Layout(gtx, cache, font.Font{}, unit.Sp(10), op.CallOp{}, op.CallOp{})
 			r.Frame(gtx.Ops)
 			newState := r.EditorState()
-			// We don't track caret position.
+
 			state.Selection.Caret = newState.Selection.Caret
-			// Expanded snippets are ok.
+
 			their, our := newState.Snippet, state.EditorState.Snippet
 			beforeLen := 0
 			for before := our.Start - their.Start; before > 0; before-- {

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package rendertest
 
 import (
@@ -108,7 +106,7 @@ func TestPaintAbsolute(t *testing.T) {
 	run(t, func(o *op.Ops) {
 		p := new(clip.Path)
 		p.Begin(o)
-		p.Move(f32.Pt(100, 100)) // offset the initial pen position to test "MoveTo"
+		p.Move(f32.Pt(100, 100))
 
 		p.MoveTo(f32.Pt(20, 20))
 		p.LineTo(f32.Pt(80, 20))
@@ -190,7 +188,7 @@ func TestStrokedPathZeroWidth(t *testing.T) {
 			p.Line(f32.Pt(30, 0))
 			cl := clip.Stroke{
 				Path: p.End(),
-			}.Op().Push(o) // width=0, disable stroke
+			}.Op().Push(o)
 
 			paint.Fill(o, red)
 			cl.Pop()
@@ -227,8 +225,7 @@ func TestStrokedPathCoincidentControlPoint(t *testing.T) {
 
 func TestStrokedPathBalloon(t *testing.T) {
 	run(t, func(o *op.Ops) {
-		// This shape is based on the one drawn by the Bubble function in
-		// github.com/llgcode/draw2d/samples/geometry/geometry.go.
+
 		p := new(clip.Path)
 		p.Begin(o)
 		p.MoveTo(f32.Pt(42.69375, 10.5))

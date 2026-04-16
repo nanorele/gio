@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package clip
 
 import (
@@ -12,10 +10,8 @@ import (
 	"github.com/nanorele/gio/op"
 )
 
-// Rect represents the clip area of a pixel-aligned rectangle.
 type Rect image.Rectangle
 
-// Op returns the op for the rectangle.
 func (r Rect) Op() Op {
 	return Op{
 		outline: true,
@@ -23,12 +19,10 @@ func (r Rect) Op() Op {
 	}
 }
 
-// Push the clip operation on the clip stack.
 func (r Rect) Push(ops *op.Ops) Stack {
 	return r.Op().Push(ops)
 }
 
-// Path returns the PathSpec for the rectangle.
 func (r Rect) Path() PathSpec {
 	return PathSpec{
 		shape:  ops.Rect,
@@ -36,8 +30,6 @@ func (r Rect) Path() PathSpec {
 	}
 }
 
-// UniformRRect returns an RRect with all corner radii set to the
-// provided radius.
 func UniformRRect(rect image.Rectangle, radius int) RRect {
 	return RRect{
 		Rect: rect,
@@ -48,18 +40,12 @@ func UniformRRect(rect image.Rectangle, radius int) RRect {
 	}
 }
 
-// RRect represents the clip area of a rectangle with rounded
-// corners.
-//
-// Specify a square with corner radii equal to half the square size to
-// construct a circular clip area.
 type RRect struct {
 	Rect image.Rectangle
-	// The corner radii.
+
 	SE, SW, NW, NE int
 }
 
-// Op returns the op for the rounded rectangle.
 func (rr RRect) Op(ops *op.Ops) Op {
 	if rr.SE == 0 && rr.SW == 0 && rr.NW == 0 && rr.NE == 0 {
 		return Rect(rr.Rect).Op()
@@ -67,17 +53,14 @@ func (rr RRect) Op(ops *op.Ops) Op {
 	return Outline{Path: rr.Path(ops)}.Op()
 }
 
-// Push the rectangle clip on the clip stack.
 func (rr RRect) Push(ops *op.Ops) Stack {
 	return rr.Op(ops).Push(ops)
 }
 
-// Path returns the PathSpec for the rounded rectangle.
 func (rr RRect) Path(ops *op.Ops) PathSpec {
 	var p Path
 	p.Begin(ops)
 
-	// https://pomax.github.io/bezierinfo/#circles_cubic.
 	const q = 4 * (math.Sqrt2 - 1) / 3
 	const iq = 1 - q
 
@@ -86,23 +69,23 @@ func (rr RRect) Path(ops *op.Ops) PathSpec {
 	w, n, e, s := rrf.Min.X, rrf.Min.Y, rrf.Max.X, rrf.Max.Y
 
 	p.MoveTo(f32.Point{X: w + nw, Y: n})
-	p.LineTo(f32.Point{X: e - ne, Y: n}) // N
-	p.CubeTo(                            // NE
+	p.LineTo(f32.Point{X: e - ne, Y: n})
+	p.CubeTo(
 		f32.Point{X: e - ne*iq, Y: n},
 		f32.Point{X: e, Y: n + ne*iq},
 		f32.Point{X: e, Y: n + ne})
-	p.LineTo(f32.Point{X: e, Y: s - se}) // E
-	p.CubeTo(                            // SE
+	p.LineTo(f32.Point{X: e, Y: s - se})
+	p.CubeTo(
 		f32.Point{X: e, Y: s - se*iq},
 		f32.Point{X: e - se*iq, Y: s},
 		f32.Point{X: e - se, Y: s})
-	p.LineTo(f32.Point{X: w + sw, Y: s}) // S
-	p.CubeTo(                            // SW
+	p.LineTo(f32.Point{X: w + sw, Y: s})
+	p.CubeTo(
 		f32.Point{X: w + sw*iq, Y: s},
 		f32.Point{X: w, Y: s - sw*iq},
 		f32.Point{X: w, Y: s - sw})
-	p.LineTo(f32.Point{X: w, Y: n + nw}) // W
-	p.CubeTo(                            // NW
+	p.LineTo(f32.Point{X: w, Y: n + nw})
+	p.CubeTo(
 		f32.Point{X: w, Y: n + nw*iq},
 		f32.Point{X: w + nw*iq, Y: n},
 		f32.Point{X: w + nw, Y: n})
@@ -110,21 +93,16 @@ func (rr RRect) Path(ops *op.Ops) PathSpec {
 	return p.End()
 }
 
-// Ellipse represents the largest axis-aligned ellipse that
-// is contained in its bounds.
 type Ellipse image.Rectangle
 
-// Op returns the op for the filled ellipse.
 func (e Ellipse) Op(ops *op.Ops) Op {
 	return Outline{Path: e.Path(ops)}.Op()
 }
 
-// Push the filled ellipse clip op on the clip stack.
 func (e Ellipse) Push(ops *op.Ops) Stack {
 	return e.Op(ops).Push(ops)
 }
 
-// Path constructs a path for the ellipse.
 func (e Ellipse) Path(o *op.Ops) PathSpec {
 	bounds := image.Rectangle(e)
 	if bounds.Dx() == 0 || bounds.Dy() == 0 {
@@ -138,11 +116,9 @@ func (e Ellipse) Path(o *op.Ops) PathSpec {
 	center := bf.Max.Add(bf.Min).Mul(.5)
 	diam := bf.Dx()
 	r := diam * .5
-	// We'll model the ellipse as a circle scaled in the Y
-	// direction.
+
 	scale := bf.Dy() / diam
 
-	// https://pomax.github.io/bezierinfo/#circles_cubic.
 	const q = 4 * (math.Sqrt2 - 1) / 3
 
 	curve := r * q

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package text
 
 import (
@@ -30,9 +28,6 @@ func (a Alignment) String() string {
 	}
 }
 
-// Align returns the x offset that should be applied to text with width so that it
-// appears correctly aligned within a space of size maxWidth and with the primary
-// text direction dir.
 func (a Alignment) Align(dir system.TextDirection, width fixed.Int26_6, maxWidth int) fixed.Int26_6 {
 	mw := fixed.I(maxWidth)
 	if dir.Progression() == system.TowardOrigin {

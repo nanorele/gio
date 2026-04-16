@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package text
 
 import (
@@ -14,20 +12,17 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
-// entry holds a single key-value pair for an LRU cache.
 type entry[K comparable, V any] struct {
 	next, prev *entry[K, V]
 	key        K
 	v          V
 }
 
-// lru is a generic least-recently-used cache.
 type lru[K comparable, V any] struct {
 	m          map[K]*entry[K, V]
 	head, tail *entry[K, V]
 }
 
-// Get fetches the value associated with the given key, if any.
 func (l *lru[K, V]) Get(k K) (V, bool) {
 	if lt, ok := l.m[k]; ok {
 		l.remove(lt)
@@ -38,8 +33,6 @@ func (l *lru[K, V]) Get(k K) (V, bool) {
 	return v, false
 }
 
-// Put inserts the given value with the given key, evicting old
-// cache entries if necessary.
 func (l *lru[K, V]) Put(k K, v V) {
 	if l.m == nil {
 		l.m = make(map[K]*entry[K, V])
@@ -58,13 +51,11 @@ func (l *lru[K, V]) Put(k K, v V) {
 	}
 }
 
-// remove cuts e out of the lru linked list.
 func (l *lru[K, V]) remove(e *entry[K, V]) {
 	e.next.prev = e.prev
 	e.prev.next = e.next
 }
 
-// insert adds e to the lru linked list.
 func (l *lru[K, V]) insert(e *entry[K, V]) {
 	e.next = l.head
 	e.prev = l.head.prev
@@ -93,8 +84,6 @@ type glyphLRU[V any] struct {
 
 var seed uint32
 
-// hashGlyphs computes a hash key based on the ID and X offset of
-// every glyph in the slice.
 func (c *glyphLRU[V]) hashGlyphs(gs []Glyph) uint64 {
 	if c.seed == 0 {
 		c.seed = uint64(atomic.AddUint32(&seed, 3900798947))
@@ -130,7 +119,7 @@ func (c *glyphLRU[V]) Put(key uint64, glyphs []Glyph, v V) {
 		if i == 0 {
 			firstX = glyph.X
 		}
-		// Cache glyph X offsets relative to the first glyph.
+
 		gids[i] = glyphInfo{ID: glyph.ID, X: glyph.X - firstX}
 	}
 	val := glyphValue[V]{
@@ -174,7 +163,7 @@ func gidsEqual(a []glyphInfo, glyphs []Glyph) bool {
 		if i == 0 {
 			firstX = glyphs[i].X
 		}
-		// Cache glyph X offsets relative to the first glyph.
+
 		if a[i].ID != glyphs[i].ID || a[i].X != (glyphs[i].X-firstX) {
 			return false
 		}

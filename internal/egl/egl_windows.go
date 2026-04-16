@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package egl
 
 import (
@@ -184,8 +182,6 @@ func eglWaitClient() bool {
 	return r != 0
 }
 
-// issue34474KeepAlive calls runtime.KeepAlive as a
-// workaround for golang.org/issue/34474.
 func issue34474KeepAlive(v any) {
 	runtime.KeepAlive(v)
 }

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package ops
 
 import (
@@ -13,27 +11,16 @@ import (
 )
 
 type Ops struct {
-	// version is incremented at each Reset.
 	version uint32
-	// data contains the serialized operations.
+
 	data []byte
-	// refs hold external references for operations.
+
 	refs []any
-	// stringRefs provides space for string references, pointers to which will
-	// be stored in refs. Storing a string directly in refs would cause a heap
-	// allocation, to store the string header in an interface value. The backing
-	// array of stringRefs, on the other hand, gets reused between calls to
-	// reset, making string references free on average.
-	//
-	// Appending to stringRefs might reallocate the backing array, which will
-	// leave pointers to the old array in refs. This temporarily causes a slight
-	// increase in memory usage, but this, too, amortizes away as the capacity
-	// of stringRefs approaches its stable maximum.
+
 	stringRefs []string
-	// nextStateID is the id allocated for the next
-	// StateOp.
+
 	nextStateID uint32
-	// multipOp indicates a multi-op such as clip.Path is being added.
+
 	multipOp bool
 
 	macroStack stack
@@ -44,7 +31,6 @@ type OpType byte
 
 type Shape byte
 
-// Start at a high number for easier debugging.
 const firstOpIndex = 200
 
 const (
@@ -84,16 +70,12 @@ type StackID struct {
 	prev uint32
 }
 
-// StateOp represents a saved operation snapshot to be restored
-// later.
 type StateOp struct {
 	id      uint32
 	macroID uint32
 	ops     *Ops
 }
 
-// stack tracks the integer identities of stack operations to ensure correct
-// pairing of their push and pop methods.
 type stack struct {
 	currentID uint32
 	nextID    uint32
@@ -101,7 +83,6 @@ type stack struct {
 
 type StackKind uint8
 
-// ClipOp is the shadow of clip.Op.
 type ClipOp struct {
 	Bounds  image.Rectangle
 	Outline bool
@@ -172,7 +153,7 @@ func (op *ClipOp) Decode(data []byte) {
 func Reset(o *Ops) {
 	o.macroStack = stack{}
 	o.stacks = [_StackKind]stack{}
-	// Leave references to the GC.
+
 	for i := range o.refs {
 		o.refs[i] = nil
 	}
@@ -232,7 +213,7 @@ func PopMacro(o *Ops, id StackID) {
 
 func FillMacro(o *Ops, startPC PC) {
 	pc := PCFor(o)
-	// Fill out the macro definition reserved in Record.
+
 	data := o.data[startPC.data:]
 	data = data[:TypeMacroLen]
 	data[0] = byte(TypeMacro)
@@ -337,7 +318,6 @@ func (s *stack) pop(sid StackID) {
 	s.currentID = sid.prev
 }
 
-// Save the effective transformation.
 func Save(o *Ops) StateOp {
 	o.nextStateID++
 	s := StateOp{
@@ -352,8 +332,6 @@ func Save(o *Ops) StateOp {
 	return s
 }
 
-// Load a previously saved operations state given
-// its ID.
 func (s StateOp) Load() {
 	bo := binary.LittleEndian
 	data := Write(s.ops, TypeLoadLen)
@@ -397,7 +375,6 @@ func DecodeOpacity(data []byte) float32 {
 	return math.Float32frombits(bo.Uint32(data[1:]))
 }
 
-// DecodeSave decodes the state id of a save op.
 func DecodeSave(data []byte) int {
 	if OpType(data[0]) != TypeSave {
 		panic("invalid op")
@@ -406,7 +383,6 @@ func DecodeSave(data []byte) int {
 	return int(bo.Uint32(data[1:]))
 }
 
-// DecodeLoad decodes the state id of a load op.
 func DecodeLoad(data []byte) int {
 	if OpType(data[0]) != TypeLoad {
 		panic("invalid op")

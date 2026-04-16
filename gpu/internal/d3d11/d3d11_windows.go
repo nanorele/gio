@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package d3d11
 
 import (
@@ -12,16 +10,15 @@ import (
 
 	"golang.org/x/sys/windows"
 
+	"gioui.org/shader"
 	"github.com/nanorele/gio/gpu/internal/driver"
 	"github.com/nanorele/gio/internal/d3d11"
-	"gioui.org/shader"
 )
 
 type Backend struct {
 	dev *d3d11.Device
 	ctx *d3d11.DeviceContext
 
-	// Temporary storage to avoid garbage.
 	clearColor [4]float32
 	viewport   d3d11.VIEWPORT
 
@@ -99,7 +96,7 @@ func detectFloatFormat(dev *d3d11.Device) (uint32, bool) {
 		d3d11.DXGI_FORMAT_R32_FLOAT,
 		d3d11.DXGI_FORMAT_R16G16_FLOAT,
 		d3d11.DXGI_FORMAT_R32G32_FLOAT,
-		// These last two are really wasteful, but c'est la vie.
+
 		d3d11.DXGI_FORMAT_R16G16B16A16_FLOAT,
 		d3d11.DXGI_FORMAT_R32G32B32A32_FLOAT,
 	}
@@ -118,7 +115,7 @@ func newDirect3D11Device(api driver.Direct3D11) (driver.Device, error) {
 		dev: dev,
 		ctx: dev.GetImmediateContext(),
 		caps: driver.Caps{
-			MaxTextureSize: 2048, // 9.1 maximum
+			MaxTextureSize: 2048,
 			Features:       driver.FeatureSRGB,
 		},
 	}
@@ -138,7 +135,7 @@ func newDirect3D11Device(api driver.Direct3D11) (driver.Device, error) {
 		b.floatFormat = fmt
 		b.caps.Features |= driver.FeatureFloatRenderTargets
 	}
-	// Disable backface culling to match OpenGL.
+
 	state, err := dev.CreateRasterizerState(&d3d11.RASTERIZER_DESC{
 		CullMode: d3d11.CULL_NONE,
 		FillMode: d3d11.FILL_SOLID,
@@ -172,10 +169,10 @@ func (b *Backend) CopyTexture(dstTex driver.Texture, dstOrigin image.Point, srcT
 	src := (*d3d11.Resource)(srcTex.(*Texture).tex)
 	b.ctx.CopySubresourceRegion(
 		dst,
-		0,                                           // Destination subresource.
-		uint32(dstOrigin.X), uint32(dstOrigin.Y), 0, // Destination coordinates (x, y, z).
+		0,
+		uint32(dstOrigin.X), uint32(dstOrigin.Y), 0,
 		src,
-		0, // Source subresource.
+		0,
 		&d3d11.BOX{
 			Left:   uint32(srcRect.Min.X),
 			Top:    uint32(srcRect.Min.Y),
@@ -224,7 +221,7 @@ func (b *Backend) NewTexture(format driver.TextureFormat, width, height int, min
 	mipmap := minFilter == driver.FilterLinearMipmapLinear
 	nmipmaps := 1
 	if mipmap {
-		// Flags required by ID3D11DeviceContext::GenerateMips.
+
 		bindFlags |= d3d11.BIND_SHADER_RESOURCE | d3d11.BIND_RENDER_TARGET
 		miscFlags |= d3d11.RESOURCE_MISC_GENERATE_MIPS
 		dim := max(height, width)
@@ -500,7 +497,6 @@ func (b *Backend) NewPipeline(desc driver.PipelineDesc) (driver.Pipeline, error)
 		}
 	}
 
-	// Retain shaders.
 	vshRef := vsh.shader
 	fshRef := fsh.shader
 	d3d11.IUnknownAddRef(unsafe.Pointer(vshRef), vshRef.Vtbl.AddRef)
@@ -774,10 +770,10 @@ func (t *Texture) ReadPixels(src image.Rectangle, pixels []byte, stride int) err
 	res := (*d3d11.Resource)(unsafe.Pointer(tex))
 	t.backend.ctx.CopySubresourceRegion(
 		res,
-		0,       // Destination subresource.
-		0, 0, 0, // Destination coordinates (x, y, z).
+		0,
+		0, 0, 0,
 		(*d3d11.Resource)(t.tex),
-		0, // Source subresource.
+		0,
 		&d3d11.BOX{
 			Left:   uint32(src.Min.X),
 			Top:    uint32(src.Min.Y),
@@ -865,7 +861,6 @@ func toBlendFactor(f driver.BlendFactor) (uint32, uint32) {
 	}
 }
 
-// sliceOf returns a slice from a (native) pointer.
 func sliceOf(ptr uintptr, cap int) []byte {
 	return unsafe.Slice((*byte)(unsafe.Pointer(ptr)), cap)
 }

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package widget
 
 import (
@@ -13,20 +11,13 @@ import (
 	"github.com/nanorele/gio/unit"
 )
 
-// Image is a widget that displays an image.
 type Image struct {
-	// Src is the image to display.
 	Src paint.ImageOp
-	// Fit specifies how to scale the image to the constraints.
-	// By default it does not do any scaling.
+
 	Fit Fit
-	// Position specifies where to position the image within
-	// the constraints.
+
 	Position layout.Direction
-	// Scale is the factor used for converting image pixels to dp.
-	// If Scale is zero it defaults to 1.
-	//
-	// To map one image pixel to one output pixel, set Scale to 1.0 / gtx.Metric.PxPerDp.
+
 	Scale float32
 }
 

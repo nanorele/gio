@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package unit_test
 
 import (
@@ -44,5 +42,27 @@ func TestMetric_DpToSp(t *testing.T) {
 		if got != exp {
 			t.Errorf("PxToSp conversion mismatch %v != %v", exp, got)
 		}
+	}
+}
+
+func TestMetric_Zero(t *testing.T) {
+	m := unit.Metric{}
+	if got := m.Dp(5); got != 5 {
+		t.Errorf("expected 5, got %d", got)
+	}
+	if got := m.Sp(5); got != 5 {
+		t.Errorf("expected 5, got %d", got)
+	}
+	if got := m.DpToSp(5); got != 5 {
+		t.Errorf("expected 5, got %v", got)
+	}
+	if got := m.SpToDp(5); got != 5 {
+		t.Errorf("expected 5, got %v", got)
+	}
+	if got := m.PxToSp(5); got != 5 {
+		t.Errorf("expected 5, got %v", got)
+	}
+	if got := m.PxToDp(5); got != 5 {
+		t.Errorf("expected 5, got %v", got)
 	}
 }

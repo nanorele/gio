@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package gl
 
 import (
@@ -13,10 +11,8 @@ type Functions struct {
 	EXT_disjoint_timer_query        js.Value
 	EXT_disjoint_timer_query_webgl2 js.Value
 
-	// Cached reference to the Uint8Array JS type.
 	uint8Array js.Value
 
-	// Cached JS arrays.
 	arrayBuf js.Value
 	int32Buf js.Value
 
@@ -231,7 +227,7 @@ func (f *Functions) Init() error {
 			return errors.New("gl: EXT_sRGB not supported")
 		}
 	} else {
-		// WebGL2 extensions.
+
 		f.EXT_disjoint_timer_query_webgl2 = f.getExtension("EXT_disjoint_timer_query_webgl2")
 		if f.getExtension("EXT_color_buffer_half_float").IsNull() && f.getExtension("EXT_color_buffer_float").IsNull() {
 			return errors.New("gl: no support for neither EXT_color_buffer_half_float nor EXT_color_buffer_float")
@@ -318,7 +314,7 @@ func (f *Functions) BufferSubData(target Enum, offset int, src []byte) {
 func (f *Functions) CheckFramebufferStatus(target Enum) Enum {
 	status := Enum(f._checkFramebufferStatus.Invoke(int(target)).Int())
 	if status != FRAMEBUFFER_COMPLETE && f.Ctx.Call("isContextLost").Bool() {
-		// If the context is lost, we say that everything is fine. That saves internal/opengl/opengl.go from panic.
+
 		return FRAMEBUFFER_COMPLETE
 	}
 	return status
@@ -477,7 +473,7 @@ func (f *Functions) GenerateMipmap(target Enum) {
 }
 
 func (f *Functions) GetError() Enum {
-	// Avoid slow getError calls. See gio#179.
+
 	return 0
 }
 
@@ -487,7 +483,7 @@ func (f *Functions) GetRenderbufferParameteri(target, pname Enum) int {
 
 func (f *Functions) GetFramebufferAttachmentParameteri(target, attachment, pname Enum) int {
 	if !f.isWebGL2 && pname == FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING {
-		// FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING is only available on WebGL 2
+
 		return LINEAR
 	}
 	return paramVal(f._getFramebufferAttachmentParameter.Invoke(int(target), int(attachment), int(pname)))
@@ -513,7 +509,7 @@ func (f *Functions) GetInteger(pname Enum) int {
 	if !f.isWebGL2 {
 		switch pname {
 		case PACK_ROW_LENGTH, UNPACK_ROW_LENGTH:
-			return 0 // PACK_ROW_LENGTH and UNPACK_ROW_LENGTH is only available on WebGL 2
+			return 0
 		}
 	}
 	return paramVal(f._getParameter.Invoke(int(pname)))

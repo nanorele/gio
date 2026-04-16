@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package rendertest
 
 import (
@@ -180,7 +178,7 @@ func TestComplicatedTransform(t *testing.T) {
 }
 
 func TestTransformOrder(t *testing.T) {
-	// check the ordering of operations bot in affine and in gpu stack.
+
 	run(t, func(o *op.Ops) {
 		a := f32.AffineId().Offset(f32.Pt(64, 64))
 		defer op.Affine(a).Push(o).Pop()
@@ -192,7 +190,7 @@ func TestTransformOrder(t *testing.T) {
 		defer op.Affine(c).Push(o).Pop()
 		paint.FillShape(o, red, clip.Rect(image.Rect(0, 0, 20, 20)).Op())
 	}, func(r result) {
-		// centered and with radius 40
+
 		r.expect(64-41, 64, transparent)
 		r.expect(64-39, 64, colornames.Red)
 		r.expect(64+39, 64, colornames.Red)

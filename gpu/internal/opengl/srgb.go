@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package opengl
 
 import (
@@ -13,9 +11,6 @@ import (
 	"github.com/nanorele/gio/internal/gl"
 )
 
-// SRGBFBO implements an intermediate sRGB FBO
-// for gamma-correct rendering on platforms without
-// sRGB enabled native framebuffers.
 type SRGBFBO struct {
 	c        *gl.Functions
 	state    *glState
@@ -37,7 +32,7 @@ func NewSRGBFBO(f *gl.Functions, state *glState) (*SRGBFBO, error) {
 	exts := strings.Split(f.GetString(gl.EXTENSIONS), " ")
 	srgbTriple, err := srgbaTripleFor(ver, exts)
 	if err != nil {
-		// Fall back to the linear RGB colorspace, at the cost of color precision loss.
+
 		srgbTriple = textureTriple{gl.RGBA, gl.Enum(gl.RGBA), gl.Enum(gl.UNSIGNED_BYTE)}
 	}
 	s := &SRGBFBO{
@@ -77,8 +72,8 @@ func (s *SRGBFBO) Blit() {
 	}
 	s.state.useProgram(s.c, s.prog)
 	s.state.bindTexture(s.c, 0, s.tex)
-	s.state.vertexAttribPointer(s.c, s.quad, 0 /* pos */, 2, gl.FLOAT, false, 4*4, 0)
-	s.state.vertexAttribPointer(s.c, s.quad, 1 /* uv */, 2, gl.FLOAT, false, 4*4, 4*2)
+	s.state.vertexAttribPointer(s.c, s.quad, 0, 2, gl.FLOAT, false, 4*4, 0)
+	s.state.vertexAttribPointer(s.c, s.quad, 1, 2, gl.FLOAT, false, 4*4, 4*2)
 	s.state.setVertexAttribArray(s.c, 0, true)
 	s.state.setVertexAttribArray(s.c, 1, true)
 	s.c.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
@@ -107,14 +102,12 @@ func (s *SRGBFBO) Refresh(viewport image.Point) error {
 	}
 
 	if runtime.GOOS == "js" {
-		// With macOS Safari, rendering to and then reading from a SRGB8_ALPHA8
-		// texture result in twice gamma corrected colors. Using a plain RGBA
-		// texture seems to work.
+
 		s.state.setClearColor(s.c, .5, .5, .5, 1.0)
 		s.c.Clear(gl.COLOR_BUFFER_BIT)
 		var pixel [4]byte
 		s.c.ReadPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel[:])
-		if pixel[0] == 128 { // Correct sRGB color value is ~188
+		if pixel[0] == 128 {
 			s.c.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, viewport.X, viewport.Y, gl.RGBA, gl.UNSIGNED_BYTE)
 			if st := s.c.CheckFramebufferStatus(gl.FRAMEBUFFER); st != gl.FRAMEBUFFER_COMPLETE {
 				return fmt.Errorf("fallback RGBA framebuffer incomplete (%dx%d), status: %#x error: %x", viewport.X, viewport.Y, st, s.c.GetError())

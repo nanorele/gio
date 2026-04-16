@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package material
 
 import (
@@ -62,7 +60,6 @@ func (p ProgressBarStyle) Layout(gtx layout.Context) layout.Dimensions {
 	)
 }
 
-// clamp1 limits v to range [0..1].
 func clamp1(v float32) float32 {
 	if v >= 1 {
 		return 1

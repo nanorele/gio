@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package clip
 
 import (
@@ -57,7 +55,7 @@ func TestPath_MoveTo_QuadTo(t *testing.T) {
 }
 
 func TestPath_MoveTo_ArcTo(t *testing.T) {
-	// We need a tolerance here because of rounding errors.
+
 	tolerance := f32.Pt(1, 1)
 
 	var ops op.Ops

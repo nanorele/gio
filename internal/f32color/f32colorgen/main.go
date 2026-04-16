@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package main
 
 import (
@@ -48,9 +46,8 @@ func main() {
 	}
 }
 
-// sRGBToLinear transforms color value from sRGB to linear.
 func sRGBToLinear(c float32) float32 {
-	// Formula from EXT_sRGB.
+
 	if c <= 0.04045 {
 		return c / 12.92
 	} else {

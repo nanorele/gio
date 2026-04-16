@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package headless
 
 import (
@@ -22,7 +20,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		// Don't need it.
+
 		d3d11.IUnknownRelease(unsafe.Pointer(ctx), ctx.Vtbl.Release)
 		return &d3d11Context{dev: dev}, nil
 	}

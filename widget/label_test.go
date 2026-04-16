@@ -9,8 +9,6 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
-// TestGlyphIterator ensures that the glyph iterator computes correct bounding
-// boxes and baselines for a variety of glyph sequences.
 func TestGlyphIterator(t *testing.T) {
 	fontSize := 16
 	stdAscent := fixed.I(fontSize)
@@ -51,7 +49,7 @@ func TestGlyphIterator(t *testing.T) {
 			name:     "simple clipped horizontally",
 			str:      "MMM",
 			viewport: image.Rectangle{Max: image.Pt(20, math.MaxInt)},
-			// The dimensions should only include the first two glyphs.
+
 			expectedDims: image.Rectangle{
 				Max: image.Point{X: 27, Y: stdLineHeight.Round()},
 			},
@@ -62,7 +60,7 @@ func TestGlyphIterator(t *testing.T) {
 			name:     "simple clipped vertically",
 			str:      "M\nM\nM\nM",
 			viewport: image.Rectangle{Max: image.Pt(math.MaxInt, 2*stdLineHeight.Floor()-3)},
-			// The dimensions should only include the first two lines.
+
 			expectedDims: image.Rectangle{
 				Max: image.Point{X: 14, Y: 39},
 			},
@@ -74,7 +72,7 @@ func TestGlyphIterator(t *testing.T) {
 			str:      "mmm",
 			maxLines: 1,
 			viewport: image.Rectangle{Max: image.Pt(math.MaxInt, math.MaxInt)},
-			// This truncation should have no effect because the text is already one line.
+
 			expectedDims: image.Rectangle{
 				Max: image.Point{X: 40, Y: stdLineHeight.Round()},
 			},
@@ -103,7 +101,7 @@ func TestGlyphIterator(t *testing.T) {
 		},
 		{
 			name:     "multi-line with soft newline",
-			str:      "你好", // UAX#14 allows line breaking between these characters.
+			str:      "你好",
 			maxWidth: fontSize,
 			viewport: image.Rectangle{Max: image.Pt(math.MaxInt, math.MaxInt)},
 			expectedDims: image.Rectangle{
@@ -116,8 +114,7 @@ func TestGlyphIterator(t *testing.T) {
 			name:     "trailing hard newline",
 			str:      "m\n",
 			viewport: image.Rectangle{Max: image.Pt(math.MaxInt, math.MaxInt)},
-			// We expect the dimensions to account for two vertical lines because of the
-			// newline at the end.
+
 			expectedDims: image.Rectangle{
 				Max: image.Point{X: 14, Y: 39},
 			},
@@ -129,8 +126,7 @@ func TestGlyphIterator(t *testing.T) {
 			str:      "m\n",
 			maxLines: 1,
 			viewport: image.Rectangle{Max: image.Pt(math.MaxInt, math.MaxInt)},
-			// We expect the dimensions to reflect only a single line despite the newline
-			// at the end.
+
 			expectedDims: image.Rectangle{
 				Max: image.Point{X: 14, Y: 20},
 			},
@@ -164,8 +160,6 @@ func TestGlyphIterator(t *testing.T) {
 	}
 }
 
-// TestGlyphIteratorPadding ensures that the glyph iterator computes correct padding
-// around glyphs with unusual bounding boxes.
 func TestGlyphIteratorPadding(t *testing.T) {
 	type testcase struct {
 		name             string

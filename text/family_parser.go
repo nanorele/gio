@@ -97,9 +97,7 @@ func unescape(s string, quote rune) (string, error) {
 			continue
 		}
 		hitNonSpace = true
-		// If we get here, we're not looking at whitespace.
-		// Insert any buffered up whitespace characters from
-		// the gap between words.
+
 		b.WriteString(wb.String())
 		wb.Reset()
 		if r == '\\' {
@@ -161,7 +159,6 @@ func (l *lexer) ignore() {
 	l.pos = 0
 }
 
-// next decodes the next rune in the input and returns it.
 func (l *lexer) next() int32 {
 	if l.pos >= len(l.input) {
 		return -1
@@ -171,13 +168,10 @@ func (l *lexer) next() int32 {
 	return r
 }
 
-// emit adds a token of the given kind.
 func (l *lexer) emit(t tokenKind) {
 	l.emitProcessed(t, func(s string) (string, error) { return s, nil })
 }
 
-// emitProcessed adds a token of the given kind, but transforms its value
-// with the provided closure first.
 func (l *lexer) emitProcessed(t tokenKind, f func(string) (string, error)) error {
 	val, err := f(l.input[:l.pos])
 	l.tokens = append(l.tokens, token{
@@ -188,7 +182,6 @@ func (l *lexer) emitProcessed(t tokenKind, f func(string) (string, error)) error
 	return err
 }
 
-// run executes the lexer on the given input.
 func (l *lexer) run(input string) ([]token, error) {
 	l.input = input
 	l.tokens = l.tokens[:0]
@@ -199,17 +192,12 @@ func (l *lexer) run(input string) ([]token, error) {
 	return l.tokens, l.err
 }
 
-// parser implements a simple recursive descent parser for font family fallback
-// expressions.
 type parser struct {
 	faces  []string
 	lexer  lexer
 	tokens []token
 }
 
-// parse the provided rule and return the extracted font families. The returned families
-// are valid only until the next call to parse. If parsing fails, an error describing the
-// failure is returned instead.
 func (p *parser) parse(rule string) ([]string, error) {
 	var err error
 	p.tokens, err = p.lexer.run(rule)
@@ -220,9 +208,6 @@ func (p *parser) parse(rule string) ([]string, error) {
 	return p.faces, p.parseList()
 }
 
-// parse implements the production:
-//
-//	LIST ::= <FACE> <COMMA> <LIST> | <FACE>
 func (p *parser) parseList() error {
 	if len(p.tokens) == 0 {
 		return fmt.Errorf("expected family name, got EOF")

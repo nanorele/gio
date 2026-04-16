@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package gl
 
 type (
@@ -125,7 +123,6 @@ const (
 	WRITE_ONLY                            = 0x88B9
 	ZERO                                  = 0x0
 
-	// EXT_disjoint_timer_query
 	TIME_ELAPSED_EXT = 0x88BF
 	GPU_DISJOINT_EXT = 0x8FBB
 )

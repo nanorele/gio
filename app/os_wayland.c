@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: Unlicense OR MIT
 
-//go:build ((linux && !android) || freebsd) && !nowayland
-// +build linux,!android freebsd
+
+//go:build (linux || freebsd) && !nowayland
+// +build linux freebsd
 // +build !nowayland
 
 #include <wayland-client.h>
@@ -11,7 +11,7 @@
 #include "_cgo_export.h"
 
 const struct wl_registry_listener gio_registry_listener = {
-	// Cast away const parameter.
+	
 	.global = (void (*)(void *, struct wl_registry *, uint32_t,  const char *, uint32_t))gio_onRegistryGlobal,
 	.global_remove = gio_onRegistryGlobalRemove
 };
@@ -47,7 +47,7 @@ const struct wl_callback_listener gio_callback_listener = {
 };
 
 const struct wl_output_listener gio_output_listener = {
-	// Cast away const parameter.
+	
 	.geometry = (void (*)(void *, struct wl_output *, int32_t,  int32_t,  int32_t,  int32_t,  int32_t,  const char *, const char *, int32_t))gio_onOutputGeometry,
 	.mode = gio_onOutputMode,
 	.done = gio_onOutputDone,
@@ -56,7 +56,7 @@ const struct wl_output_listener gio_output_listener = {
 
 const struct wl_seat_listener gio_seat_listener = {
 	.capabilities = gio_onSeatCapabilities,
-	// Cast away const parameter.
+	
 	.name = (void (*)(void *, struct wl_seat *, const char *))gio_onSeatName,
 };
 
@@ -92,7 +92,7 @@ const struct wl_keyboard_listener gio_keyboard_listener = {
 const struct zwp_text_input_v3_listener gio_zwp_text_input_v3_listener = {
 	.enter = gio_onTextInputEnter,
 	.leave = gio_onTextInputLeave,
-	// Cast away const parameter.
+	
 	.preedit_string = (void (*)(void *, struct zwp_text_input_v3 *, const char *, int32_t,  int32_t))gio_onTextInputPreeditString,
 	.commit_string = (void (*)(void *, struct zwp_text_input_v3 *, const char *))gio_onTextInputCommitString,
 	.delete_surrounding_text = gio_onTextInputDeleteSurroundingText,

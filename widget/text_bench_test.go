@@ -125,7 +125,7 @@ func BenchmarkLabelDynamic(b *testing.B) {
 		r := rand.New(rand.NewSource(42))
 		b.ResetTimer()
 		for b.Loop() {
-			// simulate a constantly changing string
+
 			a := r.Intn(len(runes))
 			b := r.Intn(len(runes))
 			runes[a], runes[b] = runes[b], runes[a]
@@ -195,7 +195,7 @@ func BenchmarkEditorDynamic(b *testing.B) {
 		r := rand.New(rand.NewSource(42))
 		b.ResetTimer()
 		for b.Loop() {
-			// simulate a constantly changing string
+
 			a := r.Intn(e.Len())
 			b := r.Intn(e.Len())
 			e.SetCaret(a, a+1)
@@ -228,7 +228,7 @@ func FuzzEditorEditing(f *testing.F) {
 	f.Fuzz(func(t *testing.T, txt string, replaceFrom, replaceTo int16) {
 		e.SetText(txt)
 		e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
-		// simulate a constantly changing string
+
 		if e.Len() > 0 {
 			a := int(replaceFrom) % e.Len()
 			b := int(replaceTo) % e.Len()

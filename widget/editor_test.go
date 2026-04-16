@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package widget
 
 import (
@@ -35,43 +33,40 @@ var english = system.Locale{
 	Direction: system.LTR,
 }
 
-// TestEditorHistory ensures that undo and redo behave correctly.
 func TestEditorHistory(t *testing.T) {
 	e := new(Editor)
-	// Insert some multi-byte unicode text.
+
 	e.SetText("안П你 hello 안П你")
 	assertContents(t, e, "안П你 hello 안П你", 0, 0)
-	// Overwrite all of the text with the empty string.
+
 	e.SetCaret(0, len([]rune("안П你 hello 안П你")))
 	e.Insert("")
 	assertContents(t, e, "", 0, 0)
-	// Ensure that undoing the overwrite succeeds.
+
 	e.undo()
 	assertContents(t, e, "안П你 hello 안П你", 13, 0)
-	// Ensure that redoing the overwrite succeeds.
+
 	e.redo()
 	assertContents(t, e, "", 0, 0)
-	// Insert some smaller text.
+
 	e.Insert("안П你 hello")
 	assertContents(t, e, "안П你 hello", 9, 9)
-	// Replace a region in the middle of the text.
+
 	e.SetCaret(1, 5)
 	e.Insert("П")
 	assertContents(t, e, "안Пello", 2, 2)
-	// Replace a second region in the middle.
+
 	e.SetCaret(3, 4)
 	e.Insert("П")
 	assertContents(t, e, "안ПeПlo", 4, 4)
-	// Ensure both operations undo successfully.
+
 	e.undo()
 	assertContents(t, e, "안Пello", 4, 3)
 	e.undo()
 	assertContents(t, e, "안П你 hello", 5, 1)
-	// Make a new modification.
+
 	e.Insert("Something New")
-	// Ensure that redo history is discarded now that
-	// we've diverged from the linear editing history.
-	// This redo() call should do nothing.
+
 	text := e.Text()
 	start, end := e.Selection()
 	e.redo()
@@ -93,8 +88,6 @@ func assertContents(t *testing.T, e *Editor, contents string, selectionStart, se
 	}
 }
 
-// TestEditorReadOnly ensures that mouse and keyboard interactions with readonly
-// editors do nothing but manipulate the text selection.
 func TestEditorReadOnly(t *testing.T) {
 	r := new(input.Router)
 	gtx := layout.Context{
@@ -128,7 +121,6 @@ func TestEditorReadOnly(t *testing.T) {
 	layoutEditor()
 	r.Frame(gtx.Ops)
 
-	// Select everything.
 	gtx.Ops.Reset()
 	r.Queue(key.Event{Name: "A", Modifiers: key.ModShortcut})
 	layoutEditor()
@@ -144,7 +136,6 @@ func TestEditorReadOnly(t *testing.T) {
 		t.Errorf("expected selection to start at rune 0, got %d", cStart2)
 	}
 
-	// Type some new characters.
 	gtx.Ops.Reset()
 	r.Queue(key.EditEvent{Range: key.Range{Start: cStart2, End: cEnd2}, Text: "something else"})
 	e.Update(gtx)
@@ -153,7 +144,6 @@ func TestEditorReadOnly(t *testing.T) {
 		t.Errorf("readonly editor modified by key.EditEvent")
 	}
 
-	// Try to delete selection.
 	gtx.Ops.Reset()
 	r.Queue(key.Event{Name: key.NameDeleteBackward})
 	dims := layoutEditor()
@@ -162,8 +152,6 @@ func TestEditorReadOnly(t *testing.T) {
 		t.Errorf("readonly editor modified by delete key.Event")
 	}
 
-	// Click and drag from the middle of the first line
-	// to the center.
 	gtx.Ops.Reset()
 	r.Queue(
 		pointer.Event{
@@ -201,8 +189,6 @@ func TestEditorConfigurations(t *testing.T) {
 	sentence := "\n\n\n\n\n\n\n\n\n\n\n\nthe quick brown fox jumps over the lazy dog"
 	runes := len([]rune(sentence))
 
-	// Ensure that both ends of the text are reachable in all permutations
-	// of settings that influence layout.
 	for _, singleLine := range []bool{true, false} {
 		for _, alignment := range []text.Alignment{text.Start, text.Middle, text.End} {
 			for _, zeroMin := range []bool{true, false} {
@@ -253,14 +239,13 @@ func TestEditor(t *testing.T) {
 	fontSize := unit.Sp(10)
 	font := font.Font{}
 
-	// Regression test for bad in-cluster rune offset math.
 	e.SetText("æbc")
 	e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
 	e.text.MoveLineEnd(selectionClear)
 	assertCaret(t, e, 0, 3, len("æbc"))
 
 	textSample := "æbc\naøå••"
-	e.SetCaret(0, 0) // shouldn't panic
+	e.SetCaret(0, 0)
 	assertCaret(t, e, 0, 0, 0)
 	e.SetText(textSample)
 	if got, exp := e.Len(), utf8.RuneCountInString(e.Text()); got != exp {
@@ -289,7 +274,6 @@ func TestEditor(t *testing.T) {
 	e.SetCaret(utf8.RuneCountInString("æbc\naøå•"), utf8.RuneCountInString("æbc\naøå•"))
 	assertCaret(t, e, 1, 4, len("æbc\naøå•"))
 
-	// Ensure that password masking does not affect caret behavior
 	e.MoveCaret(-3, -3)
 	assertCaret(t, e, 1, 1, len("æbc\na"))
 	e.text.Mask = '*'
@@ -297,7 +281,7 @@ func TestEditor(t *testing.T) {
 	assertCaret(t, e, 1, 1, len("æbc\na"))
 	e.MoveCaret(-3, -3)
 	assertCaret(t, e, 0, 2, len("æb"))
-	// Test that moveLine applies x offsets from previous moves.
+
 	e.SetText("long line\nshort")
 	e.SetCaret(0, 0)
 	e.text.MoveLineEnd(selectionClear)
@@ -327,11 +311,9 @@ func TestEditorRTL(t *testing.T) {
 	fontSize := unit.Sp(10)
 	font := font.Font{}
 
-	e.SetCaret(0, 0) // shouldn't panic
+	e.SetCaret(0, 0)
 	assertCaret(t, e, 0, 0, 0)
 
-	// Set the text to a single RTL word. The caret should start at 0 column
-	// zero, but this is the first column on the right.
 	e.SetText("الحب")
 	e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
 	assertCaret(t, e, 0, 0, 0)
@@ -341,7 +323,7 @@ func TestEditorRTL(t *testing.T) {
 	assertCaret(t, e, 0, 2, len("ال"))
 	e.MoveCaret(+1, +1)
 	assertCaret(t, e, 0, 3, len("الح"))
-	// Move to the "end" of the line. This moves to the left edge of the line.
+
 	e.text.MoveLineEnd(selectionClear)
 	assertCaret(t, e, 0, 4, len("الحب"))
 
@@ -404,18 +386,9 @@ func TestEditorLigature(t *testing.T) {
 	fontSize := unit.Sp(10)
 	font := font.Font{}
 
-	/*
-		In this font, the following rune sequences form ligatures:
-
-		- ffi
-		- ffl
-		- fi
-		- fl
-	*/
-
-	e.SetCaret(0, 0) // shouldn't panic
+	e.SetCaret(0, 0)
 	assertCaret(t, e, 0, 0, 0)
-	e.SetText("fl") // just a ligature
+	e.SetText("fl")
 	e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
 	e.text.MoveLineEnd(selectionClear)
 	assertCaret(t, e, 0, 2, len("fl"))
@@ -425,7 +398,7 @@ func TestEditorLigature(t *testing.T) {
 	assertCaret(t, e, 0, 0, 0)
 	e.MoveCaret(+2, +2)
 	assertCaret(t, e, 0, 2, len("fl"))
-	e.SetText("flaffl•ffi\n•fflfi") // 3 ligatures on line 0, 2 on line 1
+	e.SetText("flaffl•ffi\n•fflfi")
 	e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
 	assertCaret(t, e, 0, 0, 0)
 	e.text.MoveLineEnd(selectionClear)
@@ -477,28 +450,24 @@ func TestEditorLigature(t *testing.T) {
 	e.MoveCaret(-1, -1)
 	assertCaret(t, e, 0, 0, 0)
 	gtx.Constraints = layout.Exact(image.Pt(50, 50))
-	e.SetText("fflffl fflffl fflffl fflffl") // Many ligatures broken across lines.
+	e.SetText("fflffl fflffl fflffl fflffl")
 	e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
-	// Ensure that all runes in the final cluster of a line are properly
-	// decoded when moving to the end of the line. This is a regression test.
+
 	e.text.MoveLineEnd(selectionClear)
-	// The first line was broken by line wrapping, not a newline character, and has a trailing
-	// whitespace. However, we should never be able to reach the "other side" of such a trailing
-	// whitespace glyph.
+
 	assertCaret(t, e, 0, 13, len("fflffl fflffl"))
 	e.text.MoveLines(1, selectionClear)
 	assertCaret(t, e, 1, 13, len("fflffl fflffl fflffl fflffl"))
 	e.text.MoveLines(-1, selectionClear)
 	assertCaret(t, e, 0, 13, len("fflffl fflffl"))
 
-	// Absurdly narrow constraints to force each ligature onto its own line.
 	gtx.Constraints = layout.Exact(image.Pt(10, 10))
-	e.SetText("ffl ffl") // Two ligatures on separate lines.
+	e.SetText("ffl ffl")
 	e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
 	assertCaret(t, e, 0, 0, 0)
-	e.MoveCaret(1, 1) // Move the caret into the first ligature.
+	e.MoveCaret(1, 1)
 	assertCaret(t, e, 0, 1, len("f"))
-	e.MoveCaret(4, 4) // Move the caret several positions.
+	e.MoveCaret(4, 4)
 	assertCaret(t, e, 1, 1, len("ffl f"))
 }
 
@@ -524,8 +493,6 @@ func TestEditorDimensions(t *testing.T) {
 	}
 }
 
-// assertCaret asserts that the editor caret is at a particular line
-// and column, and that the byte position matches as well.
 func assertCaret(t *testing.T, e *Editor, line, col, bytes int) {
 	t.Helper()
 	gotLine, gotCol := e.CaretPos()
@@ -536,8 +503,7 @@ func assertCaret(t *testing.T, e *Editor, line, col, bytes int) {
 	if bytes != caretBytes {
 		t.Errorf("caret at buffer position %d, expected %d", caretBytes, bytes)
 	}
-	// Ensure that SelectedText() does not panic no matter what the
-	// editor's state is.
+
 	_ = e.SelectedText()
 }
 
@@ -555,7 +521,7 @@ const (
 	moveCoord
 	moveWord
 	deleteWord
-	moveLast // Mark end; never generated.
+	moveLast
 )
 
 func TestEditorCaretConsistency(t *testing.T) {
@@ -576,7 +542,7 @@ func TestEditorCaretConsistency(t *testing.T) {
 			t.Helper()
 			gotLine, gotCol := e.CaretPos()
 			gotCoords := e.CaretCoords()
-			// Blow away index to re-compute position from scratch.
+
 			e.text.invalidate()
 			want := e.text.closestToRune(e.text.caret.start)
 			wantCoords := f32.Pt(float32(want.x)/64, float32(want.y))
@@ -685,7 +651,7 @@ func TestEditorInsert(t *testing.T) {
 		Result string
 	}
 	tests := []Test{
-		// Nothing inserted
+
 		{"", 0, 0, "", ""},
 		{"", 0, -1, "", ""},
 		{"", 0, 1, "", ""},
@@ -700,7 +666,7 @@ func TestEditorInsert(t *testing.T) {
 		{"world", 5, 0, "", "world"},
 		{"world", 5, -1, "", "worl"},
 		{"world", 5, 1, "", "world"},
-		// One rune inserted
+
 		{"", 0, 0, "_", "_"},
 		{"", 0, -1, "_", "_"},
 		{"", 0, 1, "_", "_"},
@@ -715,7 +681,7 @@ func TestEditorInsert(t *testing.T) {
 		{"world", 5, 0, "_", "world_"},
 		{"world", 5, -1, "_", "worl_"},
 		{"world", 5, 1, "_", "world_"},
-		// More runes inserted
+
 		{"", 0, 0, "-3-", "-3-"},
 		{"", 0, -1, "-3-", "-3-"},
 		{"", 0, 1, "-3-", "-3-"},
@@ -730,7 +696,7 @@ func TestEditorInsert(t *testing.T) {
 		{"world", 5, 0, "-3-", "world-3-"},
 		{"world", 5, -1, "-3-", "worl-3-"},
 		{"world", 5, 1, "-3-", "world-3-"},
-		// Runes with length > 1 inserted
+
 		{"", 0, 0, "éêè", "éêè"},
 		{"", 0, -1, "éêè", "éêè"},
 		{"", 0, 1, "éêè", "éêè"},
@@ -745,7 +711,7 @@ func TestEditorInsert(t *testing.T) {
 		{"world", 5, 0, "éêè", "worldéêè"},
 		{"world", 5, -1, "éêè", "worléêè"},
 		{"world", 5, 1, "éêè", "worldéêè"},
-		// Runes with length > 1 deleted from selection
+
 		{"élançé", 0, 1, "", "lançé"},
 		{"élançé", 0, 1, "-3-", "-3-lançé"},
 		{"élançé", 3, 2, "-3-", "éla-3-é"},
@@ -788,7 +754,7 @@ func TestEditorDeleteWord(t *testing.T) {
 		Result string
 	}
 	tests := []Test{
-		// No text selected
+
 		{"", 0, 0, 0, 0, ""},
 		{"", 0, 0, -1, 0, ""},
 		{"", 0, 0, 1, 0, ""},
@@ -797,14 +763,12 @@ func TestEditorDeleteWord(t *testing.T) {
 		{"hello", 0, 0, -1, 0, "hello"},
 		{"hello", 0, 0, 1, 0, ""},
 
-		// Document (imho) incorrect behavior w.r.t. deleting spaces following
-		// words.
-		{"hello world", 0, 0, 1, 0, " world"},   // Should be "world", if you ask me.
-		{"hello world", 0, 0, 2, 0, "world"},    // Should be "".
-		{"hello ", 0, 0, 1, 0, " "},             // Should be "".
-		{"hello world", 11, 0, -1, 6, "hello "}, // Should be "hello".
-		{"hello world", 11, 0, -2, 5, "hello"},  // Should be "".
-		{"hello ", 6, 0, -1, 0, ""},             // Correct result.
+		{"hello world", 0, 0, 1, 0, " world"},
+		{"hello world", 0, 0, 2, 0, "world"},
+		{"hello ", 0, 0, 1, 0, " "},
+		{"hello world", 11, 0, -1, 6, "hello "},
+		{"hello world", 11, 0, -2, 5, "hello"},
+		{"hello ", 6, 0, -1, 0, ""},
 
 		{"hello world", 3, 0, 1, 3, "hel world"},
 		{"hello world", 3, 0, -1, 0, "lo world"},
@@ -815,30 +779,23 @@ func TestEditorDeleteWord(t *testing.T) {
 		{"hello    world", 8, 0, 1, 8, "hello   "},
 		{"hello    world", 8, 0, -1, 5, "hello world"},
 		{"hello brave new world", 0, 0, 3, 0, " new world"},
-		{"helléèçàô world", 3, 0, 1, 3, "hel world"}, // unicode char with length > 1 in deleted part
-		// Add selected text.
-		//
-		// Several permutations must be tested:
-		// - select from the left or right
-		// - Delete + or -
-		// - abs(Delete) == 1 or > 1
-		//
-		// "brave |" selected; caret at |
-		{"hello there brave new world", 12, 6, 1, 12, "hello there new world"}, // #16
-		{"hello there brave new world", 12, 6, 2, 12, "hello there  world"},    // The two spaces after "there" are actually suboptimal, if you ask me. See also above cases.
+		{"helléèçàô world", 3, 0, 1, 3, "hel world"},
+
+		{"hello there brave new world", 12, 6, 1, 12, "hello there new world"},
+		{"hello there brave new world", 12, 6, 2, 12, "hello there  world"},
 		{"hello there brave new world", 12, 6, -1, 12, "hello there new world"},
 		{"hello there brave new world", 12, 6, -2, 6, "hello new world"},
-		{"hello there b®âve new world", 12, 6, 1, 12, "hello there new world"},  // unicode chars with length > 1 in selection
-		{"hello there b®âve new world", 12, 6, 2, 12, "hello there  world"},     // ditto
-		{"hello there b®âve new world", 12, 6, -1, 12, "hello there new world"}, // ditto
-		{"hello there b®âve new world", 12, 6, -2, 6, "hello new world"},        // ditto
-		// "|brave " selected
-		{"hello there brave new world", 18, -6, 1, 12, "hello there new world"}, // #20
-		{"hello there brave new world", 18, -6, 2, 12, "hello there  world"},    // ditto
+		{"hello there b®âve new world", 12, 6, 1, 12, "hello there new world"},
+		{"hello there b®âve new world", 12, 6, 2, 12, "hello there  world"},
+		{"hello there b®âve new world", 12, 6, -1, 12, "hello there new world"},
+		{"hello there b®âve new world", 12, 6, -2, 6, "hello new world"},
+
+		{"hello there brave new world", 18, -6, 1, 12, "hello there new world"},
+		{"hello there brave new world", 18, -6, 2, 12, "hello there  world"},
 		{"hello there brave new world", 18, -6, -1, 12, "hello there new world"},
 		{"hello there brave new world", 18, -6, -2, 6, "hello new world"},
-		{"hello there b®âve new world", 18, -6, 1, 12, "hello there new world"}, // unicode chars with length > 1 in selection
-		// Random edge cases
+		{"hello there b®âve new world", 18, -6, 1, 12, "hello there new world"},
+
 		{"hello there brave new world", 12, 6, 99, 12, "hello there "},
 		{"hello there brave new world", 18, -6, -99, 0, "new world"},
 	}
@@ -874,17 +831,11 @@ func TestEditorNoLayout(t *testing.T) {
 	e.MoveCaret(1, 1)
 }
 
-// Generate generates a value of itself, for testing/quick.
 func (editMutation) Generate(rand *rand.Rand, size int) reflect.Value {
 	t := editMutation(rand.Intn(int(moveLast)))
 	return reflect.ValueOf(t)
 }
 
-// TestEditorSelect tests the selection code. It lays out an editor with several
-// lines in it, selects some text, verifies the selection, resizes the editor
-// to make it much narrower (which makes the lines in the editor reflow), and
-// then verifies that the updated (col, line) positions of the selected text
-// are where we expect.
 func TestEditorSelectReflow(t *testing.T) {
 	e := new(Editor)
 	e.SetText(`a 2 4 6 8 a
@@ -909,12 +860,12 @@ g 2 4 6 8 g
 	var tim time.Duration
 	selected := func(start, end int) string {
 		gtx.Execute(key.FocusCmd{Tag: e})
-		// Layout once with no events; populate e.lines.
+
 		e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
 
 		r.Frame(gtx.Ops)
 		gtx.Source = r.Source()
-		// Build the selection events
+
 		startPos := e.text.closestToRune(start)
 		endPos := e.text.closestToRune(end)
 		r.Queue(
@@ -932,10 +883,10 @@ g 2 4 6 8 g
 				Position: f32.Pt(textWidth(e, endPos.lineCol.line, 0, endPos.lineCol.col), textBaseline(e, endPos.lineCol.line)),
 			},
 		)
-		tim += time.Second // Avoid multi-clicks.
+		tim += time.Second
 
 		for {
-			_, ok := e.Update(gtx) // throw away any events from this layout
+			_, ok := e.Update(gtx)
 			if !ok {
 				break
 			}
@@ -953,12 +904,10 @@ g 2 4 6 8 g
 	}
 
 	type testCase struct {
-		// input text offsets
 		start, end int
 
-		// expected selected text
 		selection string
-		// expected line/col positions of selection after resize
+
 		startPos, endPos screenPos
 	}
 
@@ -975,9 +924,8 @@ g 2 4 6 8 g
 			continue
 		}
 
-		// Constrain the editor to roughly 6 columns wide and redraw
 		gtx.Constraints = layout.Exact(image.Pt(36, 36))
-		// Keep existing selection
+
 		gtx = gtx.Disabled()
 		e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
 
@@ -999,11 +947,10 @@ func TestEditorSelectShortcuts(t *testing.T) {
 	lines := "abc abc abc\ndef def def\nghi ghi ghi"
 	tEditor.SetText(lines)
 	type testCase struct {
-		// Initial text selection.
 		startPos, endPos int
-		// Keyboard shortcut to execute.
+
 		keyEvent key.Event
-		// Expected text selection.
+
 		selection string
 	}
 
@@ -1095,7 +1042,6 @@ func TestEditorSelect(t *testing.T) {
 	}
 }
 
-// Verify that an existing selection is dismissed when you press arrow keys.
 func TestSelectMove(t *testing.T) {
 	e := new(Editor)
 	e.SetText(`0123456789`)
@@ -1110,11 +1056,10 @@ func TestSelectMove(t *testing.T) {
 	font := font.Font{}
 	fontSize := unit.Sp(10)
 
-	// Layout once to populate e.lines and get focus.
 	gtx.Execute(key.FocusCmd{Tag: e})
 	e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
 	r.Frame(gtx.Ops)
-	// Set up selecton so the Editor key handler filters for all 4 directional keys.
+
 	e.SetCaret(3, 6)
 	gtx.Ops.Reset()
 	e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
@@ -1124,13 +1069,12 @@ func TestSelectMove(t *testing.T) {
 	r.Frame(gtx.Ops)
 
 	for _, keyName := range []key.Name{key.NameLeftArrow, key.NameRightArrow, key.NameUpArrow, key.NameDownArrow} {
-		// Select 345
+
 		e.SetCaret(3, 6)
 		if expected, got := "345", e.SelectedText(); expected != got {
 			t.Errorf("KeyName %s, expected %q, got %q", keyName, expected, got)
 		}
 
-		// Press the key
 		r.Queue(key.Event{State: key.Press, Name: keyName})
 		gtx.Ops.Reset()
 		e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
@@ -1317,9 +1261,6 @@ func TestNoFilterAllocs(t *testing.T) {
 	}
 }
 
-// textWidth is a text helper for building simple selection events.
-// It assumes single-run lines, which isn't safe with non-test text
-// data.
 func textWidth(e *Editor, lineNum, colStart, colEnd int) float32 {
 	start := e.text.closestToLineCol(lineNum, colStart)
 	end := e.text.closestToLineCol(lineNum, colEnd)
@@ -1330,8 +1271,6 @@ func textWidth(e *Editor, lineNum, colStart, colEnd int) float32 {
 	return float32(delta.Round())
 }
 
-// testBaseline returns the y coordinate of the baseline for the
-// given line number.
 func textBaseline(e *Editor, lineNum int) float32 {
 	start := e.text.closestToLineCol(lineNum, 0)
 	return float32(start.y)

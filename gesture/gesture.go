@@ -1,18 +1,8 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-/*
-Package gesture implements common pointer gestures.
-
-Gestures accept low level pointer Events from an event
-Queue and detect higher level actions such as clicks
-and scrolling.
-*/
 package gesture
 
 import (
 	"image"
 	"math"
-	"runtime"
 	"time"
 
 	"github.com/nanorele/gio/f32"
@@ -25,23 +15,18 @@ import (
 	"github.com/nanorele/gio/unit"
 )
 
-// The duration is somewhat arbitrary.
 const doubleClickDuration = 200 * time.Millisecond
 
-// Hover detects the hover gesture for a pointer area.
 type Hover struct {
-	// entered tracks whether the pointer is inside the gesture.
 	entered bool
-	// pid is the pointer.ID.
+
 	pid pointer.ID
 }
 
-// Add the gesture to detect hovering over the current pointer area.
 func (h *Hover) Add(ops *op.Ops) {
 	event.Op(ops, h)
 }
 
-// Update state and report whether a pointer is inside the area.
 func (h *Hover) Update(q input.Source) bool {
 	for {
 		ev, ok := q.Event(pointer.Filter{
@@ -72,41 +57,31 @@ func (h *Hover) Update(q input.Source) bool {
 	return h.entered
 }
 
-// Click detects click gestures in the form
-// of ClickEvents.
 type Click struct {
-	// clickedAt is the timestamp at which
-	// the last click occurred.
 	clickedAt time.Duration
-	// clicks is incremented if successive clicks
-	// are performed within a fixed duration.
+
 	clicks int
-	// pressed tracks whether the pointer is pressed.
+
 	pressed bool
-	// hovered tracks whether the pointer is inside the gesture.
+
 	hovered bool
-	// entered tracks whether an Enter event has been received.
+
 	entered bool
-	// pid is the pointer.ID.
+
 	pid pointer.ID
 }
 
-// ClickEvent represent a click action, either a
-// KindPress for the beginning of a click or a
-// KindClick for a completed click.
 type ClickEvent struct {
 	Kind      ClickKind
 	Position  image.Point
 	Source    pointer.Source
 	Modifiers key.Modifiers
-	// NumClicks records successive clicks occurring
-	// within a short duration of each other.
+
 	NumClicks int
 }
 
 type ClickKind uint8
 
-// Drag detects drag gestures in the form of pointer.Drag events.
 type Drag struct {
 	dragging bool
 	pressed  bool
@@ -114,16 +89,13 @@ type Drag struct {
 	start    f32.Point
 }
 
-// Scroll detects scroll gestures and reduces them to
-// scroll distances. Scroll recognizes mouse wheel
-// movements as well as drag and fling touch gestures.
 type Scroll struct {
 	dragging  bool
 	estimator fling.Extrapolation
 	flinger   fling.Animation
 	pid       pointer.ID
 	last      int
-	// Leftover scroll.
+
 	scroll float32
 }
 
@@ -138,45 +110,35 @@ const (
 )
 
 const (
-	// KindPress is reported for the first pointer
-	// press.
 	KindPress ClickKind = iota
-	// KindClick is reported when a click action
-	// is complete.
+
 	KindClick
-	// KindCancel is reported when the gesture is
-	// cancelled.
+
 	KindCancel
 )
 
 const (
-	// StateIdle is the default scroll state.
 	StateIdle ScrollState = iota
-	// StateDragging is reported during drag gestures.
+
 	StateDragging
-	// StateFlinging is reported when a fling is
-	// in progress.
+
 	StateFlinging
 )
 
 const touchSlop = unit.Dp(3)
 
-// Add the handler to the operation list to receive click events.
 func (c *Click) Add(ops *op.Ops) {
 	event.Op(ops, c)
 }
 
-// Hovered returns whether a pointer is inside the area.
 func (c *Click) Hovered() bool {
 	return c.hovered
 }
 
-// Pressed returns whether a pointer is pressing.
 func (c *Click) Pressed() bool {
 	return c.pressed
 }
 
-// Update state and return the next click events, if any.
 func (c *Click) Update(q input.Source) (ClickEvent, bool) {
 	for {
 		evt, ok := q.Event(pointer.Filter{
@@ -258,19 +220,14 @@ func (c *Click) Update(q input.Source) (ClickEvent, bool) {
 
 func (ClickEvent) ImplementsEvent() {}
 
-// Add the handler to the operation list to receive scroll events.
-// The bounds variable refers to the scrolling boundaries
-// as defined in [pointer.Filter].
 func (s *Scroll) Add(ops *op.Ops) {
 	event.Op(ops, s)
 }
 
-// Stop any remaining fling movement.
 func (s *Scroll) Stop() {
 	s.flinger = fling.Animation{}
 }
 
-// Update state and report the scroll distance along axis.
 func (s *Scroll) Update(cfg unit.Metric, q input.Source, t time.Time, axis Axis, scrollx, scrolly pointer.ScrollRange) int {
 	total := 0
 	f := pointer.Filter{
@@ -293,9 +250,8 @@ func (s *Scroll) Update(cfg unit.Metric, q input.Source, t time.Time, axis Axis,
 			if s.dragging {
 				break
 			}
-			// Only scroll on touch drags, or on Android where mice
-			// drags also scroll by convention.
-			if e.Source != pointer.Touch && runtime.GOOS != "android" {
+
+			if e.Source != pointer.Touch {
 				break
 			}
 			s.Stop()
@@ -367,7 +323,6 @@ func (s *Scroll) val(axis Axis, p f32.Point) float32 {
 	}
 }
 
-// State reports the scroll state.
 func (s *Scroll) State() ScrollState {
 	switch {
 	case s.flinger.Active():
@@ -379,12 +334,10 @@ func (s *Scroll) State() ScrollState {
 	}
 }
 
-// Add the handler to the operation list to receive drag events.
 func (d *Drag) Add(ops *op.Ops) {
 	event.Op(ops, d)
 }
 
-// Update state and return the next drag event, if any.
 func (d *Drag) Update(cfg unit.Metric, q input.Source, axis Axis) (pointer.Event, bool) {
 	for {
 		ev, ok := q.Event(pointer.Filter{
@@ -421,7 +374,7 @@ func (d *Drag) Update(cfg unit.Metric, q input.Source, axis Axis) (pointer.Event
 			case Vertical:
 				e.Position.X = d.start.X
 			case Both:
-				// Do nothing
+
 			}
 			if e.Priority < pointer.Grabbed {
 				diff := e.Position.Sub(d.start)
@@ -444,10 +397,8 @@ func (d *Drag) Update(cfg unit.Metric, q input.Source, axis Axis) (pointer.Event
 	return pointer.Event{}, false
 }
 
-// Dragging reports whether it is currently in use.
 func (d *Drag) Dragging() bool { return d.dragging }
 
-// Pressed returns whether a pointer is pressing.
 func (d *Drag) Pressed() bool { return d.pressed }
 
 func (a Axis) String() string {

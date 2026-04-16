@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package widget
 
 import (
@@ -9,14 +7,10 @@ import (
 	"golang.org/x/text/runes"
 )
 
-// editBuffer implements a gap buffer for text editing.
 type editBuffer struct {
-	// The gap start and end in bytes.
 	gapstart, gapend int
 	text             []byte
 
-	// changed tracks whether the buffer content
-	// has changed since the last call to Changed.
 	changed bool
 }
 
@@ -47,15 +41,13 @@ func (e *editBuffer) deleteRunes(caret, count int) (bytes int, runes int) {
 	return
 }
 
-// moveGap moves the gap to the caret position. After returning,
-// the gap is guaranteed to be at least space bytes long.
 func (e *editBuffer) moveGap(caret, space int) {
 	if e.gapLen() < space {
 		if space < minSpace {
 			space = minSpace
 		}
 		txt := make([]byte, int(e.Size())+space)
-		// Expand to capacity.
+
 		txt = txt[:cap(txt)]
 		gaplen := len(txt) - int(e.Size())
 		if caret > e.gapstart {

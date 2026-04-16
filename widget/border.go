@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package widget
 
 import (
@@ -12,7 +10,6 @@ import (
 	"github.com/nanorele/gio/unit"
 )
 
-// Border lays out a widget and draws a border inside it.
 type Border struct {
 	Color        color.NRGBA
 	CornerRadius unit.Dp

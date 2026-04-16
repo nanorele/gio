@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package material
 
 import (
@@ -17,20 +15,18 @@ import (
 
 type EditorStyle struct {
 	Font font.Font
-	// LineHeight controls the distance between the baselines of lines of text.
-	// If zero, a sensible default will be used.
+
 	LineHeight unit.Sp
-	// LineHeightScale applies a scaling factor to the LineHeight. If zero, a
-	// sensible default will be used.
+
 	LineHeightScale float32
 	TextSize        unit.Sp
-	// Color is the text color.
+
 	Color color.NRGBA
-	// Hint contains the text displayed when the editor is empty.
+
 	Hint string
-	// HintColor is the color of hint text.
+
 	HintColor color.NRGBA
-	// SelectionColor is the color of the background for selected text.
+
 	SelectionColor color.NRGBA
 	Editor         *widget.Editor
 
@@ -53,7 +49,7 @@ func Editor(th *Theme, editor *widget.Editor, hint string) EditorStyle {
 }
 
 func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
-	// Choose colors.
+
 	textColorMacro := op.Record(gtx.Ops)
 	paint.ColorOp{Color: e.Color}.Add(gtx.Ops)
 	textColor := textColorMacro.Stop()

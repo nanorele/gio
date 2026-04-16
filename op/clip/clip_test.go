@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package clip_test
 
 import (
@@ -46,7 +44,7 @@ func TestPathBegin(t *testing.T) {
 	if w == nil {
 		return
 	}
-	// The following should not panic.
+
 	_ = w.Frame(ops)
 }
 

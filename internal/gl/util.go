@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package gl
 
 import (
@@ -77,7 +75,7 @@ func ParseGLVersion(glVer string) (version [2]int, gles bool, err error) {
 	if _, err := fmt.Sscanf(glVer, "OpenGL ES %d.%d", &ver[0], &ver[1]); err == nil {
 		return ver, true, nil
 	} else if _, err := fmt.Sscanf(glVer, "WebGL %d.%d", &ver[0], &ver[1]); err == nil {
-		// WebGL major version v corresponds to OpenGL ES version v + 1
+
 		ver[0]++
 		return ver, true, nil
 	} else if _, err := fmt.Sscanf(glVer, "%d.%d", &ver[0], &ver[1]); err == nil {

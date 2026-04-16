@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package input
 
 import (
@@ -22,8 +20,6 @@ import (
 	"github.com/nanorele/gio/op"
 )
 
-// Router tracks the [io/event.Tag] identifiers of user interface widgets
-// and routes events to them. [Source] is its interface exposed to widgets.
 type Router struct {
 	savedTrans []f32.Affine2D
 	transStack []f32.Affine2D
@@ -34,47 +30,37 @@ type Router struct {
 	}
 	key struct {
 		queue keyQueue
-		// The following fields have the same purpose as the fields in
-		// type handler, but for key.Events.
+
 		filter        keyFilter
 		nextFilter    keyFilter
 		scratchFilter keyFilter
 	}
 	cqueue clipboardQueue
-	// states is the list of pending state changes resulting from
-	// incoming events. The first element, if present, contains the state
-	// and events for the current frame.
+
 	changes []stateChange
 	reader  ops.Reader
-	// InvalidateCmd summary.
+
 	wakeup     bool
 	wakeupTime time.Time
-	// Changes queued for next call to Frame.
+
 	commands []Command
-	// transfers is the pending transfer.DataEvent.Open functions.
+
 	transfers []io.ReadCloser
-	// deferring is set if command execution and event delivery is deferred
-	// to the next frame.
+
 	deferring bool
-	// scratchFilters is for garbage-free construction of ephemeral filters.
+
 	scratchFilters []taggedFilter
 }
 
-// Source implements the interface between a Router and user interface widgets.
-// The zero-value Source is disabled.
 type Source struct {
 	r        *Router
 	disabled bool
 }
 
-// Command represents a request such as moving the focus, or initiating a clipboard read.
-// Commands are queued by calling [Source.Queue].
 type Command interface {
 	ImplementsCommand()
 }
 
-// SemanticNode represents a node in the tree describing the components
-// contained in a frame.
 type SemanticNode struct {
 	ID       SemanticID
 	ParentID SemanticID
@@ -84,7 +70,6 @@ type SemanticNode struct {
 	areaIdx int
 }
 
-// SemanticDesc provides a semantic description of a UI component.
 type SemanticDesc struct {
 	Class       semantic.ClassOp
 	Description string
@@ -95,7 +80,6 @@ type SemanticDesc struct {
 	Bounds      image.Rectangle
 }
 
-// SemanticGestures is a bit-set of supported gestures.
 type SemanticGestures int
 
 const (
@@ -103,75 +87,55 @@ const (
 	ScrollGesture
 )
 
-// SemanticID uniquely identifies a SemanticDescription.
-//
-// By convention, the zero value denotes the non-existent ID.
 type SemanticID uint
 
-// SystemEvent is a marker for events that have platform specific
-// side-effects. SystemEvents are never matched by catch-all filters.
 type SystemEvent struct {
 	Event event.Event
 }
 
-// handler contains the per-handler state tracked by a [Router].
 type handler struct {
-	// active tracks whether the handler was active in the current
-	// frame. Router deletes state belonging to inactive handlers during Frame.
 	active  bool
 	pointer pointerHandler
 	key     keyHandler
-	// filter the handler has asked for through event handling
-	// in the previous frame. It is used for routing events in the
-	// current frame.
+
 	filter filter
-	// prevFilter is the filter being built in the current frame.
+
 	nextFilter filter
-	// processedFilter is the filters that have exhausted available events.
+
 	processedFilter filter
 }
 
-// filter is the union of a set of [io/event.Filters].
 type filter struct {
 	pointer   pointerFilter
 	focusable bool
 }
 
-// taggedFilter is a filter for a particular tag.
 type taggedFilter struct {
 	tag    event.Tag
 	filter filter
 }
 
-// stateChange represents the new state and outgoing events
-// resulting from an incoming event.
 type stateChange struct {
-	// event, if set, is the trigger for the change.
 	event  event.Event
 	state  inputState
 	events []taggedEvent
 }
 
-// inputState represent a immutable snapshot of the state required
-// to route events.
 type inputState struct {
 	clipboardState
 	keyState
 	pointerState
 }
 
-// taggedEvent represents an event and its target handler.
 type taggedEvent struct {
 	event event.Event
 	tag   event.Tag
 }
 
-// Source returns a Source backed by this Router.
 func (q *Router) Source() Source {
 	return Source{r: q}
 }
 
-// Execute a command.
 func (s Source) Execute(c Command) {
 	if !s.Enabled() {
 		return
@@ -179,21 +143,16 @@ func (s Source) Execute(c Command) {
 	s.r.execute(c)
 }
 
-// Disabled returns a copy of this source that don't deliver any events.
 func (s Source) Disabled() Source {
 	s2 := s
 	s2.disabled = true
 	return s2
 }
 
-// Enabled reports whether the source is enabled. Only enabled
-// Sources deliver events.
 func (s Source) Enabled() bool {
 	return s.r != nil && !s.disabled
 }
 
-// Focused reports whether tag is focused, according to the most recent
-// [key.FocusEvent] delivered.
 func (s Source) Focused(tag event.Tag) bool {
 	if !s.Enabled() {
 		return false
@@ -201,8 +160,6 @@ func (s Source) Focused(tag event.Tag) bool {
 	return s.r.state().keyState.focus == tag
 }
 
-// Event returns the next event that matches at least one of filters.
-// If the source is disabled, no events will be reported.
 func (s Source) Event(filters ...event.Filter) (event.Event, bool) {
 	if !s.Enabled() {
 		return nil, false
@@ -211,7 +168,7 @@ func (s Source) Event(filters ...event.Filter) (event.Event, bool) {
 }
 
 func (q *Router) Event(filters ...event.Filter) (event.Event, bool) {
-	// Merge filters into scratch filters.
+
 	q.scratchFilters = q.scratchFilters[:0]
 	q.key.scratchFilter = q.key.scratchFilter[:0]
 	for _, f := range filters {
@@ -243,7 +200,7 @@ func (q *Router) Event(filters ...event.Filter) (event.Event, bool) {
 		if filter == nil {
 			n := len(q.scratchFilters)
 			if n < cap(q.scratchFilters) {
-				// Re-use previously allocated filter.
+
 				q.scratchFilters = q.scratchFilters[:n+1]
 				tf := &q.scratchFilters[n]
 				tf.tag = t
@@ -263,7 +220,7 @@ func (q *Router) Event(filters ...event.Filter) (event.Event, bool) {
 	}
 	q.key.filter = append(q.key.filter, q.key.scratchFilter...)
 	q.key.nextFilter = append(q.key.nextFilter, q.key.scratchFilter...)
-	// Deliver reset event, if any.
+
 	for _, f := range filters {
 		switch f := f.(type) {
 		case key.FocusFilter:
@@ -304,7 +261,7 @@ func (q *Router) Event(filters ...event.Filter) (event.Event, bool) {
 			}
 			if match {
 				change.events = slices.Delete(change.events, j, j+1)
-				// Fast forward state to last matched.
+
 				q.collapseState(i)
 				return evt.event, true
 			}
@@ -317,7 +274,6 @@ func (q *Router) Event(filters ...event.Filter) (event.Event, bool) {
 	return nil, false
 }
 
-// collapseState in the interval [1;idx] into q.changes[0].
 func (q *Router) collapseState(idx int) {
 	if idx == 0 {
 		return
@@ -330,20 +286,17 @@ func (q *Router) collapseState(idx int) {
 	q.changes = append(q.changes[:1], q.changes[idx+1:]...)
 }
 
-// Frame completes the current frame and starts a new with the
-// handlers from the frame argument. Remaining events are discarded,
-// unless they were deferred by a command.
 func (q *Router) Frame(frame *op.Ops) {
 	var remaining []event.Event
 	if n := len(q.changes); n > 0 {
 		if q.deferring {
-			// Collect events for replay.
+
 			for _, ch := range q.changes[1:] {
 				remaining = append(remaining, ch.event)
 			}
 			q.changes = append(q.changes[:0], stateChange{state: q.changes[0].state})
 		} else {
-			// Collapse state.
+
 			state := q.changes[n-1].state
 			q.changes = append(q.changes[:0], stateChange{state: state})
 		}
@@ -385,11 +338,9 @@ func (q *Router) Frame(frame *op.Ops) {
 	st.keyState = q.key.queue.Frame(q.handlers, q.lastState().keyState)
 	q.changeState(nil, st, evts)
 
-	// Collapse state and events.
 	q.collapseState(len(q.changes) - 1)
 }
 
-// Queue events to be routed.
 func (q *Router) Queue(events ...event.Event) {
 	for _, e := range events {
 		se, system := e.(SystemEvent)
@@ -411,7 +362,6 @@ func (f *filter) Add(flt event.Filter) {
 	}
 }
 
-// Merge f2 into f.
 func (f *filter) Merge(f2 filter) {
 	f.focusable = f.focusable || f2.focusable
 	f.pointer.Merge(f2.pointer)
@@ -449,7 +399,7 @@ func (q *Router) processEvent(e event.Event, system bool) {
 		}
 		q.changeState(e, state, evts)
 	case key.SnippetEvent:
-		// Expand existing, overlapping snippet.
+
 		if r := state.content.Snippet.Range; rangeOverlaps(r, key.Range(e)) {
 			if e.Start > r.Start {
 				e.Start = r.Start
@@ -479,8 +429,7 @@ func (q *Router) processEvent(e event.Event, system bool) {
 }
 
 func (q *Router) execute(c Command) {
-	// The command can be executed immediately if event delivery is not frozen, and
-	// no event receiver has completed their event handling.
+
 	if !q.deferring {
 		ch := q.executeCommand(c)
 		immediate := true
@@ -489,7 +438,7 @@ func (q *Router) execute(c Command) {
 			immediate = immediate && (!ok || !h.processedFilter.Matches(e.event))
 		}
 		if immediate {
-			// Hold on to the remaining events for state replay.
+
 			var evts []event.Event
 			for _, ch := range q.changes {
 				if ch.event != nil {
@@ -530,8 +479,6 @@ func (q *Router) executeCommands() {
 	q.commands = nil
 }
 
-// executeCommand the command and return the resulting state change along with the
-// tag the state change depended on, if any.
 func (q *Router) executeCommand(c Command) stateChange {
 	state := q.state()
 	var evts []taggedEvent
@@ -562,7 +509,7 @@ func (q *Router) executeCommand(c Command) stateChange {
 }
 
 func (q *Router) changeState(e event.Event, state inputState, evts []taggedEvent) {
-	// Wrap pointer.DataEvent.Open functions to detect them not being called.
+
 	for i := range evts {
 		e := &evts[i]
 		if de, ok := e.event.(transfer.DataEvent); ok {
@@ -576,17 +523,15 @@ func (q *Router) changeState(e event.Event, state inputState, evts []taggedEvent
 			e.event = de
 		}
 	}
-	// Initialize the first change to contain the current state
-	// and events that are bound for the current frame.
+
 	if len(q.changes) == 0 {
 		q.changes = append(q.changes, stateChange{})
 	}
 	if e != nil && len(evts) > 0 {
-		// An event triggered events bound for user receivers. Add a state change to be
-		// able to redo the change in case of a command execution.
+
 		q.changes = append(q.changes, stateChange{event: e, state: state, events: evts})
 	} else {
-		// Otherwise, merge with previous change.
+
 		prev := &q.changes[len(q.changes)-1]
 		prev.state = state
 		prev.events = append(prev.events, evts...)
@@ -614,8 +559,6 @@ func (q *Router) MoveFocus(dir key.FocusDirection) {
 	q.changeState(nil, state, evts)
 }
 
-// RevealFocus scrolls the current focus (if any) into viewport
-// if there are scrollable parent handlers.
 func (q *Router) RevealFocus(viewport image.Rectangle) {
 	state := q.lastState()
 	focus := state.focus
@@ -643,7 +586,6 @@ func (q *Router) RevealFocus(viewport image.Rectangle) {
 	q.ScrollFocus(s)
 }
 
-// ScrollFocus scrolls the focused widget, if any, by dist.
 func (q *Router) ScrollFocus(dist image.Point) {
 	state := q.lastState()
 	focus := state.focus
@@ -705,8 +647,6 @@ func (q *Router) ClickFocus() {
 	q.changeState(nil, state, q.pointer.queue.Deliver(q.handlers, area, e))
 }
 
-// TextInputState returns the input state from the most recent
-// call to Frame.
 func (q *Router) TextInputState() TextInputState {
 	state := q.state()
 	kstate, s := state.InputState()
@@ -715,43 +655,32 @@ func (q *Router) TextInputState() TextInputState {
 	return s
 }
 
-// TextInputHint returns the input mode from the most recent key.InputOp.
 func (q *Router) TextInputHint() (key.InputHint, bool) {
 	return q.key.queue.InputHint(q.handlers, q.state().keyState)
 }
 
-// WriteClipboard returns the most recent content to be copied
-// to the clipboard, if any.
 func (q *Router) WriteClipboard() (mime string, content []byte, ok bool) {
 	return q.cqueue.WriteClipboard()
 }
 
-// ClipboardRequested reports if any new handler is waiting
-// to read the clipboard.
 func (q *Router) ClipboardRequested() bool {
 	return q.cqueue.ClipboardRequested(q.lastState().clipboardState)
 }
 
-// Cursor returns the last cursor set.
 func (q *Router) Cursor() pointer.Cursor {
 	return q.state().cursor
 }
 
-// SemanticAt returns the first semantic description under pos, if any.
 func (q *Router) SemanticAt(pos f32.Point) (SemanticID, bool) {
 	return q.pointer.queue.SemanticAt(pos)
 }
 
-// AppendSemantics appends the semantic tree to nodes, and returns the result.
-// The root node is the first added.
 func (q *Router) AppendSemantics(nodes []SemanticNode) []SemanticNode {
 	q.pointer.collector.q = &q.pointer.queue
 	q.pointer.collector.ensureRoot()
 	return q.pointer.queue.AppendSemantics(nodes)
 }
 
-// EditorState returns the editor state for the focused handler, or the
-// zero value if there is none.
 func (q *Router) EditorState() EditorState {
 	return q.key.queue.editorState(q.handlers, q.state().keyState)
 }
@@ -825,7 +754,6 @@ func (q *Router) collect() {
 				kq.inputOp(tag, &s.key, t, a, b)
 			}
 
-		// Pointer ops.
 		case ops.TypePass:
 			pc.pass()
 		case ops.TypePopPass:
@@ -844,7 +772,6 @@ func (q *Router) collect() {
 			s := q.stateFor(op.Tag)
 			s.key.inputHint(op.Hint)
 
-		// Semantic ops.
 		case ops.TypeSemanticLabel:
 			lbl := *encOp.Refs[0].(*string)
 			pc.semanticLabel(lbl)
@@ -870,12 +797,10 @@ func (q *Router) collect() {
 	}
 }
 
-// WakeupTime returns the most recent time for doing another frame,
-// as determined from the last call to Frame.
 func (q *Router) WakeupTime() (time.Time, bool) {
 	t, w := q.wakeupTime, q.wakeup
 	q.wakeup = false
-	// Pending events always trigger wakeups.
+
 	if len(q.changes) > 1 || len(q.changes) == 1 && len(q.changes[0].events) > 0 {
 		t, w = time.Time{}, true
 	}

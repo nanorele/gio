@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package opengl
 
 import (
@@ -7,18 +5,16 @@ import (
 	"fmt"
 	"image"
 	"math/bits"
-	"runtime"
 	"slices"
 	"strings"
 	"time"
 	"unsafe"
 
+	"gioui.org/shader"
 	"github.com/nanorele/gio/gpu/internal/driver"
 	"github.com/nanorele/gio/internal/gl"
-	"gioui.org/shader"
 )
 
-// Backend implements driver.Device.
 type Backend struct {
 	funcs *gl.Functions
 
@@ -31,10 +27,9 @@ type Backend struct {
 	glver [2]int
 	gles  bool
 	feats driver.Caps
-	// floatTriple holds the settings for floating point
-	// textures.
+
 	floatTriple textureTriple
-	// Single channel alpha textures.
+
 	alphaTriple textureTriple
 	srgbaTriple textureTriple
 	storage     [storageBindings]*buffer
@@ -42,12 +37,9 @@ type Backend struct {
 	outputFBO gl.Framebuffer
 	sRGBFBO   *SRGBFBO
 
-	// vertArray is bound during a frame. We don't need it, but
-	// core desktop OpenGL profile 3.3 requires some array bound.
 	vertArray gl.VertexArray
 }
 
-// State tracking.
 type glState struct {
 	drawFBO     gl.Framebuffer
 	readFBO     gl.Framebuffer
@@ -127,7 +119,7 @@ type buffer struct {
 	typ       driver.BufferBinding
 	size      int
 	immutable bool
-	// For emulation of uniform buffers.
+
 	data []byte
 }
 
@@ -156,8 +148,6 @@ type uniformLocation struct {
 	size    int
 }
 
-// textureTriple holds the type settings for
-// a TexImage2D call.
 type textureTriple struct {
 	internalFormat gl.Enum
 	format         gl.Enum
@@ -172,11 +162,6 @@ func init() {
 	driver.NewOpenGLDevice = newOpenGLDevice
 }
 
-// Supporting compute programs is theoretically possible with OpenGL ES 3.1. In
-// practice, there are too many driver issues, especially on Android (e.g.
-// Google Pixel, Samsung J2 are both broken i different ways). Disable support
-// and rely on Vulkan for devices that support it, and the CPU fallback for
-// devices that don't.
 const brokenGLES31 = true
 
 func newOpenGLDevice(api driver.OpenGL) (driver.Device, error) {
@@ -217,8 +202,7 @@ func newOpenGLDevice(api driver.OpenGL) (driver.Device, error) {
 	}
 	b.feats.MaxTextureSize = f.GetInteger(gl.MAX_TEXTURE_SIZE)
 	if !b.sharedCtx {
-		// We have exclusive access to the context, so query the GL state once
-		// instead of at each frame.
+
 		b.glstate = b.queryState()
 	}
 	return b, nil
@@ -245,7 +229,7 @@ func (b *Backend) BeginFrame(target driver.RenderTarget, clear bool, viewport im
 	b.outputFBO = renderFBO
 	b.glstate.bindFramebuffer(b.funcs, gl.FRAMEBUFFER, renderFBO)
 	if b.gles {
-		// If the output framebuffer is not in the sRGB colorspace already, emulate it.
+
 		fbSRGB := false
 		if !b.gles || b.glver[0] > 2 {
 			var fbEncoding int
@@ -299,10 +283,6 @@ func (b *Backend) EndFrame() {
 	}
 	if b.sharedCtx {
 		b.restoreState(b.savedState)
-	} else if runtime.GOOS == "android" {
-		// The Android emulator needs the output framebuffer to be current when
-		// eglSwapBuffers is called.
-		b.glstate.bindFramebuffer(b.funcs, gl.FRAMEBUFFER, b.outputFBO)
 	}
 }
 
@@ -707,7 +687,7 @@ func (b *Backend) NewTexture(format driver.TextureFormat, width, height int, min
 	min, mipmap := toTexFilter(minFilter)
 	mag, _ := toTexFilter(magFilter)
 	if b.gles && b.glver[0] < 3 {
-		// OpenGL ES 2 only supports mipmaps for power-of-two textures.
+
 		mipmap = false
 	}
 	tex.mipmap = mipmap
@@ -722,7 +702,7 @@ func (b *Backend) NewTexture(format driver.TextureFormat, width, height int, min
 			log2 := 32 - bits.LeadingZeros32(uint32(dim)) - 1
 			nmipmaps = log2 + 1
 		}
-		// Immutable textures are required for BindImageTexture, and can't hurt otherwise.
+
 		b.funcs.TexStorage2D(gl.TEXTURE_2D, nmipmaps, tex.triple.internalFormat, width, height)
 	} else {
 		b.funcs.TexImage2D(gl.TEXTURE_2D, 0, tex.triple.internalFormat, width, height, tex.triple.format, tex.triple.typ)
@@ -841,7 +821,7 @@ func (b *Backend) SetBlend(enable bool) {
 
 func (b *Backend) DrawElements(off, count int) {
 	b.prepareDraw()
-	// off is in 16-bit indices, but DrawElements take a byte offset.
+
 	byteOff := off * 2
 	b.funcs.DrawElements(toGLDrawMode(b.state.pipeline.topology), count, gl.UNSIGNED_SHORT, byteOff)
 }
@@ -880,7 +860,7 @@ func (b *Backend) clearOutput(colR, colG, colB, colA float32) {
 }
 
 func (b *Backend) NewComputeProgram(src shader.Sources) (driver.Program, error) {
-	// We don't support ES 3.1 compute, see brokenGLES31 above.
+
 	const GLES31Source = ""
 	p, err := gl.CreateComputeProgram(b.funcs, GLES31Source)
 	if err != nil {
@@ -958,7 +938,7 @@ func (b *Backend) newProgram(desc driver.PipelineDesc) (*program, error) {
 		obj:     p,
 	}
 	b.glstate.useProgram(b.funcs, p)
-	// Bind texture uniforms.
+
 	for _, tex := range vsh.src.Textures {
 		u := b.funcs.GetUniformLocation(p, tex.Name)
 		if u.Valid() {
@@ -1060,9 +1040,7 @@ func (b *buffer) Upload(data []byte) {
 		firstBinding := firstBufferType(b.typ)
 		b.backend.glstate.bindBuffer(b.backend.funcs, firstBinding, b.obj)
 		if len(data) == b.size {
-			// the iOS GL implementation doesn't recognize when BufferSubData
-			// clears the entire buffer. Tell it and avoid GPU stalls.
-			// See also https://github.com/godotengine/godot/issues/23956.
+
 			b.backend.funcs.BufferData(firstBinding, b.size, gl.DYNAMIC_DRAW, data)
 		} else {
 			b.backend.funcs.BufferSubData(firstBinding, 0, data)
@@ -1162,7 +1140,7 @@ func (t *texture) ReadPixels(src image.Rectangle, pixels []byte, stride int) err
 	if len(pixels) < w*h*4 {
 		return errors.New("unexpected RGBA size")
 	}
-	// OpenGL ES 2 doesn't support PACK_ROW_LENGTH != 0. Avoid it if possible.
+
 	rowLen := 0
 	if n := stride / 4; n != w {
 		rowLen = n
@@ -1251,7 +1229,7 @@ func (t *texture) Upload(offset, size image.Point, pixels []byte, stride int) {
 		panic(fmt.Errorf("size %d larger than data %d", min, len(pixels)))
 	}
 	t.backend.BindTexture(0, t)
-	// WebGL 1 doesn't support UNPACK_ROW_LENGTH != 0. Avoid it if possible.
+
 	rowLen := 0
 	if n := stride / 4; n != size.X {
 		rowLen = n
@@ -1287,20 +1265,16 @@ func (t *timer) Duration() (time.Duration, bool) {
 	return time.Duration(nanos), true
 }
 
-// floatTripleFor determines the best texture triple for floating point FBOs.
 func floatTripleFor(f *gl.Functions, ver [2]int, exts []string) (textureTriple, error) {
 	var triples []textureTriple
 	if ver[0] >= 3 {
 		triples = append(triples, textureTriple{gl.R16F, gl.Enum(gl.RED), gl.Enum(gl.HALF_FLOAT)})
 	}
-	// According to the OES_texture_half_float specification, EXT_color_buffer_half_float is needed to
-	// render to FBOs. However, the Safari WebGL1 implementation does support half-float FBOs but does not
-	// report EXT_color_buffer_half_float support. The triples are verified below, so it doesn't matter if we're
-	// wrong.
+
 	if hasExtension(exts, "GL_OES_texture_half_float") || hasExtension(exts, "GL_EXT_color_buffer_half_float") {
-		// Try single channel.
+
 		triples = append(triples, textureTriple{gl.LUMINANCE, gl.Enum(gl.LUMINANCE), gl.Enum(gl.HALF_FLOAT_OES)})
-		// Fallback to 4 channels.
+
 		triples = append(triples, textureTriple{gl.RGBA, gl.Enum(gl.RGBA), gl.Enum(gl.HALF_FLOAT_OES)})
 	}
 	if hasExtension(exts, "GL_OES_texture_float") || hasExtension(exts, "GL_EXT_color_buffer_float") {
@@ -1348,7 +1322,7 @@ func srgbaTripleFor(ver [2]int, exts []string) (textureTriple, error) {
 func alphaTripleFor(ver [2]int) textureTriple {
 	intf, f := gl.Enum(gl.R8), gl.Enum(gl.RED)
 	if ver[0] < 3 {
-		// R8, RED not supported on OpenGL ES 2.0.
+
 		intf, f = gl.LUMINANCE, gl.Enum(gl.LUMINANCE)
 	}
 	return textureTriple{intf, f, gl.UNSIGNED_BYTE}

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package gl
 
 import (
@@ -20,7 +18,7 @@ func loadGLESv2Procs() error {
 		return fmt.Errorf("gl: failed to load %s: %v", dllName, err)
 	}
 	gles := windows.DLL{Handle: handle, Name: dllName}
-	// d3dcompiler_47.dll is needed internally for shader compilation to function.
+
 	dllName = "d3dcompiler_47.dll"
 	_, err = windows.LoadLibraryEx(dllName, 0, windows.LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)
 	if err != nil {
@@ -217,7 +215,6 @@ var (
 )
 
 type Functions struct {
-	// Query caches.
 	int32s   [100]int32
 	float32s [100]float32
 	uintptrs [100]uintptr
@@ -598,7 +595,7 @@ func (c *Functions) GetVertexAttribPointer(index int, pname Enum) uintptr {
 func (c *Functions) InvalidateFramebuffer(target, attachment Enum) {
 	addr := _glInvalidateFramebuffer.Addr()
 	if addr == 0 {
-		// InvalidateFramebuffer is just a hint. Skip it if not supported.
+
 		return
 	}
 	syscall.Syscall(addr, 3, uintptr(target), 1, uintptr(unsafe.Pointer(&attachment)))
@@ -714,8 +711,6 @@ func cString(s string) []byte {
 	return b
 }
 
-// issue34474KeepAlive calls runtime.KeepAlive as a
-// workaround for golang.org/issue/34474.
 func issue34474KeepAlive(v any) {
 	runtime.KeepAlive(v)
 }

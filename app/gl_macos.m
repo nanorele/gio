@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense OR MIT
 
-// +build darwin,!ios,nometal
+// +build darwin,nometal
 
 #import <AppKit/AppKit.h>
 #include <CoreFoundation/CoreFoundation.h>

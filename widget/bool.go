@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package widget
 
 import (
@@ -13,7 +11,6 @@ type Bool struct {
 	clk Clickable
 }
 
-// Update the widget state and report whether Value was changed.
 func (b *Bool) Update(gtx layout.Context) bool {
 	changed := false
 	for b.clk.clicked(b, gtx) {
@@ -23,12 +20,10 @@ func (b *Bool) Update(gtx layout.Context) bool {
 	return changed
 }
 
-// Hovered reports whether pointer is over the element.
 func (b *Bool) Hovered() bool {
 	return b.clk.Hovered()
 }
 
-// Pressed reports whether pointer is pressing the element.
 func (b *Bool) Pressed() bool {
 	return b.clk.Pressed()
 }

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package paint
 
 import (
@@ -15,17 +13,14 @@ import (
 	"github.com/nanorele/gio/op/clip"
 )
 
-// ImageFilter is the scaling filter for images.
 type ImageFilter byte
 
 const (
-	// FilterLinear uses linear interpolation for scaling.
 	FilterLinear ImageFilter = iota
-	// FilterNearest uses nearest neighbor interpolation for scaling.
+
 	FilterNearest
 )
 
-// ImageOp sets the brush to an image.
 type ImageOp struct {
 	Filter ImageFilter
 
@@ -33,18 +28,13 @@ type ImageOp struct {
 	color   color.NRGBA
 	src     *image.RGBA
 
-	// handle is a key to uniquely identify this ImageOp
-	// in a map of cached textures.
 	handle any
 }
 
-// ColorOp sets the brush to a constant color.
 type ColorOp struct {
 	Color color.NRGBA
 }
 
-// LinearGradientOp sets the brush to a gradient starting at stop1 with color1 and
-// ending at stop2 with color2.
 type LinearGradientOp struct {
 	Stop1  f32.Point
 	Color1 color.NRGBA
@@ -52,23 +42,14 @@ type LinearGradientOp struct {
 	Color2 color.NRGBA
 }
 
-// PaintOp fills the current clip area with the current brush.
 type PaintOp struct{}
 
-// OpacityStack represents an opacity applied to all painting operations
-// until Pop is called.
 type OpacityStack struct {
 	id      ops.StackID
 	macroID uint32
 	ops     *ops.Ops
 }
 
-// NewImageOp creates an ImageOp backed by src.
-//
-// NewImageOp assumes the backing image is immutable, and may cache a
-// copy of its contents in a GPU-friendly way. Create new ImageOps to
-// ensure that changes to an image is reflected in the display of
-// it.
 func NewImageOp(src image.Image) ImageOp {
 	switch src := src.(type) {
 	case *image.Uniform:
@@ -85,7 +66,7 @@ func NewImageOp(src image.Image) ImageOp {
 	}
 
 	sz := src.Bounds().Size()
-	// Copy the image into a GPU friendly format.
+
 	dst := image.NewRGBA(image.Rectangle{
 		Max: sz,
 	})
@@ -151,28 +132,16 @@ func (d PaintOp) Add(o *op.Ops) {
 	data[0] = byte(ops.TypePaint)
 }
 
-// FillShape fills the clip shape with a color.
 func FillShape(ops *op.Ops, c color.NRGBA, shape clip.Op) {
 	defer shape.Push(ops).Pop()
 	Fill(ops, c)
 }
 
-// Fill paints an infinitely large plane with the provided color. It
-// is intended to be used with a clip.Op already in place to limit
-// the painted area. Use FillShape unless you need to paint several
-// times within the same clip.Op.
 func Fill(ops *op.Ops, c color.NRGBA) {
 	ColorOp{Color: c}.Add(ops)
 	PaintOp{}.Add(ops)
 }
 
-// PushOpacity creates a drawing layer with an opacity in the range [0;1].
-// The layer includes every subsequent drawing operation until [OpacityStack.Pop]
-// is called.
-//
-// The layer is drawn in two steps. First, the layer operations are
-// drawn to a separate image. Then, the image is blended on top of
-// the frame, with the opacity used as the blending factor.
 func PushOpacity(o *op.Ops, opacity float32) OpacityStack {
 	if opacity > 1 {
 		opacity = 1

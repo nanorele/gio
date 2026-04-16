@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package material
 
 import (
@@ -14,8 +12,6 @@ type RadioButtonStyle struct {
 	Group *widget.Enum
 }
 
-// RadioButton returns a RadioButton with a label. The key specifies
-// the value for the Enum.
 func RadioButton(th *Theme, group *widget.Enum, key, label string) RadioButtonStyle {
 	r := RadioButtonStyle{
 		Group: group,
@@ -36,7 +32,6 @@ func RadioButton(th *Theme, group *widget.Enum, key, label string) RadioButtonSt
 	return r
 }
 
-// Layout updates enum and displays the radio button.
 func (r RadioButtonStyle) Layout(gtx layout.Context) layout.Dimensions {
 	r.Group.Update(gtx)
 	hovered, hovering := r.Group.Hovered()

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package input
 
 import (
@@ -12,7 +10,6 @@ import (
 	"github.com/nanorele/gio/io/key"
 )
 
-// EditorState represents the state of an editor needed by input handlers.
 type EditorState struct {
 	Selection struct {
 		Transform f32.Affine2D
@@ -30,7 +27,6 @@ type keyQueue struct {
 	hint     key.InputHint
 }
 
-// keyState is the input state related to key events.
 type keyState struct {
 	focus   event.Tag
 	state   TextInputState
@@ -38,11 +34,8 @@ type keyState struct {
 }
 
 type keyHandler struct {
-	// visible will be true if the InputOp is present
-	// in the current frame.
 	visible bool
-	// reset tracks whether the handler has seen a
-	// focus reset.
+
 	reset        bool
 	hint         key.InputHint
 	orderPlusOne int
@@ -69,16 +62,12 @@ func (k *keyHandler) inputHint(hint key.InputHint) {
 	k.hint = hint
 }
 
-// InputState returns the input state and returns a state
-// reset to [TextInputKeep].
 func (s keyState) InputState() (keyState, TextInputState) {
 	state := s.state
 	s.state = TextInputKeep
 	return s, state
 }
 
-// InputHint returns the input hint from the focused handler and whether it was
-// changed since the last call.
 func (q *keyQueue) InputHint(handlers map[event.Tag]*handler, state keyState) (key.InputHint, bool) {
 	focused, ok := handlers[state.focus]
 	if !ok {
@@ -111,7 +100,7 @@ func (k *keyHandler) ResetEvent() (event.Event, bool) {
 func (q *keyQueue) Frame(handlers map[event.Tag]*handler, state keyState) keyState {
 	if state.focus != nil {
 		if h, ok := handlers[state.focus]; !ok || !h.filter.focusable || !h.key.visible {
-			// Remove focus from the handler that is no longer focusable.
+
 			state.focus = nil
 			state.state = TextInputClose
 		}
@@ -120,16 +109,9 @@ func (q *keyQueue) Frame(handlers map[event.Tag]*handler, state keyState) keySta
 	return state
 }
 
-// updateFocusLayout partitions input handlers handlers into rows
-// for directional focus moves.
-//
-// The approach is greedy: pick the topmost handler and create a row
-// containing it. Then, extend the handler bounds to a horizontal beam
-// and add to the row every handler whose center intersect it. Repeat
-// until no handlers remain.
 func (q *keyQueue) updateFocusLayout(handlers map[event.Tag]*handler) {
 	order := q.dirOrder
-	// Sort by ascending y position.
+
 	sort.SliceStable(order, func(i, j int) bool {
 		return order[i].bounds.Min.Y < order[j].bounds.Min.Y
 	})
@@ -147,7 +129,7 @@ func (q *keyQueue) updateFocusLayout(handlers map[event.Tag]*handler) {
 			}
 			h.row = row
 		}
-		// Sort row by ascending x position.
+
 		sort.SliceStable(order[:end], func(i, j int) bool {
 			return order[i].bounds.Min.X < order[j].bounds.Min.X
 		})
@@ -159,7 +141,6 @@ func (q *keyQueue) updateFocusLayout(handlers map[event.Tag]*handler) {
 	}
 }
 
-// MoveFocus attempts to move the focus in the direction of dir.
 func (q *keyQueue) MoveFocus(handlers map[event.Tag]*handler, state keyState, dir key.FocusDirection) (keyState, []taggedEvent) {
 	if len(q.dirOrder) == 0 {
 		return state, nil

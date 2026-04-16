@@ -1,7 +1,5 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-//go:build ((linux && !android) || freebsd) && !nowayland && !noopengl
-// +build linux,!android freebsd
+//go:build (linux || freebsd) && !nowayland && !noopengl
+// +build linux freebsd
 // +build !nowayland
 // +build !noopengl
 
@@ -51,8 +49,7 @@ func init() {
 		if err := ctx.CreateSurface(eglSurf); err != nil {
 			return nil, err
 		}
-		// We're in charge of the frame callbacks, don't let eglSwapBuffers
-		// wait for callbacks that may never arrive.
+
 		ctx.EnableVSync(false)
 
 		return &wlContext{Context: ctx, win: w, eglWin: eglWin}, nil

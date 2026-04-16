@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package widget
 
 import (
@@ -12,9 +10,7 @@ import (
 	"github.com/nanorele/gio/unit"
 )
 
-// Float is for selecting a value in a range.
 type Float struct {
-	// Value is the value of the Float, in the [0; 1] range.
 	Value float32
 
 	drag   gesture.Drag
@@ -22,7 +18,6 @@ type Float struct {
 	length float32
 }
 
-// Dragging returns whether the value is being interacted with.
 func (f *Float) Dragging() bool { return f.drag.Dragging() }
 
 func (f *Float) Layout(gtx layout.Context, axis layout.Axis, pointerMargin unit.Dp) layout.Dimensions {
@@ -42,10 +37,6 @@ func (f *Float) Layout(gtx layout.Context, axis layout.Axis, pointerMargin unit.
 	return layout.Dimensions{Size: size}
 }
 
-// Update the Value according to drag events along the f's main axis.
-// The return value reports whether the value was changed.
-//
-// The range of f is set by the minimum constraints main axis value.
 func (f *Float) Update(gtx layout.Context) bool {
 	changed := false
 	for {

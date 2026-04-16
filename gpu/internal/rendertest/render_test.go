@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package rendertest
 
 import (
@@ -18,25 +16,21 @@ import (
 )
 
 func TestTransformMacro(t *testing.T) {
-	// testcase resulting from original bug when rendering layout.Stacked
 
-	// Build clip-path.
 	c := constSqPath()
 
 	run(t, func(o *op.Ops) {
-		// render the first Stacked item
+
 		m1 := op.Record(o)
 		dr := image.Rect(0, 0, 128, 50)
 		paint.FillShape(o, black, clip.Rect(dr).Op())
 		c1 := m1.Stop()
 
-		// Render the second stacked item
 		m2 := op.Record(o)
 		paint.ColorOp{Color: red}.Add(o)
-		// Simulate a draw text call
+
 		t := op.Offset(image.Pt(0, 10)).Push(o)
 
-		// Apply the clip-path.
 		cl := c.Push(o)
 
 		paint.PaintOp{}.Add(o)
@@ -45,7 +39,6 @@ func TestTransformMacro(t *testing.T) {
 
 		c2 := m2.Stop()
 
-		// Call each of them in a transform
 		t = op.Offset(image.Pt(0, 0)).Push(o)
 		c1.Add(o)
 		t.Pop()
@@ -61,7 +54,7 @@ func TestTransformMacro(t *testing.T) {
 
 func TestRepeatedPaintsZ(t *testing.T) {
 	run(t, func(o *op.Ops) {
-		// Draw a rectangle
+
 		paint.FillShape(o, black, clip.Rect(image.Rect(0, 0, 128, 50)).Op())
 
 		builder := clip.Path{}
@@ -84,8 +77,7 @@ func TestRepeatedPaintsZ(t *testing.T) {
 }
 
 func TestNoClipFromPaint(t *testing.T) {
-	// ensure that a paint operation does not pollute the state
-	// by leaving any clip paths in place.
+
 	run(t, func(o *op.Ops) {
 		a := f32.AffineId().Rotate(f32.Pt(20, 20), math.Pi/4)
 		defer op.Affine(a).Push(o).Pop()
@@ -161,7 +153,6 @@ func TestReuseStencil(t *testing.T) {
 		c1 := drawChild(ops, txt)
 		c2 := drawChild(ops, txt)
 
-		// lay out the children
 		c1.Add(ops)
 
 		defer op.Offset(image.Pt(0, 50)).Push(ops).Pop()
@@ -173,9 +164,6 @@ func TestReuseStencil(t *testing.T) {
 }
 
 func TestBuildOffscreen(t *testing.T) {
-	// Check that something we in one frame build outside the screen
-	// still is rendered correctly if moved into the screen in a later
-	// frame.
 
 	txt := constSqCirc()
 	draw := func(off int, o *op.Ops) {
@@ -245,8 +233,7 @@ func TestLinearGradient(t *testing.T) {
 	t.Skip("linear gradients don't support transformations")
 
 	const gradienth = 8
-	// 0.5 offset from ends to ensure that the center of the pixel
-	// aligns with gradient from and to colors.
+
 	pixelAligned := f32.Rect(0.5, 0, 127.5, gradienth)
 	samples := []int{0, 12, 32, 64, 96, 115, 127}
 
@@ -384,8 +371,6 @@ func TestImageRGBA_ScaleLinear(t *testing.T) {
 		r.expect(0, 0, colornames.Red)
 		r.expect(8, 8, colornames.Red)
 
-		// TODO: this currently seems to do srgb scaling
-		// instead of linear rgb scaling,
 		r.expect(64-4, 0, color.RGBA{R: 197, G: 87, B: 0, A: 255})
 		r.expect(64+4, 0, color.RGBA{R: 175, G: 98, B: 0, A: 255})
 
@@ -430,13 +415,12 @@ func TestGapsInPath(t *testing.T) {
 	ops := new(op.Ops)
 	var p clip.Path
 	p.Begin(ops)
-	// Unclosed square 1
+
 	p.MoveTo(f32.Point{X: 10})
 	p.LineTo(f32.Point{X: 40})
 	p.LineTo(f32.Point{X: 40, Y: 30})
 	p.LineTo(f32.Point{X: 10, Y: 30})
 
-	// Unclosed square 2
 	p.MoveTo(f32.Point{X: 50})
 	p.LineTo(f32.Point{X: 80})
 	p.LineTo(f32.Point{X: 80, Y: 30})
@@ -483,7 +467,7 @@ func TestGapsInPath(t *testing.T) {
 func TestOpacity(t *testing.T) {
 	run(t, func(ops *op.Ops) {
 		opc1 := paint.PushOpacity(ops, .3)
-		// Fill screen to exercise the glClear optimization.
+
 		paint.FillShape(ops, color.NRGBA{R: 255, A: 255}, clip.Rect{Max: image.Pt(1024, 1024)}.Op())
 		opc2 := paint.PushOpacity(ops, .6)
 		paint.FillShape(ops, color.NRGBA{G: 255, A: 255}, clip.Rect{Min: image.Pt(20, 10), Max: image.Pt(64, 128)}.Op())
@@ -495,7 +479,6 @@ func TestOpacity(t *testing.T) {
 	}, nil)
 }
 
-// lerp calculates linear interpolation with color b and p.
 func lerp(a, b f32color.RGBA, p float32) f32color.RGBA {
 	return f32color.RGBA{
 		R: a.R*(1-p) + b.R*p,

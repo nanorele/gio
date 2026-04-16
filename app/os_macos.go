@@ -1,7 +1,5 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-//go:build darwin && !ios
-// +build darwin,!ios
+//go:build darwin
+// +build darwin
 
 package app
 
@@ -340,18 +338,15 @@ static int isMiniaturized(CFTypeRef windowRef) {
 import "C"
 
 func init() {
-	// Darwin requires that UI operations happen on the main thread only.
+
 	runtime.LockOSThread()
-	// Register launch finished listener.
+
 	C.gio_init()
 }
 
-// AppKitViewEvent notifies the client of changes to the window AppKit handles.
-// The handles are retained until another AppKitViewEvent is sent.
 type AppKitViewEvent struct {
-	// View is a CFTypeRef for the NSView for the window.
 	View uintptr
-	// Layer is a CFTypeRef of the CALayer of View.
+
 	Layer uintptr
 }
 
@@ -360,8 +355,7 @@ type window struct {
 	w           *callbacks
 	anim        bool
 	displayLink *displayLink
-	// redraw is a single entry channel for making sure only one
-	// display link redraw request is in flight.
+
 	redraw      chan struct{}
 	cursor      pointer.Cursor
 	pointerBtns pointer.Buttons
@@ -372,8 +366,7 @@ type window struct {
 	config Config
 
 	keysDown map[key.Name]struct{}
-	// cmdKeys is for storing the current key event while
-	// waiting for a doCommandBySelector.
+
 	cmdKeys cmdKeys
 }
 
@@ -382,11 +375,8 @@ type cmdKeys struct {
 	eventMods key.Modifiers
 }
 
-// launched is closed when applicationDidFinishLaunching is called.
 var launched = make(chan struct{})
 
-// nextTopLeft is the offset to use for the next window's call to
-// cascadeTopLeftFromPoint.
 var nextTopLeft C.NSPoint
 
 func windowFor(h C.uintptr_t) *window {
@@ -511,8 +501,7 @@ func (w *window) Configure(options []Option) {
 	C.setWindowStandardButtonHidden(window, C.NSWindowCloseButton, barTrans)
 	C.setWindowStandardButtonHidden(window, C.NSWindowMiniaturizeButton, barTrans)
 	C.setWindowStandardButtonHidden(window, C.NSWindowZoomButton, barTrans)
-	// When toggling the titlebar, the layer doesn't update its frame
-	// until the next resize. Force it.
+
 	C.resetLayerFrame(w.view)
 }
 
@@ -528,7 +517,7 @@ func (w *window) Perform(acts system.Action) {
 	walkActions(acts, func(a system.Action) {
 		switch a {
 		case system.ActionCenter:
-			r := C.getScreenFrame(window) // the screen size of the window
+			r := C.getScreenFrame(window)
 			screenScale := float32(C.getScreenBackingScale())
 			sz := w.config.Size.Div(int(screenScale))
 			x := (int(r.size.width) - sz.X) / 2
@@ -573,8 +562,7 @@ func (w *window) SetAnimating(anim bool) {
 
 func (w *window) runOnMain(f func()) {
 	runOnMain(func() {
-		// Make sure the view is still valid. The window might've been closed
-		// during the switch to the main thread.
+
 		if w.view != 0 {
 			f()
 		}
@@ -606,7 +594,7 @@ func gio_onKeys(h C.uintptr_t, event C.CFTypeRef, cstr C.CFTypeRef, ti C.double,
 			if keyDown {
 				w.keysDown[ke.Name] = struct{}{}
 				if _, isCmd := convertCommandKey(k); isCmd || kmods.Contain(key.ModCommand) {
-					// doCommandBySelector already processed the event.
+
 					return
 				}
 			} else {
@@ -806,7 +794,7 @@ func gio_setMarkedText(h C.uintptr_t, cstr C.CFTypeRef, selRange C.NSRange, repl
 		rng = state.Selection.Range
 	}
 	if replaceRange.location != C.NSNotFound {
-		// replaceRange is relative to marked (or selected) text.
+
 		offset := state.UTF16Index(rng.Start)
 		start := state.RunesIndex(int(replaceRange.location) + offset)
 		end := state.RunesIndex(int(replaceRange.location+replaceRange.length) + offset)
@@ -824,7 +812,7 @@ func gio_setMarkedText(h C.uintptr_t, cstr C.CFTypeRef, selRange C.NSRange, repl
 
 	sel := key.Range{Start: comp.End, End: comp.End}
 	if selRange.location != C.NSNotFound {
-		// selRange is relative to inserted text.
+
 		offset := state.UTF16Index(rng.Start)
 		start := state.RunesIndex(int(selRange.location) + offset)
 		end := state.RunesIndex(int(selRange.location+selRange.length) + offset)
@@ -861,8 +849,7 @@ func gio_substringForProposedRange(h C.uintptr_t, crng C.NSRange, actual C.NSRan
 func gio_insertText(h C.uintptr_t, cstr C.CFTypeRef, crng C.NSRange) {
 	w := windowFor(h)
 	str := nsstringToString(cstr)
-	// macOS IME in some cases calls insertText for command keys such as backspace
-	// instead of doCommandBySelector.
+
 	for _, r := range str {
 		if _, ok := convertCommandKey(r); ok {
 			w.w.SetComposingRegion(key.Range{Start: -1, End: -1})
@@ -903,7 +890,7 @@ func gio_firstRectForCharacterRange(h C.uintptr_t, crng C.NSRange, actual C.NSRa
 	u16start := state.UTF16Index(sel.Start)
 	actual.location = C.NSUInteger(u16start)
 	actual.length = 0
-	// Transform to NSView local coordinates (lower left origin, undo backing scale).
+
 	scale := 1. / float32(C.getViewBackingScale(w.view))
 	height := float32(C.viewHeight(w.view))
 	local := f32.AffineId().Scale(f32.Pt(0, 0), f32.Pt(scale, -scale)).Offset(f32.Pt(0, height))
@@ -1035,17 +1022,16 @@ func newWindow(win *callbacks, options []Option) {
 			return
 		}
 		window := C.gio_createWindow(w.view, C.CGFloat(cnf.Size.X), C.CGFloat(cnf.Size.Y))
-		// Release our reference now that the NSWindow has it.
+
 		C.CFRelease(w.view)
 		w.Configure(options)
 		if nextTopLeft.x == 0 && nextTopLeft.y == 0 {
-			// cascadeTopLeftFromPoint treats (0, 0) as a no-op,
-			// and just returns the offset we need for the first window.
+
 			nextTopLeft = C.cascadeTopLeftFromPoint(window, nextTopLeft)
 		}
 		nextTopLeft = C.cascadeTopLeftFromPoint(window, nextTopLeft)
 		C.makeFirstResponder(window, w.view)
-		// makeKeyAndOrderFront assumes ownership of our window reference.
+
 		C.makeKeyAndOrderFront(window)
 	})
 	<-res
@@ -1092,7 +1078,7 @@ func osMain() {
 func convertCommandKey(k rune) (key.Name, bool) {
 	var n key.Name
 	switch k {
-	case '\x1b': // ASCII escape.
+	case '\x1b':
 		n = key.NameEscape
 	case C.NSLeftArrowFunctionKey:
 		n = key.NameLeftArrow

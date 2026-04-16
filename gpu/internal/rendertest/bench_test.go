@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package rendertest
 
 import (
@@ -19,8 +17,6 @@ import (
 	"github.com/nanorele/gio/widget/material"
 )
 
-// use some global variables for benchmarking so as to not pollute
-// the reported allocs with allocations that we do not want to count.
 var (
 	c1, c2, c3    = make(chan op.CallOp), make(chan op.CallOp), make(chan op.CallOp)
 	op1, op2, op3 op.Ops
@@ -60,8 +56,7 @@ func finishBenchmark(b *testing.B, w *headless.Window) {
 }
 
 func BenchmarkDrawUICached(b *testing.B) {
-	// As BenchmarkDraw but the same op.Ops every time that is not reset - this
-	// should thus allow for maximal cache usage.
+
 	gtx, w, th := setupBenchmark(b)
 	defer w.Release()
 	drawCore(gtx, th)
@@ -74,10 +69,7 @@ func BenchmarkDrawUICached(b *testing.B) {
 }
 
 func BenchmarkDrawUI(b *testing.B) {
-	// BenchmarkDraw is intended as a reasonable overall benchmark for
-	// the drawing performance of the full drawing pipeline, in each iteration
-	// resetting the ops and drawing, similar to how a typical UI would function.
-	// This will allow font caching across frames.
+
 	gtx, w, th := setupBenchmark(b)
 	defer w.Release()
 	drawCore(gtx, th)
@@ -99,7 +91,7 @@ func BenchmarkDrawUI(b *testing.B) {
 }
 
 func BenchmarkDrawUITransformed(b *testing.B) {
-	// Like BenchmarkDraw UI but transformed at every frame
+
 	gtx, w, th := setupBenchmark(b)
 	defer w.Release()
 	drawCore(gtx, th)
@@ -122,9 +114,7 @@ func BenchmarkDrawUITransformed(b *testing.B) {
 }
 
 func Benchmark1000Circles(b *testing.B) {
-	// Benchmark1000Shapes draws 1000 individual shapes such that no caching between
-	// shapes will be possible and resets buffers on each operation to prevent caching
-	// between frames.
+
 	gtx, w, _ := setupBenchmark(b)
 	defer w.Release()
 	draw1000Circles(gtx)
@@ -140,8 +130,7 @@ func Benchmark1000Circles(b *testing.B) {
 }
 
 func Benchmark1000CirclesInstanced(b *testing.B) {
-	// Like Benchmark1000Circles but will record them and thus allow for caching between
-	// them.
+
 	gtx, w, _ := setupBenchmark(b)
 	defer w.Release()
 	draw1000CirclesInstanced(gtx)
@@ -200,7 +189,7 @@ func drawCore(gtx layout.Context, th *material.Theme) {
 }
 
 func drawIndividualShapes(gtx layout.Context, th *material.Theme) chan op.CallOp {
-	// draw 81 rounded rectangles of different solid colors - each one individually
+
 	go func() {
 		ops := &op1
 		c := op.Record(ops)
@@ -220,7 +209,7 @@ func drawIndividualShapes(gtx layout.Context, th *material.Theme) chan op.CallOp
 }
 
 func drawShapeInstances(gtx layout.Context, th *material.Theme) chan op.CallOp {
-	// draw 400 textured circle instances, each with individual transform
+
 	go func() {
 		ops := &op2
 		co := op.Record(ops)
@@ -247,7 +236,7 @@ func drawShapeInstances(gtx layout.Context, th *material.Theme) chan op.CallOp {
 }
 
 func drawText(gtx layout.Context, th *material.Theme) chan op.CallOp {
-	// draw 40 lines of text with different transforms.
+
 	go func() {
 		ops := &op3
 		c := op.Record(ops)

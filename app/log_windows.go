@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package app
 
 import (
@@ -18,7 +16,7 @@ var (
 )
 
 func init() {
-	// Windows DebugView already includes timestamps.
+
 	if syscall.Stderr == 0 {
 		log.SetFlags(log.Flags() &^ log.LstdFlags)
 		log.SetOutput(debugView)

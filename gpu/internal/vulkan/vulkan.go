@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 //go:build (linux || freebsd) && !novulkan
 // +build linux freebsd
 // +build !novulkan
@@ -12,9 +10,9 @@ import (
 	"image"
 	"math/bits"
 
+	"gioui.org/shader"
 	"github.com/nanorele/gio/gpu/internal/driver"
 	"github.com/nanorele/gio/internal/vk"
-	"gioui.org/shader"
 )
 
 type Backend struct {
@@ -48,7 +46,6 @@ type Backend struct {
 
 	passes map[passKey]vk.RenderPass
 
-	// bindings and offset are temporary storage for BindVertexBuffer.
 	bindings []vk.Buffer
 	offsets  []vk.DeviceSize
 
@@ -221,7 +218,7 @@ func (b *Backend) resetPipes() {
 	for i := len(b.allPipes) - 1; i >= 0; i-- {
 		p := b.allPipes[i]
 		if p.pipe == 0 {
-			// Released pipeline.
+
 			b.allPipes = append(b.allPipes[:i], b.allPipes[:i+1]...)
 			continue
 		}
@@ -238,7 +235,7 @@ func (b *Backend) EndFrame() {
 	}
 	fence := b.frameFence
 	if fence == 0 {
-		// We're internally synchronized.
+
 		fence = b.fence
 	}
 	b.submitCmdBuf(fence)
@@ -349,7 +346,7 @@ func (b *Backend) NewTexture(format driver.TextureFormat, width, height int, min
 
 func (b *Backend) NewBuffer(bindings driver.BufferBinding, size int) (driver.Buffer, error) {
 	if bindings&driver.BufferBindingUniforms != 0 {
-		// Implement uniform buffers as inline push constants.
+
 		return &Buffer{store: make([]byte, size)}, nil
 	}
 	usage := vk.BUFFER_USAGE_TRANSFER_DST_BIT | vk.BUFFER_USAGE_TRANSFER_SRC_BIT
@@ -660,7 +657,7 @@ func (t *Texture) Upload(offset, size image.Point, pixels []byte, stride int) {
 		vk.ACCESS_TRANSFER_WRITE_BIT,
 	)
 	vk.CmdCopyBufferToImage(cmdBuf, stage.buf, t.img, t.layout, op)
-	// Build mipmaps by repeating linear blits.
+
 	w, h := t.width, t.height
 	for i := 1; i < t.mipmaps; i++ {
 		nw, nh := w/2, h/2
@@ -670,7 +667,7 @@ func (t *Texture) Upload(offset, size image.Point, pixels []byte, stride int) {
 		if nw < 1 {
 			nw = 1
 		}
-		// Transition previous (source) level.
+
 		b := vk.BuildImageMemoryBarrier(
 			t.img,
 			vk.ACCESS_TRANSFER_WRITE_BIT, vk.ACCESS_TRANSFER_READ_BIT,
@@ -678,13 +675,13 @@ func (t *Texture) Upload(offset, size image.Point, pixels []byte, stride int) {
 			i-1, 1,
 		)
 		vk.CmdPipelineBarrier(cmdBuf, vk.PIPELINE_STAGE_TRANSFER_BIT, vk.PIPELINE_STAGE_TRANSFER_BIT, vk.DEPENDENCY_BY_REGION_BIT, nil, nil, []vk.ImageMemoryBarrier{b})
-		// Blit to this mipmap level.
+
 		blit := vk.BuildImageBlit(0, 0, 0, 0, w, h, nw, nh, i-1, i)
 		vk.CmdBlitImage(cmdBuf, t.img, vk.IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, t.img, vk.IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, []vk.ImageBlit{blit}, vk.FILTER_LINEAR)
 		w, h = nw, nh
 	}
 	if t.mipmaps > 1 {
-		// Add barrier for last blit.
+
 		b := vk.BuildImageMemoryBarrier(
 			t.img,
 			vk.ACCESS_TRANSFER_WRITE_BIT, vk.ACCESS_TRANSFER_READ_BIT,
@@ -1045,11 +1042,10 @@ func (b *Backend) BeginRenderPass(tex driver.Texture, d driver.LoadDesc) {
 	}
 	cmdBuf := b.ensureCmdBuf()
 	if sem := t.acquire; sem != 0 {
-		// The render pass targets a framebuffer that has an associated acquire semaphore.
-		// Wait for it by forming an execution barrier.
+
 		b.waitSems = append(b.waitSems, sem)
 		b.waitStages = append(b.waitStages, vk.PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-		// But only for the first pass in a frame.
+
 		t.acquire = 0
 	}
 	t.imageBarrier(cmdBuf,
@@ -1061,10 +1057,7 @@ func (b *Backend) BeginRenderPass(tex driver.Texture, d driver.LoadDesc) {
 	col := d.ClearColor
 	vk.CmdBeginRenderPass(cmdBuf, pass, t.fbo, t.width, t.height, [4]float32{col.R, col.G, col.B, col.A})
 	t.layout = t.passLayout
-	// If the render pass describes an automatic image layout transition to its final layout, there
-	// is an implicit image barrier with destination PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT. Make
-	// sure any subsequent barrier includes the transition.
-	// See also https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#VkSubpassDependency.
+
 	t.scope.stage |= vk.PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
 }
 

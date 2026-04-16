@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package material
 
 import (
@@ -25,7 +23,6 @@ type SwitchStyle struct {
 	Switch *widget.Bool
 }
 
-// Switch is for selecting a boolean value.
 func Switch(th *Theme, swtch *widget.Bool, description string) SwitchStyle {
 	sw := SwitchStyle{
 		Switch:      swtch,
@@ -37,7 +34,6 @@ func Switch(th *Theme, swtch *widget.Bool, description string) SwitchStyle {
 	return sw
 }
 
-// Layout updates the switch and displays it.
 func (s SwitchStyle) Layout(gtx layout.Context) layout.Dimensions {
 	s.Switch.Update(gtx)
 	trackWidth := gtx.Dp(36)
@@ -45,7 +41,6 @@ func (s SwitchStyle) Layout(gtx layout.Context) layout.Dimensions {
 	thumbSize := gtx.Dp(20)
 	trackOff := (thumbSize - trackHeight) / 2
 
-	// Draw track.
 	trackCorner := trackHeight / 2
 	trackRect := image.Rectangle{Max: image.Point{
 		X: trackWidth,
@@ -66,7 +61,6 @@ func (s SwitchStyle) Layout(gtx layout.Context) layout.Dimensions {
 	cl.Pop()
 	t.Pop()
 
-	// Draw thumb ink.
 	inkSize := gtx.Dp(44)
 	rr := inkSize / 2
 	inkOff := image.Point{
@@ -82,7 +76,6 @@ func (s SwitchStyle) Layout(gtx layout.Context) layout.Dimensions {
 	cl.Pop()
 	t.Pop()
 
-	// Compute thumb offset.
 	if s.Switch.Value {
 		xoff := trackWidth - thumbSize
 		defer op.Offset(image.Point{X: xoff}).Push(gtx.Ops).Pop()
@@ -97,22 +90,17 @@ func (s SwitchStyle) Layout(gtx layout.Context) layout.Dimensions {
 		}
 		return clip.Ellipse(b).Op(gtx.Ops)
 	}
-	// Draw hover.
+
 	if s.Switch.Hovered() || gtx.Focused(s.Switch) {
 		r := thumbRadius * 10 / 17
 		background := f32color.MulAlpha(s.Color.Enabled, 70)
 		paint.FillShape(gtx.Ops, background, circle(thumbRadius, thumbRadius, r))
 	}
 
-	// Draw thumb shadow, a translucent disc slightly larger than the
-	// thumb itself.
-	// Center shadow horizontally and slightly adjust its Y.
 	paint.FillShape(gtx.Ops, argb(0x55000000), circle(thumbRadius, thumbRadius+gtx.Dp(.25), thumbRadius+1))
 
-	// Draw thumb.
 	paint.FillShape(gtx.Ops, col, circle(thumbRadius, thumbRadius, thumbRadius))
 
-	// Set up click area.
 	clickSize := gtx.Dp(40)
 	clickOff := image.Point{
 		X: (thumbSize - clickSize) / 2,

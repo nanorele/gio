@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package app
 
 /*
@@ -53,33 +51,24 @@ import (
 	"github.com/nanorele/gio/io/pointer"
 )
 
-// displayLink is the state for a display link (CVDisplayLinkRef on macOS,
-// CADisplayLink on iOS). It runs a state-machine goroutine that keeps the
-// display link running for a while after being stopped to avoid the thread
-// start/stop overhead and because the CVDisplayLink sometimes fails to
-// start, stop and start again within a short duration.
 type displayLink struct {
 	callback func()
-	// states is for starting or stopping the display link.
+
 	states chan bool
-	// done is closed when the display link is destroyed.
+
 	done chan struct{}
-	// dids receives the display id when the callback owner is moved
-	// to a different screen.
+
 	dids chan uint64
-	// running tracks the desired state of the link. running is accessed
-	// with atomic.
+
 	running uint32
 }
 
-// displayLinks maps CFTypeRefs to *displayLinks.
 var displayLinks sync.Map
 
 func isMainThread() bool {
 	return bool(C.isMainThread())
 }
 
-// runOnMain runs the function on the main thread.
 func runOnMain(f func()) {
 	if isMainThread() {
 		f()
@@ -96,7 +85,6 @@ func gio_runFunc(h C.uintptr_t) {
 	f()
 }
 
-// nsstringToString converts a NSString to a Go string.
 func nsstringToString(str C.CFTypeRef) string {
 	if str == 0 {
 		return ""
@@ -111,7 +99,6 @@ func nsstringToString(str C.CFTypeRef) string {
 	return string(utf8)
 }
 
-// stringToNSString converts a Go string to a retained NSString.
 func stringToNSString(str string) C.CFTypeRef {
 	u16 := utf16.Encode([]rune(str))
 	var chars *C.unichar
@@ -152,14 +139,12 @@ func (d *displayLink) run(dl C.CFTypeRef) {
 		case start := <-d.states:
 			switch {
 			case !start && tchan == nil:
-				// stopTimeout is the delay before stopping the display link to
-				// avoid the overhead of frequently starting and stopping the
-				// link thread.
+
 				const stopTimeout = 500 * time.Millisecond
 				if stopTimer == nil {
 					stopTimer = time.NewTimer(stopTimeout)
 				} else {
-					// stopTimer is always drained when tchan == nil.
+
 					stopTimer.Reset(stopTimeout)
 				}
 				tchan = stopTimer.C
@@ -240,8 +225,6 @@ var macosCursorID = [...]byte{
 	pointer.CursorNorthWestSouthEastResize: 25,
 }
 
-// windowSetCursor updates the cursor from the current one to a new one
-// and returns the new one.
 func windowSetCursor(from, to pointer.Cursor) pointer.Cursor {
 	if from == to {
 		return to

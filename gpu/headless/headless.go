@@ -1,7 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-// Package headless implements headless windows for rendering
-// an operation list to an image.
 package headless
 
 import (
@@ -14,7 +10,6 @@ import (
 	"github.com/nanorele/gio/op"
 )
 
-// Window is a headless window.
 type Window struct {
 	size   image.Point
 	ctx    context
@@ -57,7 +52,6 @@ func newContext() (context, error) {
 	return nil, errors.New("headless: no available GPU backends")
 }
 
-// NewWindow creates a new headless window.
 func NewWindow(width, height int) (*Window, error) {
 	ctx, err := newContext()
 	if err != nil {
@@ -82,7 +76,7 @@ func NewWindow(width, height int) (*Window, error) {
 			dev.Release()
 			return err
 		}
-		// Note that the gpu takes ownership of dev.
+
 		gp, err := gpu.NewWithDevice(dev)
 		if err != nil {
 			fboTex.Release()
@@ -100,7 +94,6 @@ func NewWindow(width, height int) (*Window, error) {
 	return w, nil
 }
 
-// Release resources associated with the window.
 func (w *Window) Release() {
 	contextDo(w.ctx, func() error {
 		if w.fboTex != nil {
@@ -111,7 +104,7 @@ func (w *Window) Release() {
 			w.gpu.Release()
 			w.gpu = nil
 		}
-		// w.dev is owned and freed by w.gpu.
+
 		w.dev = nil
 		return nil
 	})
@@ -121,13 +114,10 @@ func (w *Window) Release() {
 	}
 }
 
-// Size returns the window size.
 func (w *Window) Size() image.Point {
 	return w.size
 }
 
-// Frame replaces the window content and state with the
-// operation list.
 func (w *Window) Frame(frame *op.Ops) error {
 	return contextDo(w.ctx, func() error {
 		w.gpu.Clear(color.NRGBA{})
@@ -135,7 +125,6 @@ func (w *Window) Frame(frame *op.Ops) error {
 	})
 }
 
-// Screenshot transfers the Window content at origin img.Rect.Min to img.
 func (w *Window) Screenshot(img *image.RGBA) error {
 	return contextDo(w.ctx, func() error {
 		return driver.DownloadImage(w.dev, w.fboTex, img)

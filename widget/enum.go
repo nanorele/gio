@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package widget
 
 import (
@@ -39,7 +37,6 @@ func (e *Enum) index(k string) *enumKey {
 	return nil
 }
 
-// Update the state and report whether Value has changed by user interaction.
 func (e *Enum) Update(gtx layout.Context) bool {
 	if !gtx.Enabled() {
 		e.focused = false
@@ -103,17 +100,14 @@ func (e *Enum) Update(gtx layout.Context) bool {
 	return changed
 }
 
-// Hovered returns the key that is highlighted, or false if none are.
 func (e *Enum) Hovered() (string, bool) {
 	return e.hovered, e.hovering
 }
 
-// Focused reports the focused key, or false if no key is focused.
 func (e *Enum) Focused() (string, bool) {
 	return e.focus, e.focused
 }
 
-// Layout adds the event handler for the key k.
 func (e *Enum) Layout(gtx layout.Context, k string, content layout.Widget) layout.Dimensions {
 	e.Update(gtx)
 	m := op.Record(gtx.Ops)

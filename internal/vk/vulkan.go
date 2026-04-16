@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 //go:build linux || freebsd
 // +build linux freebsd
 
@@ -713,12 +711,7 @@ var (
 func vkInit() error {
 	once.Do(func() {
 		var libName string
-		switch {
-		case runtime.GOOS == "android":
-			libName = "libvulkan.so"
-		default:
-			libName = "libvulkan.so.1"
-		}
+		libName = "libvulkan.so.1"
 		lib := dlopen(libName)
 		if lib == nil {
 			loadErr = fmt.Errorf("vulkan: %s", C.GoString(C.dlerror()))
@@ -839,7 +832,7 @@ func CreateInstance(exts ...string) (Instance, error) {
 	if err := vkInit(); err != nil {
 		return nil, err
 	}
-	// VK_MAKE_API_VERSION macro.
+
 	makeVer := func(variant, major, minor, patch int) C.uint32_t {
 		return ((((C.uint32_t)(variant)) << 29) | (((C.uint32_t)(major)) << 22) | (((C.uint32_t)(minor)) << 12) | ((C.uint32_t)(patch)))
 	}
@@ -849,8 +842,7 @@ func CreateInstance(exts ...string) (Instance, error) {
 	}
 	inf := C.VkInstanceCreateInfo{
 		sType: C.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-		// pApplicationInfo may be omitted according to the spec, but the Android
-		// emulator crashes without it.
+
 		pApplicationInfo: &appInf,
 	}
 	if len(exts) > 0 {
@@ -919,8 +911,7 @@ func ChoosePhysicalDevice(inst Instance, surf Surface) (PhysicalDevice, int, err
 	for _, pd := range devs {
 		var props C.VkPhysicalDeviceProperties
 		C.vkGetPhysicalDeviceProperties(funcs.vkGetPhysicalDeviceProperties, pd, &props)
-		// The lavapipe software implementation doesn't work well rendering to a surface.
-		// See https://gitlab.freedesktop.org/mesa/mesa/-/issues/5473.
+
 		if surf != 0 && props.deviceType == C.VK_PHYSICAL_DEVICE_TYPE_CPU {
 			continue
 		}
@@ -1004,12 +995,10 @@ func CreateSwapchain(pd PhysicalDevice, d Device, surf Surface, width, height in
 		return nilSwapchain, nil, 0, err
 	}
 	if !modeOK || !fmtOK {
-		// This shouldn't happen because CreateDeviceAndQueue found at least
-		// one valid format and present mode.
+
 		return nilSwapchain, nil, 0, errors.New("vulkan: no valid format and present mode found")
 	}
-	// Find supported alpha composite mode. It doesn't matter which one, because rendering is
-	// always opaque.
+
 	alphaComp := C.VkCompositeAlphaFlagBitsKHR(1)
 	for caps.supportedCompositeAlpha&C.VkCompositeAlphaFlagsKHR(alphaComp) == 0 {
 		alphaComp <<= 1
@@ -2081,8 +2070,7 @@ func chooseFormat(pd C.VkPhysicalDevice, surf Surface) (C.VkSurfaceFormatKHR, bo
 	if err != nil {
 		return C.VkSurfaceFormatKHR{}, false, fmt.Errorf("vulkan: vkGetPhysicalDeviceSurfaceFormatsKHR: %w", err)
 	}
-	// Query for format with sRGB support.
-	// TODO: Support devices without sRGB.
+
 	for _, f := range formats {
 		if f.colorSpace != C.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR {
 			continue
@@ -2098,14 +2086,12 @@ func chooseFormat(pd C.VkPhysicalDevice, surf Surface) (C.VkSurfaceFormatKHR, bo
 func chooseQueue(pd C.VkPhysicalDevice, surf Surface, flags C.VkQueueFlags) (int, bool, error) {
 	queues := GetPhysicalDeviceQueueFamilyProperties(pd)
 	for i, q := range queues {
-		// Check for presentation and feature support.
+
 		if q.queueFlags&flags != flags {
 			continue
 		}
 		if surf != nilSurface {
-			// Check for presentation support. It is possible that a device has no
-			// queue with both rendering and presentation support, but not in reality.
-			// See https://github.com/KhronosGroup/Vulkan-Docs/issues/1234.
+
 			var support C.VkBool32
 			if err := vkErr(C.vkGetPhysicalDeviceSurfaceSupportKHR(funcs.vkGetPhysicalDeviceSurfaceSupportKHR, pd, C.uint32_t(i), surf, &support)); err != nil {
 				return 0, false, fmt.Errorf("vulkan: vkGetPhysicalDeviceSurfaceSupportKHR: %w", err)

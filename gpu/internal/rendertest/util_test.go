@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package rendertest
 
 import (
@@ -73,8 +71,7 @@ func drawImage(t *testing.T, size int, ops *op.Ops, draw func(o *op.Ops)) (*imag
 }
 
 func run(t *testing.T, f func(o *op.Ops), c func(r result)) {
-	// Draw a few times and check that it is correct each time, to
-	// ensure any caching effects still generate the correct images.
+
 	var img *image.RGBA
 	var err error
 	ops := new(op.Ops)
@@ -85,7 +82,7 @@ func run(t *testing.T, f func(o *op.Ops), c func(r result)) {
 			t.Error("error rendering:", err)
 			return
 		}
-		// Check for a reference image and make sure it is identical.
+
 		if !verifyRef(t, img, 0) {
 			name := fmt.Sprintf("%s-%d-bad.png", t.Name(), i)
 			saveImage(t, name, img)
@@ -105,11 +102,8 @@ type frameT struct {
 	c func(r result)
 }
 
-// multiRun is used to run test cases over multiple frames, typically
-// to test caching interactions.
 func multiRun(t *testing.T, frames ...frameT) {
-	// draw a few times and check that it is correct each time, to
-	// ensure any caching effects still generate the correct images.
+
 	var err error
 	sz := image.Point{X: 128, Y: 128}
 	w := newWindow(t, sz.X, sz.Y)
@@ -128,7 +122,7 @@ func multiRun(t *testing.T, frames ...frameT) {
 			t.Errorf("screenshot failed: %v", err)
 			continue
 		}
-		// Check for a reference image and make sure they are identical.
+
 		ok := verifyRef(t, img, i)
 		if frames[i].c != nil {
 			frames[i].c(result{t: t, img: img})
@@ -144,7 +138,7 @@ func multiRun(t *testing.T, frames ...frameT) {
 }
 
 func verifyRef(t *testing.T, img *image.RGBA, frame int) (ok bool) {
-	// ensure identical to ref data
+
 	var path string
 	if frame == 0 {
 		path = t.Name()
@@ -206,7 +200,7 @@ func verifyRef(t *testing.T, img *image.RGBA, frame int) (ok bool) {
 }
 
 func colorsClose(c1, c2 color.RGBA) bool {
-	const delta = 0.01 // magic value obtained from experimentation.
+	const delta = 0.01
 	return yiqEqApprox(c1, c2, delta)
 }
 
@@ -215,18 +209,8 @@ func alphaClose(c1, c2 color.RGBA) bool {
 	return d > -8 && d < 8
 }
 
-// yiqEqApprox compares the colors of 2 pixels, in the NTSC YIQ color space,
-// as described in:
-//
-//	Measuring perceived color difference using YIQ NTSC
-//	transmission color space in mobile applications.
-//	Yuriy Kotsarenko, Fernando Ramos.
-//
-// An electronic version is available at:
-//
-// - http://www.progmat.uaem.mx:8080/artVol2Num2/Articulo3Vol2Num2.pdf
 func yiqEqApprox(c1, c2 color.RGBA, d2 float64) bool {
-	const max = 35215.0 // difference between 2 maximally different pixels.
+	const max = 35215.0
 
 	var (
 		r1 = float64(c1.R)
@@ -274,7 +258,7 @@ func saveImage(t testing.TB, file string, img *image.RGBA) {
 	if !*dumpImages {
 		return
 	}
-	// Only NRGBA images are losslessly encoded by png.Encode.
+
 	nrgba := image.NewNRGBA(img.Bounds())
 	bnd := img.Bounds()
 	for x := bnd.Min.X; x < bnd.Max.X; x++ {

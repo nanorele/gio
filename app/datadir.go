@@ -1,7 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-//go:build !android
-
 package app
 
 import "os"

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package input
 
 import (
@@ -61,7 +59,6 @@ func TestSemanticTree(t *testing.T) {
 		}
 	}
 
-	// Verify stable IDs.
 	r.Frame(&ops)
 	tree2 := r.AppendSemantics(nil)
 	if !reflect.DeepEqual(tree, tree2) {

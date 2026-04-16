@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package input
 
 import (
@@ -10,20 +8,16 @@ import (
 	"github.com/nanorele/gio/io/event"
 )
 
-// clipboardState contains the state for clipboard event routing.
 type clipboardState struct {
 	receivers []event.Tag
 }
 
 type clipboardQueue struct {
-	// request avoid read clipboard every frame while waiting.
 	requested bool
 	mime      string
 	text      []byte
 }
 
-// WriteClipboard returns the most recent data to be copied
-// to the clipboard, if any.
 func (q *clipboardQueue) WriteClipboard() (mime string, content []byte, ok bool) {
 	if q.text == nil {
 		return "", nil, false
@@ -33,8 +27,6 @@ func (q *clipboardQueue) WriteClipboard() (mime string, content []byte, ok bool)
 	return q.mime, content, true
 }
 
-// ClipboardRequested reports if any new handler is waiting
-// to read the clipboard.
 func (q *clipboardQueue) ClipboardRequested(state clipboardState) bool {
 	req := len(state.receivers) > 0 && q.requested
 	q.requested = false

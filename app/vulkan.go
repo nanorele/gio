@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 //go:build (linux || freebsd) && !novulkan
 // +build linux freebsd
 // +build !novulkan
@@ -115,15 +113,12 @@ func mapSurfaceErr(err error) error {
 	}
 	switch {
 	case vkErr == vk.SUBOPTIMAL_KHR:
-		// Android reports VK_SUBOPTIMAL_KHR when presenting to a rotated
-		// swapchain (preTransform != currentTransform). However, we don't
-		// support transforming the output ourselves, so we'll live with it.
+
 		return nil
 	case vkErr == vk.ERROR_OUT_OF_DATE_KHR:
 		return errOutOfDate
 	case vkErr == vk.ERROR_SURFACE_LOST_KHR:
-		// Treating a lost surface as a lost device isn't accurate, but
-		// probably not worth optimizing.
+
 		return gpu.ErrDeviceLost
 	}
 	return mapErr(err)
@@ -169,8 +164,7 @@ func (c *vkContext) refresh(surf vk.Surface, width, height int) error {
 	vk.DeviceWaitIdle(c.dev)
 
 	c.destroyImageViews()
-	// Check whether size is valid. That's needed on X11, where ConfigureNotify
-	// is not always synchronized with the window extent.
+
 	caps, err := vk.GetPhysicalDeviceSurfaceCapabilities(c.physDev, surf)
 	if err != nil {
 		return err

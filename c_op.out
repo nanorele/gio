@@ -1,0 +1,19 @@
+mode: set
+github.com/nanorele/gio/op/op.go:43.30,44.18 1 1
+github.com/nanorele/gio/op/op.go:44.18,46.3 1 1
+github.com/nanorele/gio/op/op.go:47.2,56.10 8 1
+github.com/nanorele/gio/op/op.go:59.23,61.2 1 1
+github.com/nanorele/gio/op/op.go:63.29,73.2 4 1
+github.com/nanorele/gio/op/op.go:75.32,84.2 3 1
+github.com/nanorele/gio/op/op.go:86.29,87.18 1 1
+github.com/nanorele/gio/op/op.go:87.18,89.3 1 1
+github.com/nanorele/gio/op/op.go:90.2,90.49 1 1
+github.com/nanorele/gio/op/op.go:93.42,96.2 2 1
+github.com/nanorele/gio/op/op.go:98.41,100.2 1 1
+github.com/nanorele/gio/op/op.go:102.50,106.2 3 1
+github.com/nanorele/gio/op/op.go:108.34,110.2 1 1
+github.com/nanorele/gio/op/op.go:112.45,115.10 3 1
+github.com/nanorele/gio/op/op.go:115.10,117.3 1 1
+github.com/nanorele/gio/op/op.go:118.2,125.49 8 1
+github.com/nanorele/gio/op/op.go:128.31,132.2 3 1
+github.com/nanorele/gio/op/op.go:134.43,134.44 0 1
