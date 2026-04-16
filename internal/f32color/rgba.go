@@ -92,21 +92,18 @@ func RGBAToNRGBA(col color.RGBA) color.NRGBA {
 }
 
 func linearTosRGB(c float32) float32 {
-
 	switch {
 	case c <= 0:
 		return 0
-	case 0 < c && c < 0.0031308:
+	case c < 0.0031308:
 		return 12.92 * c
-	case 0.0031308 <= c && c < 1:
+	case c < 1:
 		return 1.055*float32(math.Pow(float64(c), 0.41666)) - 0.055
 	}
-
 	return 1
 }
 
 func sRGBToLinear(c float32) float32 {
-
 	if c <= 0.04045 {
 		return c / 12.92
 	} else {

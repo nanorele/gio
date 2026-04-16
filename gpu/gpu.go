@@ -1505,22 +1505,22 @@ func (d *drawOps) boundsForTransformedRect(r f32.Rectangle, tr f32.Affine2D) (au
 		}
 	}
 
-	l := len(d.vertCache)
-	d.vertCache = append(d.vertCache, make([]byte, vertStride*4*4)...)
-	aux = d.vertCache[l:]
+	aux = d.writeVertCache(vertStride * 4 * 4)
 	encodeQuadTo(aux, 0, corners[0], corners[0].Add(corners[1]).Mul(0.5), corners[1])
 	encodeQuadTo(aux[vertStride*4:], 0, corners[1], corners[1].Add(corners[2]).Mul(0.5), corners[2])
 	encodeQuadTo(aux[vertStride*4*2:], 0, corners[2], corners[2].Add(corners[3]).Mul(0.5), corners[3])
 	encodeQuadTo(aux[vertStride*4*3:], 0, corners[3], corners[3].Add(corners[0]).Mul(0.5), corners[0])
 	fillMaxY(aux)
 
+	invW := 1.0 / (bnd.Max.X - bnd.Min.X)
+	invH := 1.0 / (bnd.Max.Y - bnd.Min.Y)
 	var P1, P2, P3 f32.Point
-	P1.X = (corners[1].X - bnd.Min.X) / (bnd.Max.X - bnd.Min.X)
-	P1.Y = (corners[1].Y - bnd.Min.Y) / (bnd.Max.Y - bnd.Min.Y)
-	P2.X = (corners[2].X - bnd.Min.X) / (bnd.Max.X - bnd.Min.X)
-	P2.Y = (corners[2].Y - bnd.Min.Y) / (bnd.Max.Y - bnd.Min.Y)
-	P3.X = (corners[3].X - bnd.Min.X) / (bnd.Max.X - bnd.Min.X)
-	P3.Y = (corners[3].Y - bnd.Min.Y) / (bnd.Max.Y - bnd.Min.Y)
+	P1.X = (corners[1].X - bnd.Min.X) * invW
+	P1.Y = (corners[1].Y - bnd.Min.Y) * invH
+	P2.X = (corners[2].X - bnd.Min.X) * invW
+	P2.Y = (corners[2].Y - bnd.Min.Y) * invH
+	P3.X = (corners[3].X - bnd.Min.X) * invW
+	P3.Y = (corners[3].Y - bnd.Min.Y) * invH
 	sx, sy := P2.X-P3.X, P2.Y-P3.Y
 	ptr = f32.NewAffine2D(sx, P2.X-P1.X, P1.X-sx, sy, P2.Y-P1.Y, P1.Y-sy).Invert()
 
@@ -1529,10 +1529,10 @@ func (d *drawOps) boundsForTransformedRect(r f32.Rectangle, tr f32.Affine2D) (au
 
 func transformOffset(t f32.Affine2D) (f32.Affine2D, f32.Point) {
 	sx, hx, ox, hy, sy, oy := t.Elems()
-	iox, fox := math.Modf(float64(ox))
-	ioy, foy := math.Modf(float64(oy))
-	ft := f32.NewAffine2D(sx, hx, float32(fox), hy, sy, float32(foy))
-	ip := f32.Pt(float32(iox), float32(ioy))
+	iox := float32(int32(ox))
+	ioy := float32(int32(oy))
+	ft := f32.NewAffine2D(sx, hx, ox-iox, hy, sy, oy-ioy)
+	ip := f32.Pt(iox, ioy)
 	return ft, ip
 }
 

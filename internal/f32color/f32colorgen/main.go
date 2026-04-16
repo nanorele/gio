@@ -47,10 +47,10 @@ func main() {
 }
 
 func sRGBToLinear(c float32) float32 {
-
 	if c <= 0.04045 {
 		return c / 12.92
 	} else {
 		return float32(math.Pow(float64((c+0.055)/1.055), 2.4))
 	}
 }
+

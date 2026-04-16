@@ -39,8 +39,12 @@ func (s Stack) Layout(gtx Context, children ...StackChild) Dimensions {
 		dims Dimensions
 	}
 	var scratchArray [32]scratchSpace
-	scratch := scratchArray[:0]
-	scratch = append(scratch, make([]scratchSpace, len(children))...)
+	var scratch []scratchSpace
+	if len(children) <= len(scratchArray) {
+		scratch = scratchArray[:len(children)]
+	} else {
+		scratch = make([]scratchSpace, len(children))
+	}
 	for i, w := range children {
 		if w.expanded {
 			continue

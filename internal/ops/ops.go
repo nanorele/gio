@@ -199,8 +199,14 @@ func WriteMulti(o *Ops, n int) []byte {
 	if !o.multipOp {
 		panic("cannot use multi ops in single ops")
 	}
-	o.data = append(o.data, make([]byte, n)...)
-	return o.data[len(o.data)-n:]
+	l := len(o.data)
+	if l+n <= cap(o.data) {
+		o.data = o.data[:l+n]
+		clear(o.data[l : l+n])
+	} else {
+		o.data = append(o.data, make([]byte, n)...)
+	}
+	return o.data[l : l+n]
 }
 
 func PushMacro(o *Ops) StackID {
@@ -256,10 +262,16 @@ func Write1(o *Ops, n int, ref1 any) []byte {
 }
 
 func Write1String(o *Ops, n int, ref1 string) []byte {
-	o.data = append(o.data, make([]byte, n)...)
+	l := len(o.data)
+	if l+n <= cap(o.data) {
+		o.data = o.data[:l+n]
+		clear(o.data[l : l+n])
+	} else {
+		o.data = append(o.data, make([]byte, n)...)
+	}
 	o.stringRefs = append(o.stringRefs, ref1)
 	o.refs = append(o.refs, &o.stringRefs[len(o.stringRefs)-1])
-	return o.data[len(o.data)-n:]
+	return o.data[l : l+n]
 }
 
 func Write2(o *Ops, n int, ref1, ref2 any) []byte {
@@ -275,10 +287,16 @@ func Write2(o *Ops, n int, ref1, ref2 any) []byte {
 }
 
 func Write2String(o *Ops, n int, ref1 any, ref2 string) []byte {
-	o.data = append(o.data, make([]byte, n)...)
+	l := len(o.data)
+	if l+n <= cap(o.data) {
+		o.data = o.data[:l+n]
+		clear(o.data[l : l+n])
+	} else {
+		o.data = append(o.data, make([]byte, n)...)
+	}
 	o.stringRefs = append(o.stringRefs, ref2)
 	o.refs = append(o.refs, ref1, &o.stringRefs[len(o.stringRefs)-1])
-	return o.data[len(o.data)-n:]
+	return o.data[l : l+n]
 }
 
 func Write3(o *Ops, n int, ref1, ref2, ref3 any) []byte {

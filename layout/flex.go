@@ -80,9 +80,6 @@ func (f Flex) Layout(gtx Context, children ...FlexChild) Dimensions {
 	var scratch []scratchSpace
 	if len(children) <= len(scratchArray) {
 		scratch = scratchArray[:len(children)]
-		for i := range scratch {
-			scratch[i] = scratchSpace{}
-		}
 	} else {
 		scratch = make([]scratchSpace, len(children))
 	}
