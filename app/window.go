@@ -525,13 +525,12 @@ func (c *callbacks) nextEvent() (event.Event, bool) {
 func (w *Window) nextEvent() (event.Event, bool) {
 	s := &w.coalesced
 	defer func() {
-
 		s.wakeup = false
 	}()
-	switch {
-	case s.framePending:
-
+	if s.framePending {
 		w.processFrame(new(op.Ops), nil)
+	}
+	switch {
 	case s.view != nil:
 		e := *s.view
 		s.view = nil
