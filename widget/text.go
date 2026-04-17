@@ -507,6 +507,9 @@ func (e *textView) runeOffset(r int) int {
 			e.offIndex = append(e.offIndex, entry)
 		}
 		_, s, _ := e.ReadRuneAt(int64(entry.bytes))
+		if s == 0 {
+			break
+		}
 		entry.bytes += s
 		entry.runes++
 	}

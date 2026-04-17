@@ -1,7 +1,6 @@
 package widget
 
 import (
-	"fmt"
 	"math/bits"
 
 	"github.com/nanorele/gio/io/system"
@@ -23,7 +22,7 @@ func (d *Decorations) LayoutMove(gtx layout.Context, w layout.Widget) layout.Dim
 
 func (d *Decorations) Clickable(action system.Action) *Clickable {
 	if bits.OnesCount(uint(action)) != 1 {
-		panic(fmt.Errorf("not a single action"))
+		panic("not a single action")
 	}
 	idx := bits.TrailingZeros(uint(action))
 	click, found := d.clicks[idx]

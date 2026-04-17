@@ -219,6 +219,9 @@ func (p *parser) parseList() error {
 		p.tokens = p.tokens[1:]
 	}
 
+	if len(p.tokens) == 0 {
+		return nil
+	}
 	switch head := p.tokens[0]; head.kind {
 	case tokenEOF:
 		return nil

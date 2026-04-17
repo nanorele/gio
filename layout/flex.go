@@ -229,7 +229,7 @@ func (s Spacing) String() string {
 	case SpaceAround:
 		return "SpaceAround"
 	case SpaceBetween:
-		return "SpaceAround"
+		return "SpaceBetween"
 	case SpaceEvenly:
 		return "SpaceEvenly"
 	default:

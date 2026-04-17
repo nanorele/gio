@@ -15,6 +15,9 @@ import (
 )
 
 func fromListPosition(lp layout.Position, elements int, majorAxisSize int) (start, end float32) {
+	if elements <= 0 || lp.Length <= 0 {
+		return 0, 1
+	}
 
 	lengthEstPx := float32(lp.Length)
 	elementLenEstPx := lengthEstPx / float32(elements)

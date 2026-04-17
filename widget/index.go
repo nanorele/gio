@@ -262,15 +262,21 @@ func (g *glyphIndex) closestToLineCol(lineCol screenPos) combinedPos {
 }
 
 func (g *glyphIndex) atStartOfLine(pos combinedPos) bool {
-	if pos.runes == 0 {
+	if pos.runes == 0 || len(g.positions) == 0 {
 		return true
 	}
 	prevRuneIndex := pos.runes - 1
+	if prevRuneIndex >= len(g.positions) {
+		return true
+	}
 	lineOfPrevRune := g.positions[prevRuneIndex].lineCol.line
 	return lineOfPrevRune < pos.lineCol.line
 }
 
 func (g *glyphIndex) atEndOfLine(pos combinedPos) bool {
+	if len(g.positions) == 0 {
+		return true
+	}
 	if pos.runes == g.positions[len(g.positions)-1].runes {
 		return true
 	}
