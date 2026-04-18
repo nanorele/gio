@@ -46,6 +46,9 @@ type window struct {
 	loop       *eventLoop
 	minimized  bool
 	dpi        int
+	// Cached result of configForDPI(dpi). cachedDPI==0 means uninitialised.
+	cachedDPI    int
+	cachedMetric unit.Metric
 }
 
 const _WM_WAKEUP = windows.WM_USER + iota
@@ -533,23 +536,23 @@ func (w *window) scrollEvent(wParam, lParam uintptr, horizontal bool, kmods key.
 }
 
 func (w *window) runLoop() {
-	msg := new(windows.Msg)
+	var msg windows.Msg
 
 loop:
 	for {
 		anim := w.animating
-		if anim && !w.minimized && !windows.PeekMessage(msg, 0, 0, 0, windows.PM_NOREMOVE) {
+		if anim && !w.minimized && !windows.PeekMessage(&msg, 0, 0, 0, windows.PM_NOREMOVE) {
 			w.draw(false)
 			continue
 		}
-		switch ret := windows.GetMessage(msg, 0, 0, 0); ret {
+		switch ret := windows.GetMessage(&msg, 0, 0, 0); ret {
 		case -1:
 			panic(errors.New("GetMessage failed"))
 		case 0:
 			break loop
 		}
-		windows.TranslateMessage(msg)
-		windows.DispatchMessage(msg)
+		windows.TranslateMessage(&msg)
+		windows.DispatchMessage(&msg)
 	}
 }
 
@@ -602,12 +605,15 @@ func (w *window) draw(sync bool) {
 	if w.dpi == 0 {
 		w.dpi = windows.GetWindowDPI(w.hwnd)
 	}
-	cfg := configForDPI(w.dpi)
+	if w.cachedDPI != w.dpi {
+		w.cachedMetric = configForDPI(w.dpi)
+		w.cachedDPI = w.dpi
+	}
 	w.ProcessEvent(frameEvent{
 		FrameEvent: FrameEvent{
 			Now:    time.Now(),
 			Size:   w.config.Size,
-			Metric: cfg,
+			Metric: w.cachedMetric,
 		},
 		Sync: sync,
 	})

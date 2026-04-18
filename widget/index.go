@@ -18,6 +18,10 @@ type lineInfo struct {
 	width           fixed.Int26_6
 	ascent, descent fixed.Int26_6
 	glyphs          int
+	// posStart, posEnd are indices into glyphIndex.positions covering this line
+	// as a half-open range [posStart, posEnd). Enables O(1) line→positions lookup.
+	posStart int
+	posEnd   int
 }
 
 func (l lineInfo) getLineEnd() fixed.Int26_6 {
@@ -34,6 +38,10 @@ type glyphIndex struct {
 	currentLineMin, currentLineMax fixed.Int26_6
 
 	currentLineGlyphs int
+
+	// currentLinePosStart is the index into positions where the line currently
+	// being built begins. Written into lineInfo.posStart when the line ends.
+	currentLinePosStart int
 
 	pos combinedPos
 
@@ -53,6 +61,7 @@ func (g *glyphIndex) reset() {
 	g.currentLineMin = 0
 	g.currentLineMax = 0
 	g.currentLineGlyphs = 0
+	g.currentLinePosStart = 0
 	g.pos = combinedPos{}
 	g.prog = 0
 	g.clusterAdvance = 0
@@ -204,14 +213,18 @@ func (g *glyphIndex) Glyph(gl text.Glyph) {
 		g.pos.runIndex++
 	}
 	if needsNewLine {
+		posEnd := len(g.positions)
 		g.lines = append(g.lines, lineInfo{
-			xOff:    g.currentLineMin,
-			yOff:    int(gl.Y),
-			width:   g.currentLineMax - g.currentLineMin,
-			ascent:  g.positions[len(g.positions)-1].ascent,
-			descent: g.positions[len(g.positions)-1].descent,
-			glyphs:  g.currentLineGlyphs,
+			xOff:     g.currentLineMin,
+			yOff:     int(gl.Y),
+			width:    g.currentLineMax - g.currentLineMin,
+			ascent:   g.positions[posEnd-1].ascent,
+			descent:  g.positions[posEnd-1].descent,
+			glyphs:   g.currentLineGlyphs,
+			posStart: g.currentLinePosStart,
+			posEnd:   posEnd,
 		})
+		g.currentLinePosStart = posEnd
 		g.pos.lineCol.line++
 		g.pos.lineCol.col = 0
 		g.pos.runIndex = 0
@@ -310,7 +323,13 @@ func (g *glyphIndex) closestToXY(x fixed.Int26_6, y int) (pos combinedPos, atEnd
 	closestDist := dist(first.x, x)
 	line := first.lineCol.line
 
-	for i := i + 1; i < len(g.positions) && g.positions[i].lineCol.line == line; i++ {
+	// Bound the scan by the line's pre-computed posEnd index, avoiding a per-
+	// iteration line comparison. Falls back to the old bound if posEnd is 0.
+	lineEnd := len(g.positions)
+	if line < len(g.lines) && g.lines[line].posEnd > 0 {
+		lineEnd = g.lines[line].posEnd
+	}
+	for i := i + 1; i < lineEnd; i++ {
 		candidate := g.positions[i]
 		distance := dist(candidate.x, x)
 
@@ -362,18 +381,27 @@ func (g *glyphIndex) locate(viewport image.Rectangle, startRune, endRune int, re
 	caretStart, _ := g.closestToRune(startRune)
 	caretEnd, _ := g.closestToRune(endRune)
 
+	lastLineIdx := len(g.lines) - 1
 	for lineIdx := caretStart.lineCol.line; lineIdx < len(g.lines); lineIdx++ {
 		if lineIdx > caretEnd.lineCol.line {
 			break
 		}
-		pos := g.closestToLineCol(screenPos{line: lineIdx})
+		line := g.lines[lineIdx]
+		// Direct lookup of the first position on this line (replaces O(log n)
+		// closestToLineCol call). Falls back only if the line has no positions,
+		// which shouldn't happen under normal shaping but keeps the code robust.
+		var pos combinedPos
+		if line.posEnd > line.posStart {
+			pos = g.positions[line.posStart]
+		} else {
+			pos = g.closestToLineCol(screenPos{line: lineIdx})
+		}
 		if int(pos.y)+pos.descent.Ceil() < viewport.Min.Y {
 			continue
 		}
 		if int(pos.y)-pos.ascent.Ceil() > viewport.Max.Y {
 			break
 		}
-		line := g.lines[lineIdx]
 		if lineIdx > caretStart.lineCol.line && lineIdx < caretEnd.lineCol.line {
 			startX := line.xOff
 			endX := startX + line.width
@@ -384,12 +412,24 @@ func (g *glyphIndex) locate(viewport image.Rectangle, startRune, endRune int, re
 		selectionStart := caretStart
 		selectionEnd := caretEnd
 		if lineIdx != caretStart.lineCol.line {
-
-			selectionStart = g.closestToLineCol(screenPos{line: lineIdx})
+			if line.posEnd > line.posStart {
+				selectionStart = g.positions[line.posStart]
+			} else {
+				selectionStart = g.closestToLineCol(screenPos{line: lineIdx})
+			}
 		}
 		if lineIdx != caretEnd.lineCol.line {
-
-			selectionEnd = g.closestToLineCol(screenPos{line: lineIdx, col: math.MaxInt})
+			// Mirror closestToLineCol's behavior: for non-last lines it adjusts
+			// x to the visual line end; for the last line it returns the raw
+			// position without adjustment.
+			if line.posEnd > line.posStart {
+				selectionEnd = g.positions[line.posEnd-1]
+				if lineIdx != lastLineIdx {
+					selectionEnd.x = line.getLineEnd()
+				}
+			} else {
+				selectionEnd = g.closestToLineCol(screenPos{line: lineIdx, col: math.MaxInt})
+			}
 		}
 
 		var (

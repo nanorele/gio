@@ -434,8 +434,9 @@ func (e *textView) layoutText(lt *text.Shaper) {
 	}
 	e.index.reset()
 	// Pre-allocate index slices based on source size to reduce allocations.
+	// Use ~2/3 of byte size as glyph estimate: ASCII gives 1:1, mixed 2-byte UTF-8 gives 2:1.
 	if sz := e.rr.Size(); sz > 0 {
-		e.index.ensureCapacity(int(sz))
+		e.index.ensureCapacity(int(sz) * 2 / 3)
 	}
 	it := textIterator{viewport: image.Rectangle{Max: image.Point{X: math.MaxInt, Y: math.MaxInt}}}
 	if lt != nil {

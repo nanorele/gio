@@ -36,6 +36,11 @@ type List struct {
 
 	maxSize  int
 	children []scrollChild
+	// backward holds children inserted via iterateBackward in reverse visual
+	// order (index 0 = last-inserted = rightmost/bottom of the backward batch).
+	// Merged into children at the start of layout() to avoid the O(n²) per-
+	// insert shift that the previous append+copy implementation performed.
+	backward []scrollChild
 	dir      iterationDir
 }
 
@@ -72,6 +77,7 @@ func (l *List) init(gtx Context, len int) {
 	l.cs = gtx.Constraints
 	l.maxSize = 0
 	l.children = l.children[:0]
+	l.backward = l.backward[:0]
 	l.len = len
 	l.update(gtx)
 	if l.Position.First < 0 {
@@ -164,7 +170,7 @@ func (l *List) index() int {
 	case iterateBackward:
 		return l.Position.First - 1
 	case iterateForward:
-		return l.Position.First + len(l.children)
+		return l.Position.First + len(l.backward) + len(l.children)
 	default:
 		panic("Index called before Next")
 	}
@@ -176,7 +182,8 @@ func (l *List) more() bool {
 
 func (l *List) nextDir() iterationDir {
 	_, vsize := l.Axis.mainConstraint(l.cs)
-	last := l.Position.First + len(l.children)
+	totalChildren := len(l.backward) + len(l.children)
+	last := l.Position.First + totalChildren
 
 	if l.maxSize-l.Position.Offset < vsize && last == l.len {
 		l.Position.Offset = l.maxSize - vsize
@@ -186,18 +193,30 @@ func (l *List) nextDir() iterationDir {
 	}
 
 	firstSize, lastSize := 0, 0
-	if len(l.children) > 0 {
+	if totalChildren > 0 {
 		if l.Position.First > 0 {
-			firstChild := l.children[0]
+			// The first visible child is the most recently-inserted backward
+			// child if any, otherwise children[0].
+			var firstChild scrollChild
+			if n := len(l.backward); n > 0 {
+				firstChild = l.backward[n-1]
+			} else {
+				firstChild = l.children[0]
+			}
 			firstSize = l.Axis.Convert(firstChild.size).X + l.Gap
 		}
 		if last < l.len {
-			lastChild := l.children[len(l.children)-1]
+			var lastChild scrollChild
+			if n := len(l.children); n > 0 {
+				lastChild = l.children[n-1]
+			} else {
+				lastChild = l.backward[0]
+			}
 			lastSize = l.Axis.Convert(lastChild.size).X + l.Gap
 		}
 	}
 	switch {
-	case len(l.children) == l.len:
+	case totalChildren == l.len:
 		return iterateNone
 	case l.maxSize-l.Position.Offset-lastSize < vsize:
 		return iterateForward
@@ -218,9 +237,7 @@ func (l *List) end(dims Dimensions, call op.CallOp) {
 	case iterateForward:
 		l.children = append(l.children, child)
 	case iterateBackward:
-		l.children = append(l.children, scrollChild{})
-		copy(l.children[1:], l.children[:len(l.children)-1])
-		l.children[0] = child
+		l.backward = append(l.backward, child)
 		l.Position.First--
 		l.Position.Offset += mainSize + l.Gap
 	default:
@@ -229,10 +246,39 @@ func (l *List) end(dims Dimensions, call op.CallOp) {
 	l.dir = iterateNone
 }
 
+// mergeBackward prepends backward-iterated children into l.children in correct
+// visual order, resetting l.backward. O(n) total, vs O(n²) for the previous
+// per-insert shift.
+func (l *List) mergeBackward() {
+	n := len(l.backward)
+	if n == 0 {
+		return
+	}
+	total := n + len(l.children)
+	if cap(l.children) < total {
+		newCh := make([]scrollChild, total)
+		for i := range n {
+			newCh[i] = l.backward[n-1-i]
+		}
+		copy(newCh[n:], l.children)
+		l.children = newCh
+	} else {
+		l.children = l.children[:total]
+		// Shift forward children right by n.
+		copy(l.children[n:], l.children[:total-n])
+		// Place reversed backward children at the front.
+		for i := range n {
+			l.children[i] = l.backward[n-1-i]
+		}
+	}
+	l.backward = l.backward[:0]
+}
+
 func (l *List) layout(ops *op.Ops, macro op.MacroOp) Dimensions {
 	if l.more() {
 		panic("unfinished child")
 	}
+	l.mergeBackward()
 	mainMin, mainMax := l.Axis.mainConstraint(l.cs)
 	children := l.children
 	var first scrollChild

@@ -42,12 +42,13 @@ type document struct {
 }
 
 func (l *document) append(other document) {
+	startIdx := len(l.lines)
 	l.lines = append(l.lines, other.lines...)
 	l.runs = append(l.runs, other.runs...)
 	l.glyphs = append(l.glyphs, other.glyphs...)
 	l.visual = append(l.visual, other.visual...)
 	l.alignWidth = max(l.alignWidth, other.alignWidth)
-	calculateYOffsets(l.lines)
+	calculateYOffsetsFrom(l.lines, startIdx)
 }
 
 func (l *document) reset() {
@@ -443,10 +444,7 @@ func replaceControlCharacters(in []rune) []rune {
 }
 
 func (s *shaperImpl) LayoutString(params Parameters, txt string) document {
-	s.scratchRunes = s.scratchRunes[:0]
-	for _, r := range txt {
-		s.scratchRunes = append(s.scratchRunes, r)
-	}
+	s.scratchRunes = append(s.scratchRunes[:0], []rune(txt)...)
 	return s.LayoutRunes(params, s.scratchRunes)
 }
 
@@ -463,14 +461,22 @@ func (s *shaperImpl) Layout(params Parameters, txt io.RuneReader) document {
 }
 
 func calculateYOffsets(lines []line) {
+	calculateYOffsetsFrom(lines, 0)
+}
+
+// calculateYOffsetsFrom fills in yOffset for lines[startIdx:] only, reusing
+// lines[startIdx-1].yOffset as the carry. For a full recompute pass startIdx=0.
+func calculateYOffsetsFrom(lines []line, startIdx int) {
 	if len(lines) < 1 {
 		return
 	}
-	currentY := lines[0].ascent.Ceil()
-	for i := range lines {
-		if i > 0 {
-			currentY += lines[i].lineHeight.Round()
-		}
+	if startIdx <= 0 {
+		lines[0].yOffset = lines[0].ascent.Ceil()
+		startIdx = 1
+	}
+	currentY := lines[startIdx-1].yOffset
+	for i := startIdx; i < len(lines); i++ {
+		currentY += lines[i].lineHeight.Round()
 		lines[i].yOffset = currentY
 	}
 }
@@ -638,6 +644,9 @@ func (s *shaperImpl) Shape(pathOps *op.Ops, gs []Glyph) clip.PathSpec {
 	var x fixed.Int26_6
 	var builder clip.Path
 	builder.Begin(pathOps)
+	var cachedPpem fixed.Int26_6
+	cachedFaceIdx := -1
+	var cachedScaleFactor float32
 	for i, g := range gs {
 		if i == 0 {
 			x = g.X
@@ -650,7 +659,15 @@ func (s *shaperImpl) Shape(pathOps *op.Ops, gs []Glyph) clip.PathSpec {
 		if face == nil {
 			continue
 		}
-		scaleFactor := fixedToFloat(ppem) / float32(face.Upem())
+		var scaleFactor float32
+		if ppem == cachedPpem && faceIdx == cachedFaceIdx {
+			scaleFactor = cachedScaleFactor
+		} else {
+			scaleFactor = fixedToFloat(ppem) / float32(face.Upem())
+			cachedPpem = ppem
+			cachedFaceIdx = faceIdx
+			cachedScaleFactor = scaleFactor
+		}
 		glyphData := face.GlyphData(gid)
 
 		var outline font.GlyphOutline

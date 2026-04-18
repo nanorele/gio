@@ -531,8 +531,25 @@ func TestIndexPositionLines(t *testing.T) {
 			for i := range min(len(gi.lines), len(tc.expectedLines)) {
 				actual := gi.lines[i]
 				expected := tc.expectedLines[i]
-				if actual != expected {
+				// Compare semantic fields only; posStart/posEnd are internal indices
+				// tracked for fast line→positions lookup and are verified separately.
+				if actual.xOff != expected.xOff || actual.yOff != expected.yOff ||
+					actual.width != expected.width || actual.ascent != expected.ascent ||
+					actual.descent != expected.descent || actual.glyphs != expected.glyphs {
 					t.Errorf("line %d: expected:\n%#+v, got:\n%#+v", i, expected, actual)
+				}
+			}
+			// Verify posStart/posEnd invariants: contiguous, non-decreasing, bounded.
+			for i, ln := range gi.lines {
+				if ln.posStart > ln.posEnd {
+					t.Errorf("line %d: posStart (%d) > posEnd (%d)", i, ln.posStart, ln.posEnd)
+				}
+				if ln.posEnd > len(gi.positions) {
+					t.Errorf("line %d: posEnd (%d) > len(positions) (%d)", i, ln.posEnd, len(gi.positions))
+				}
+				if i > 0 && ln.posStart != gi.lines[i-1].posEnd {
+					t.Errorf("line %d: posStart (%d) != previous posEnd (%d)",
+						i, ln.posStart, gi.lines[i-1].posEnd)
 				}
 			}
 		})
