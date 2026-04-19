@@ -390,7 +390,6 @@ import (
 	"image"
 	"math"
 	"reflect"
-	"runtime"
 	"sync"
 	"unsafe"
 )
