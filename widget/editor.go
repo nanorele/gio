@@ -1006,6 +1006,11 @@ func (e *Editor) SetCaret(start, end int) {
 	e.scroller.Stop()
 }
 
+func (e *Editor) SetScrollCaret(b bool) {
+	e.initBuffer()
+	e.scrollCaret = b
+}
+
 func (e *Editor) SelectedText() string {
 	e.initBuffer()
 	e.scratch = e.text.SelectedText(e.scratch)
