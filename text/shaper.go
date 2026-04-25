@@ -195,12 +195,9 @@ func (l *Shaper) init() {
 		return
 	}
 	l.initialized = true
-	if l.pathOps == nil {
-		l.pathOps = new(op.Ops)
-	}
-	if l.bitmapOps == nil {
-		l.bitmapOps = new(op.Ops)
-	}
+	// pathOps/bitmapOps are deliberately unused — Shape and Bitmaps
+	// allocate per-call buffers so cache eviction can reclaim them
+	// (see comments on those methods).
 	l.reader = bufio.NewReader(nil)
 	l.shaper = *newShaperImpl(!l.config.disableSystemFonts, l.config.collection)
 }
@@ -208,6 +205,32 @@ func (l *Shaper) init() {
 func (l *Shaper) Layout(params Parameters, txt io.Reader) {
 	l.init()
 	l.layoutText(params, txt, "")
+}
+
+// ResetLayoutCache drops cached paragraph layouts. Useful when an editor is
+// about to switch wrap modes or when a large text replaces the current one,
+// so the document/glyph data captured for previous (text, width) keys can be
+// reclaimed by the GC instead of waiting for LRU eviction.
+func (l *Shaper) ResetLayoutCache() {
+	l.layoutCache.Clear()
+}
+
+
+// ReleaseLayoutBuffers drops the per-shape document held inside the
+// shaper after the last NextGlyph call. The next Layout/LayoutString
+// call repopulates from scratch, so this is safe to invoke from the
+// caller (e.g. the editor) once it has copied the glyphs it needs into
+// its own index. For multi-MB texts this frees hundreds of MB that
+// otherwise sit in Shaper.txt until the next shape.
+func (l *Shaper) ReleaseLayoutBuffers() {
+	l.txt.lines = nil
+	l.txt.runs = nil
+	l.txt.glyphs = nil
+	l.txt.visual = nil
+	l.txt.alignWidth = 0
+	l.txt.unreadRuneCount = 0
+	l.line, l.run, l.glyph, l.advance = 0, 0, 0, 0
+	l.done = true
 }
 
 func (l *Shaper) LayoutString(params Parameters, str string) {
@@ -304,6 +327,19 @@ func (l *Shaper) layoutParagraph(params Parameters, asStr string, asBytes []byte
 		asStr = string(asBytes)
 	}
 
+	// Skip the cache entirely for oversize paragraphs. The cache exists
+	// to short-circuit re-shaping identical short strings (UI labels,
+	// header values, repeating fragments). For multi-hundred-KB single
+	// paragraphs (e.g. minified JSON response bodies) a cache entry
+	// duplicates the shaped glyph data the caller is already consuming
+	// into its own index, and sits there holding hundreds of MB of RAM
+	// until LRU evicts it. The cost of re-shaping such a paragraph on
+	// the rare occasion it repeats is a better trade-off than keeping
+	// the second copy resident.
+	const cacheableParagraphMaxBytes = 64 * 1024
+	if len(asStr) > cacheableParagraphMaxBytes {
+		return l.shaper.LayoutString(params, asStr)
+	}
 	lk := layoutKey{
 		ppem:            params.PxPerEm,
 		maxWidth:        params.MaxWidth,
@@ -492,7 +528,14 @@ func (l *Shaper) Shape(gs []Glyph) clip.PathSpec {
 	if ok {
 		return shape
 	}
-	shape = l.shaper.Shape(l.pathOps, gs)
+	// Allocate a fresh op.Ops per cache miss so memory is bounded by
+	// the cache itself: when the LRU evicts an entry, its PathSpec
+	// drops the only reference to that ops buffer and the GC reclaims
+	// it. Sharing one persistent l.pathOps across all entries would
+	// keep the path bytes alive forever — eviction can't trim part of
+	// a single op buffer (Reset() only zeros length, freeing actual
+	// memory needs a new buffer).
+	shape = l.shaper.Shape(new(op.Ops), gs)
 	l.pathCache.Put(key, gs, shape)
 	return shape
 }
@@ -504,7 +547,8 @@ func (l *Shaper) Bitmaps(gs []Glyph) op.CallOp {
 	if ok {
 		return call
 	}
-	call = l.shaper.Bitmaps(l.bitmapOps, gs)
+	// Same per-call ops trick as Shape — eviction frees the buffer.
+	call = l.shaper.Bitmaps(new(op.Ops), gs)
 	l.bitmapShapeCache.Put(key, gs, call)
 	return call
 }

@@ -448,6 +448,11 @@ func (e *textView) layoutText(lt *text.Shaper) {
 			}
 			e.index.Glyph(g)
 		}
+		// All glyphs are now copied into e.index; the shaper's per-shape
+		// document (Shaper.txt) is no longer needed and would otherwise
+		// hold a parallel copy of every glyph until the next layoutText
+		// call. For multi-MB texts this saves hundreds of MB of live heap.
+		lt.ReleaseLayoutBuffers()
 	} else {
 
 		b := bufio.NewReader(r)
@@ -689,6 +694,24 @@ func (e *textView) SetCaret(start, end int) {
 	e.caret.start = e.closestToRune(start).runes
 	e.caret.end = e.closestToRune(end).runes
 	e.clampCursorToGraphemes()
+}
+
+// ResetCaretToOrigin pins the caret to rune 0 without going through
+// closestToRune (which forces a full reshape via makeValid). Safe to call
+// after a text mutation when the caller knows it wants the caret at the
+// start and doesn't need positional metadata yet.
+func (e *textView) ResetCaretToOrigin() {
+	e.caret.start = 0
+	e.caret.end = 0
+}
+
+// SetCaretRunes records caret rune indices without going through
+// closestToRune. Useful right after a mutation when the caller knows the
+// indices are valid and doesn't want to pay for a full reshape just to
+// normalise positions.
+func (e *textView) SetCaretRunes(start, end int) {
+	e.caret.start = start
+	e.caret.end = end
 }
 
 func (e *textView) SelectedText(buf []byte) []byte {

@@ -263,9 +263,25 @@ func splitByScript(inputs []shaping.Input, documentDir di.Direction, buf []shapi
 	return splitInputs
 }
 
+func isASCII(rs []rune) bool {
+	for _, r := range rs {
+		if r >= 0x80 {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *shaperImpl) splitBidi(input shaping.Input) []shaping.Input {
 	var splitInputs []shaping.Input
 	if input.Direction.Axis() != di.Horizontal || input.RunStart == input.RunEnd {
+		return []shaping.Input{input}
+	}
+	// Fast path: pure ASCII text has no bidi reordering; skip the
+	// bidi.Paragraph machinery, which otherwise copies the input into
+	// []byte and allocates per-rune Class/bracket tables (~10x the input
+	// size for large ASCII paragraphs).
+	if isASCII(input.Text[input.RunStart:input.RunEnd]) {
 		return []shaping.Input{input}
 	}
 	def := bidi.LeftToRight
@@ -508,19 +524,6 @@ func (s *shaperImpl) LayoutRunes(params Parameters, txt []rune) document {
 		}
 	}
 
-	if needed := len(ls); needed > len(s.scratchLines) {
-		s.scratchLines = slices.Grow(s.scratchLines, needed)
-	}
-	if needed := totalRuns; needed > len(s.scratchRuns) {
-		s.scratchRuns = slices.Grow(s.scratchRuns, needed)
-	}
-	if needed := totalGlyphs; needed > len(s.scratchGlyphs) {
-		s.scratchGlyphs = slices.Grow(s.scratchGlyphs, needed)
-	}
-	if needed := totalRuns; needed > len(s.scratchVisual) {
-		s.scratchVisual = slices.Grow(s.scratchVisual, needed)
-	}
-
 	resLines := make([]line, len(ls))
 	resRuns := make([]runLayout, totalRuns)
 	resGlyphs := make([]glyph, totalGlyphs)
@@ -622,7 +625,7 @@ func (s *shaperImpl) LayoutRunes(params Parameters, txt []rune) document {
 		resLines[i].lineHeight = maxHeight
 	}
 	calculateYOffsets(resLines)
-	return document{
+	doc := document{
 		lines:      resLines,
 		runs:       resRuns,
 		glyphs:     resGlyphs,
@@ -630,6 +633,17 @@ func (s *shaperImpl) LayoutRunes(params Parameters, txt []rune) document {
 		alignment:  params.Alignment,
 		alignWidth: alignWidth(params.MinWidth, resLines),
 	}
+	// Drop references to per-paragraph shaping outputs now that the data
+	// has been copied into the document; otherwise the underlying
+	// []shaping.Glyph (potentially hundreds of MB for large texts) stays
+	// alive until the next shape call. The wrapper's internal buffers
+	// also hold Output copies that alias the same glyph arrays; clear
+	// them too.
+	for i := range s.outScratchBuf {
+		s.outScratchBuf[i] = shaping.Output{}
+	}
+	s.wrapper.ResetBuffers()
+	return doc
 }
 
 func alignWidth(minWidth int, lines []line) int {

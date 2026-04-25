@@ -60,6 +60,13 @@ func (o *Ops) Reset() {
 	ops.Reset(&o.Internal)
 }
 
+// Size returns the byte length of the op buffer's encoded operations.
+// Intended for monitoring growth of long-lived buffers (e.g. a
+// shaper's persistent path buffer) without exposing internal state.
+func (o *Ops) Size() int {
+	return ops.DataLen(&o.Internal)
+}
+
 func Record(o *Ops) MacroOp {
 	m := MacroOp{
 		ops: &o.Internal,

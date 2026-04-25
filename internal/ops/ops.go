@@ -150,6 +150,14 @@ func (op *ClipOp) Decode(data []byte) {
 	op.Shape = Shape(data[18])
 }
 
+// DataLen returns the number of operation bytes currently buffered in
+// o. Useful for callers that need to monitor growth of long-lived
+// op.Ops (e.g. a text shaper's path buffer) and recycle them when
+// they cross a memory threshold.
+func DataLen(o *Ops) int {
+	return len(o.data)
+}
+
 func Reset(o *Ops) {
 	o.macroStack = stack{}
 	o.stacks = [_StackKind]stack{}

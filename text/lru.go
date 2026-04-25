@@ -22,6 +22,11 @@ type lru[K comparable, V any] struct {
 	m          map[K]*entry[K, V]
 	head, tail *entry[K, V]
 	onEvict    func(V)
+	// capLimit overrides the package-default maxSize when > 0. Allows
+	// individual cache instances (e.g. the per-glyph-batch path cache,
+	// which holds clip.PathSpec values that can be tens of MB combined)
+	// to be tuned tighter than the broad default.
+	capLimit int
 }
 
 func (l *lru[K, V]) Get(k K) (V, bool) {
@@ -45,7 +50,11 @@ func (l *lru[K, V]) Put(k K, v V) {
 	val := &entry[K, V]{key: k, v: v}
 	l.m[k] = val
 	l.insert(val)
-	if len(l.m) > maxSize {
+	limit := maxSize
+	if l.capLimit > 0 {
+		limit = l.capLimit
+	}
+	if len(l.m) > limit {
 		oldest := l.tail.next
 		l.remove(oldest)
 		delete(l.m, oldest.key)
@@ -58,6 +67,17 @@ func (l *lru[K, V]) Put(k K, v V) {
 func (l *lru[K, V]) remove(e *entry[K, V]) {
 	e.next.prev = e.prev
 	e.prev.next = e.next
+}
+
+func (l *lru[K, V]) Clear() {
+	if l.onEvict != nil {
+		for _, e := range l.m {
+			l.onEvict(e.v)
+		}
+	}
+	l.m = nil
+	l.head = nil
+	l.tail = nil
 }
 
 func (l *lru[K, V]) insert(e *entry[K, V]) {

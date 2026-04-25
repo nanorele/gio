@@ -759,7 +759,15 @@ func (e *Editor) SetText(s string) {
 	}
 	e.replace(0, e.text.Len(), s, true)
 
-	e.SetCaret(0, 0)
+	// Always pin the caret directly to (0,0) without going through
+	// SetCaret → closestToRune → makeValid. closestToRune triggers a
+	// full reshape of the (potentially multi-MB) text inside SetText
+	// using whatever Constraints.Max.X was last seen by Layout. The
+	// next frame's text.Layout has to reshape anyway with the actual
+	// max width, so this pre-shape is pure waste regardless of whether
+	// the editor is read-only or not. Bulk loads (collection import,
+	// pasting large bodies into ReqEditor) are the main beneficiaries.
+	e.text.ResetCaretToOrigin()
 }
 
 func (e *Editor) CaretPos() (line, col int) {
@@ -805,7 +813,16 @@ func (e *Editor) Insert(s string) (insertedRunes int) {
 	}
 
 	e.text.MoveCaret(0, 0)
-	e.SetCaret(start+moves, start+moves)
+	// SetCaret here forces makeValid via closestToRune, which triggers a
+	// full reshape of the (now-larger) text inside Insert. For ReadOnly
+	// editors there's no editing flow that depends on the post-Insert
+	// caret being precisely positioned, and the next frame's text.Layout
+	// will reshape anyway. Skip the in-Insert reshape.
+	if e.ReadOnly {
+		e.text.SetCaretRunes(start+moves, start+moves)
+	} else {
+		e.SetCaret(start+moves, start+moves)
+	}
 	e.scrollCaret = true
 	return moves
 }
@@ -892,7 +909,7 @@ func (e *Editor) replace(start, end int, s string, addHistory bool) int {
 		sc = utf8.RuneCountInString(s)
 	}
 
-	if addHistory {
+	if addHistory && !e.ReadOnly {
 		if needed := replaceSize; needed > cap(e.historyScratch) {
 			e.historyScratch = make([]rune, 0, needed)
 		}
