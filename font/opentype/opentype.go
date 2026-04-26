@@ -5,9 +5,9 @@ import (
 	"fmt"
 	_ "image/png"
 
-	fontapi "github.com/go-text/typesetting/font"
-	"github.com/go-text/typesetting/font/opentype"
 	giofont "github.com/nanorele/gio/font"
+	fontapi "github.com/nanorele/typesetting/font"
+	"github.com/nanorele/typesetting/font/opentype"
 )
 
 type Face struct {

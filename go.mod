@@ -1,11 +1,11 @@
 module github.com/nanorele/gio
 
-go 1.24.0
+go 1.25.5
 
 require (
 	eliasnaur.com/font v0.0.0-20230308162249-dd43949cb42d
-	gioui.org/shader v1.0.8
-	github.com/go-text/typesetting v0.3.0
+	github.com/nanorele/gio-shader v1.0.0
+	github.com/nanorele/typesetting v1.0.1
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
 	golang.org/x/exp/shiny v0.0.0-20250408133849-7e4ce0ab07d0
 	golang.org/x/image v0.26.0

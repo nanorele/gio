@@ -8,10 +8,10 @@ import (
 	"testing"
 
 	nsareg "eliasnaur.com/font/noto/sans/arabic/regular"
-	"github.com/go-text/typesetting/di"
-	"github.com/go-text/typesetting/font"
-	"github.com/go-text/typesetting/language"
-	"github.com/go-text/typesetting/shaping"
+	"github.com/nanorele/typesetting/di"
+	"github.com/nanorele/typesetting/font"
+	"github.com/nanorele/typesetting/language"
+	"github.com/nanorele/typesetting/shaping"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/math/fixed"
 

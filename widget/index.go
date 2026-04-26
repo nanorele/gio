@@ -7,8 +7,8 @@ import (
 	"math"
 	"sort"
 
-	"github.com/go-text/typesetting/segmenter"
 	"github.com/nanorele/gio/text"
+	"github.com/nanorele/typesetting/segmenter"
 	"golang.org/x/image/math/fixed"
 )
 

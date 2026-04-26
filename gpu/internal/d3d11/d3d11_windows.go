@@ -8,9 +8,9 @@ import (
 	"math/bits"
 	"unsafe"
 
+	shader "github.com/nanorele/gio-shader"
 	"golang.org/x/sys/windows"
 
-	"gioui.org/shader"
 	"github.com/nanorele/gio/gpu/internal/driver"
 	"github.com/nanorele/gio/internal/d3d11"
 )

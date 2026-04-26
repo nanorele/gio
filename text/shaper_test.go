@@ -11,7 +11,7 @@ import (
 	"github.com/nanorele/gio/font/gofont"
 	"github.com/nanorele/gio/font/opentype"
 	"github.com/nanorele/gio/io/system"
-	typesettingfont "github.com/go-text/typesetting/font"
+	typesettingfont "github.com/nanorele/typesetting/font"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/math/fixed"
 )

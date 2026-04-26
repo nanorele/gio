@@ -6,8 +6,8 @@ import (
 	"math"
 	"unsafe"
 
-	"gioui.org/shader"
-	"gioui.org/shader/gio"
+	shader "github.com/nanorele/gio-shader"
+	"github.com/nanorele/gio-shader/gio"
 	"github.com/nanorele/gio/gpu/internal/driver"
 	"github.com/nanorele/gio/internal/byteslice"
 	"github.com/nanorele/gio/internal/f32"

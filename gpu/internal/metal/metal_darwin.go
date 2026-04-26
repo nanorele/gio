@@ -6,7 +6,7 @@ import (
 	"image"
 	"unsafe"
 
-	"gioui.org/shader"
+	shader "github.com/nanorele/gio-shader"
 	"github.com/nanorele/gio/gpu/internal/driver"
 )
 

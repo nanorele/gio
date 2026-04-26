@@ -1,7 +1,7 @@
 package font
 
 import (
-	"github.com/go-text/typesetting/font"
+	"github.com/nanorele/typesetting/font"
 )
 
 type FontFace struct {

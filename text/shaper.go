@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/go-text/typesetting/font"
+	"github.com/nanorele/typesetting/font"
 	giofont "github.com/nanorele/gio/font"
 	"github.com/nanorele/gio/io/system"
 	"github.com/nanorele/gio/op"

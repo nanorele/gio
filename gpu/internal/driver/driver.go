@@ -5,7 +5,7 @@ import (
 	"image"
 	"time"
 
-	"gioui.org/shader"
+	shader "github.com/nanorele/gio-shader"
 	"github.com/nanorele/gio/internal/f32color"
 )
 

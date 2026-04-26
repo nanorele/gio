@@ -12,12 +12,12 @@ import (
 	"slices"
 	"unicode"
 
-	"github.com/go-text/typesetting/di"
-	"github.com/go-text/typesetting/font"
-	gotextot "github.com/go-text/typesetting/font/opentype"
-	"github.com/go-text/typesetting/fontscan"
-	"github.com/go-text/typesetting/language"
-	"github.com/go-text/typesetting/shaping"
+	"github.com/nanorele/typesetting/di"
+	"github.com/nanorele/typesetting/font"
+	gotextot "github.com/nanorele/typesetting/font/opentype"
+	"github.com/nanorele/typesetting/fontscan"
+	"github.com/nanorele/typesetting/language"
+	"github.com/nanorele/typesetting/shaping"
 	"golang.org/x/image/math/fixed"
 	"golang.org/x/text/unicode/bidi"
 
