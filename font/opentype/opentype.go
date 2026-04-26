@@ -82,7 +82,7 @@ func parseLoader(ld *opentype.Loader) (*fontapi.Font, giofont.Font, error) {
 }
 
 func (f Face) Face() *fontapi.Face {
-	return &fontapi.Face{Font: f.face}
+	return fontapi.NewFace(f.face)
 }
 
 func (f Face) Font() giofont.Font {
