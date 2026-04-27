@@ -460,11 +460,18 @@ func (w *window) hitTest(x, y int) uintptr {
 			return windows.HTRIGHT
 		}
 	}
-	if y <= titleHeightPx && x < w.config.Size.X-buttonsWidthPx {
-		return windows.HTCAPTION
-	}
+	// Consult app-registered ActionAt FIRST so the app can opt regions inside
+	// the hardcoded title-bar zone out of HTCAPTION (e.g. for in-titlebar
+	// buttons). ActionMove still maps to HTCAPTION; any other action is
+	// treated as interactive client area.
 	p := f32.Pt(float32(x), float32(y))
-	if a, ok := w.w.ActionAt(p); ok && a == system.ActionMove {
+	if a, ok := w.w.ActionAt(p); ok {
+		if a == system.ActionMove {
+			return windows.HTCAPTION
+		}
+		return windows.HTCLIENT
+	}
+	if y <= titleHeightPx && x < w.config.Size.X-buttonsWidthPx {
 		return windows.HTCAPTION
 	}
 	return windows.HTCLIENT
