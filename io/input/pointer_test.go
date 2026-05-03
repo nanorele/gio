@@ -1097,6 +1097,107 @@ func TestPassCursor(t *testing.T) {
 	}
 }
 
+// TestCursorDefaultMasks verifies that an explicit pointer.CursorDefault.Add
+// on a topmost overlay area masks a CursorText set on a lower z-order area
+// underneath it, instead of leaking through. This is the contract that lets
+// popup backdrops show the default arrow over text editors.
+func TestCursorDefaultMasks(t *testing.T) {
+	rect := clip.Rect(image.Rect(0, 0, 100, 100))
+
+	move := func(x, y float32) pointer.Event {
+		return pointer.Event{
+			Kind:     pointer.Move,
+			Source:   pointer.Mouse,
+			Position: f32.Pt(x, y),
+		}
+	}
+
+	t.Run("default masks underlying text", func(t *testing.T) {
+		var ops op.Ops
+		var r Router
+
+		// Lower: editor-like area with CursorText.
+		bg := rect.Push(&ops)
+		event.Op(&ops, 1)
+		pointer.CursorText.Add(&ops)
+		bg.Pop()
+
+		// Upper: overlay backdrop with explicit CursorDefault.
+		fg := rect.Push(&ops)
+		event.Op(&ops, 2)
+		pointer.CursorDefault.Add(&ops)
+		fg.Pop()
+
+		r.Frame(&ops)
+		r.Queue(move(50, 50))
+		r.Frame(&ops)
+
+		if got, want := r.Cursor(), pointer.CursorDefault; got != want {
+			t.Errorf("overlay default failed to mask: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("default masks sibling text in same parent area", func(t *testing.T) {
+		// Mirrors the real app's overlay structure: an editor pushes
+		// its own clip+CursorText and a handler, then later a popup
+		// backdrop registers a handler in the SAME parent area without
+		// its own clip. Without an explicit CursorDefault.Add on the
+		// backdrop, the overlay handler's n.next chain leads back into
+		// the editor's hit nodes and the editor's CursorText leaks.
+		var ops op.Ops
+		var r Router
+
+		// Editor with its own clip + CursorText.
+		ed := rect.Push(&ops)
+		event.Op(&ops, 1)
+		pointer.CursorText.Add(&ops)
+		ed.Pop()
+
+		// Overlay handler in the parent area — no clip push of its own.
+		event.Op(&ops, 2)
+		pointer.CursorDefault.Add(&ops)
+
+		r.Frame(&ops)
+		r.Queue(move(50, 50))
+		r.Frame(&ops)
+
+		if got, want := r.Cursor(), pointer.CursorDefault; got != want {
+			t.Errorf("overlay default failed to mask sibling text: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("child default masks parent text", func(t *testing.T) {
+		// Parent area sets CursorText; child area inside it sets
+		// CursorDefault. Within the child, cursor must be default.
+		var ops op.Ops
+		var r Router
+
+		parent := rect.Push(&ops)
+		event.Op(&ops, 1)
+		pointer.CursorText.Add(&ops)
+
+		child := clip.Rect(image.Rect(20, 20, 60, 60)).Push(&ops)
+		event.Op(&ops, 2)
+		pointer.CursorDefault.Add(&ops)
+		child.Pop()
+
+		parent.Pop()
+
+		r.Frame(&ops)
+		r.Queue(move(40, 40)) // inside child
+		r.Frame(&ops)
+		if got, want := r.Cursor(), pointer.CursorDefault; got != want {
+			t.Errorf("inside child: got %v, want %v", got, want)
+		}
+
+		r.Queue(move(10, 10)) // outside child, inside parent
+		r.Frame(&ops)
+		if got, want := r.Cursor(), pointer.CursorText; got != want {
+			t.Errorf("outside child: got %v, want %v", got, want)
+		}
+	})
+}
+
 func TestPartialEvent(t *testing.T) {
 	var ops op.Ops
 	var r Router

@@ -127,6 +127,18 @@ const (
 	areaEllipse
 )
 
+// cursorUnset is an internal sentinel that distinguishes "no cursor hint
+// was set on this area" from "the area's cursor hint is CursorDefault".
+// Without this distinction, an explicit pointer.CursorDefault.Add cannot
+// mask a CursorText set on a lower z-order area, because the resolution
+// algorithm uses CursorDefault as its "keep looking" placeholder.
+//
+// 0xFF is well past the highest defined pointer.Cursor value; the public
+// Cursor enum currently goes up to ~0x18. The router decoder normalises
+// any incoming op-stream value of 0xFF to CursorDefault as a precaution
+// against forged ops.
+const cursorUnset pointer.Cursor = 0xFF
+
 func (c *pointerCollector) resetState() {
 	c.state = collectState{
 		t: f32.AffineId(),
@@ -167,6 +179,7 @@ func (c *pointerCollector) pushArea(kind areaKind, bounds image.Rectangle) {
 	an := areaNode{
 		trans:      c.state.t,
 		area:       areaOp,
+		cursor:     cursorUnset,
 		parent:     parentID,
 		sibling:    -1,
 		firstChild: -1,
@@ -525,7 +538,7 @@ func (q *pointerQueue) hitTest(pos f32.Point, onNode func(*hitNode) bool) pointe
 
 	pass := true
 	idx := len(q.hitTree) - 1
-	cursor := pointer.CursorDefault
+	cursor := cursorUnset
 	for idx >= 0 {
 		n := &q.hitTree[idx]
 		hit, c := q.hit(n.area, pos)
@@ -533,7 +546,7 @@ func (q *pointerQueue) hitTest(pos f32.Point, onNode func(*hitNode) bool) pointe
 			idx--
 			continue
 		}
-		if cursor == pointer.CursorDefault {
+		if cursor == cursorUnset {
 			cursor = c
 		}
 		pass = pass && n.pass
@@ -546,6 +559,9 @@ func (q *pointerQueue) hitTest(pos f32.Point, onNode func(*hitNode) bool) pointe
 			break
 		}
 	}
+	if cursor == cursorUnset {
+		cursor = pointer.CursorDefault
+	}
 	return cursor
 }
 
@@ -557,10 +573,10 @@ func (q *pointerQueue) invTransform(areaIdx int, p f32.Point) f32.Point {
 }
 
 func (q *pointerQueue) hit(areaIdx int, p f32.Point) (bool, pointer.Cursor) {
-	c := pointer.CursorDefault
+	c := cursorUnset
 	for areaIdx != -1 {
 		a := &q.areas[areaIdx]
-		if c == pointer.CursorDefault {
+		if c == cursorUnset {
 			c = a.cursor
 		}
 		p := a.trans.Invert().Transform(p)

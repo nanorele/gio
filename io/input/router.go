@@ -760,6 +760,13 @@ func (q *Router) collect() {
 			pc.popPass()
 		case ops.TypeCursor:
 			name := pointer.Cursor(encOp.Data[1])
+			// Defensive: collapse the internal cursorUnset sentinel
+			// (and any unknown out-of-band byte that would collide with
+			// it) onto CursorDefault so a hand-crafted op stream cannot
+			// inject "unset" through the public Cursor.Add API.
+			if name == cursorUnset {
+				name = pointer.CursorDefault
+			}
 			pc.cursor(name)
 		case ops.TypeActionInput:
 			act := system.Action(encOp.Data[1])
