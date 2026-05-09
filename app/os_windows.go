@@ -250,6 +250,13 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		if err != nil {
 			panic(err)
 		}
+		// A pointer event in client area implies the cursor is over our
+		// window. Without this, w.cursorIn can latch to false (Windows
+		// suppresses WM_SETCURSOR when EnableMouseInPointer is on) and
+		// (*window).SetCursor stops calling windows.SetCursor, leaving
+		// the OS cursor stuck at whatever it last was.
+		w.cursorIn = true
+		windows.SetCursor(w.cursor)
 		switch msg {
 		case windows.WM_POINTERDOWN:
 			windows.SetCapture(w.hwnd)
