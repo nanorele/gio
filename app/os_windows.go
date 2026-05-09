@@ -783,9 +783,14 @@ func (w *window) SetCursor(cursor pointer.Cursor) {
 		c = resources.cursor
 	}
 	w.cursor = c
-	if w.cursorIn {
-		windows.SetCursor(w.cursor)
-	}
+	// Always call windows.SetCursor regardless of cursorIn. With
+	// EnableMouseInPointer(1), cursorIn can latch to false through a
+	// stray WM_SETCURSOR (e.g. during a layout change Windows probes
+	// non-client hit areas) and remain false until the user moves the
+	// mouse, which never happens here. windows.SetCursor is cheap and
+	// is still gated by Window.updateCursor, which only calls into the
+	// driver when state.cursor actually changed.
+	windows.SetCursor(w.cursor)
 }
 
 var windowsCursor = [...]uint16{
