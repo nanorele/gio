@@ -74,7 +74,7 @@ func TestListScroll(t *testing.T) {
 	if l.Position.First != 1 {
 		t.Errorf("ScrollTo(1) failed, first is %d", l.Position.First)
 	}
-	
+
 	l.ScrollBy(1.5) // scroll by 1.5 items? No, ScrollBy is float items.
 	l.Layout(gtx, 5, el)
 	// ScrollBy(1.5) from first=1 should be first=2, offset=5 (since width=10)
@@ -305,5 +305,232 @@ func TestExtraChildren(t *testing.T) {
 	})
 	if count != all {
 		t.Errorf("laid out %d of %d children", count, all)
+	}
+}
+
+func TestListScrollToFirst(t *testing.T) {
+	var l List
+	l.ScrollTo(0)
+	if l.Position.First != 0 || l.Position.Offset != 0 || !l.Position.BeforeEnd {
+		t.Errorf("ScrollTo(0): %+v", l.Position)
+	}
+}
+
+func TestListScrollToMiddle(t *testing.T) {
+	var l List
+	l.ScrollTo(5)
+	if l.Position.First != 5 || l.Position.Offset != 0 {
+		t.Errorf("ScrollTo(5): %+v", l.Position)
+	}
+}
+
+func TestListScrollByZero(t *testing.T) {
+	// ScrollBy on a fresh list with l.len==0 must not panic (regression).
+	var l List
+	l.ScrollBy(2)
+	if l.Position.First != 2 {
+		t.Errorf("ScrollBy(2): First=%d, want 2", l.Position.First)
+	}
+	// Offset should be unchanged (no item height available).
+	if l.Position.Offset != 0 {
+		t.Errorf("ScrollBy(2) on empty len: Offset=%d, want 0", l.Position.Offset)
+	}
+}
+
+func TestListScrollByNegative(t *testing.T) {
+	var l List
+	l.ScrollBy(-3)
+	if l.Position.First != -3 {
+		t.Errorf("ScrollBy(-3): First=%d, want -3", l.Position.First)
+	}
+}
+
+func TestListScrollByFractional(t *testing.T) {
+	var l List
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(20, 10)),
+	}
+	el := func(gtx Context, idx int) Dimensions {
+		return Dimensions{Size: image.Pt(10, 10)}
+	}
+	l.Layout(gtx, 5, el)
+	// Length is approximate but item-width=10. Now scroll by 0.5 items.
+	l.ScrollBy(0.5)
+	// Offset should advance by ~5.
+	if l.Position.Offset < 4 || l.Position.Offset > 6 {
+		t.Errorf("ScrollBy(0.5) offset: got %d, want ~5", l.Position.Offset)
+	}
+}
+
+func TestListPositionFields(t *testing.T) {
+	var l List
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(30, 10)),
+	}
+	el := func(gtx Context, idx int) Dimensions {
+		return Dimensions{Size: image.Pt(10, 10)}
+	}
+	l.Layout(gtx, 5, el)
+	if l.Position.Count != 3 {
+		t.Errorf("Count: got %d, want 3", l.Position.Count)
+	}
+	if l.Position.First != 0 {
+		t.Errorf("First: got %d, want 0", l.Position.First)
+	}
+	if l.Position.Offset != 0 {
+		t.Errorf("Offset: got %d, want 0", l.Position.Offset)
+	}
+	if l.Position.OffsetLast != 0 {
+		t.Errorf("OffsetLast: got %d, want 0", l.Position.OffsetLast)
+	}
+	if !l.Position.BeforeEnd {
+		t.Errorf("BeforeEnd should be true (more items remain)")
+	}
+}
+
+func TestListAllVisibleAtEnd(t *testing.T) {
+	// When everything fits, BeforeEnd should be false.
+	var l List
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(100, 10)),
+	}
+	el := func(gtx Context, idx int) Dimensions {
+		return Dimensions{Size: image.Pt(10, 10)}
+	}
+	l.Layout(gtx, 3, el)
+	if l.Position.Count != 3 {
+		t.Errorf("Count: got %d, want 3", l.Position.Count)
+	}
+	if l.Position.BeforeEnd {
+		t.Errorf("BeforeEnd should be false when all items visible")
+	}
+}
+
+func TestListScrollPastFirst(t *testing.T) {
+	// Position.First = -1 should be normalized to 0 in init().
+	var l List
+	l.Position.First = -10
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(20, 10)),
+	}
+	el := func(gtx Context, idx int) Dimensions {
+		if idx < 0 {
+			t.Fatalf("negative index %d", idx)
+		}
+		return Dimensions{Size: image.Pt(10, 10)}
+	}
+	l.Layout(gtx, 3, el)
+	if l.Position.First != 0 {
+		t.Errorf("First not normalized: got %d", l.Position.First)
+	}
+}
+
+func TestListScrollPastLast(t *testing.T) {
+	var l List
+	l.Position.First = 100
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(20, 10)),
+	}
+	el := func(gtx Context, idx int) Dimensions {
+		if idx >= 3 {
+			t.Fatalf("index %d >= len 3", idx)
+		}
+		return Dimensions{Size: image.Pt(10, 10)}
+	}
+	l.Layout(gtx, 3, el)
+}
+
+func TestListVerticalLayout(t *testing.T) {
+	l := List{Axis: Vertical}
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(10, 30)),
+	}
+	el := func(gtx Context, idx int) Dimensions {
+		return Dimensions{Size: image.Pt(10, 10)}
+	}
+	l.Layout(gtx, 5, el)
+	if l.Position.Count != 3 {
+		t.Errorf("vertical count: got %d, want 3", l.Position.Count)
+	}
+}
+
+func TestListAlignmentMiddleVertical(t *testing.T) {
+	// Cross alignment shouldn't crash with varying child sizes.
+	l := List{Axis: Vertical, Alignment: Middle}
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Constraints{Max: image.Pt(50, 100)},
+	}
+	l.Layout(gtx, 3, func(gtx Context, idx int) Dimensions {
+		return Dimensions{Size: image.Pt(10+idx*5, 10)}
+	})
+	if l.Position.Count != 3 {
+		t.Errorf("count: %d", l.Position.Count)
+	}
+}
+
+func TestListDraggingFalse(t *testing.T) {
+	var l List
+	if l.Dragging() {
+		t.Errorf("fresh list should not be dragging")
+	}
+}
+
+func TestListScrollToEndManyItems(t *testing.T) {
+	l := List{ScrollToEnd: true}
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(20, 10)),
+	}
+	el := func(gtx Context, idx int) Dimensions {
+		return Dimensions{Size: image.Pt(10, 10)}
+	}
+	l.Layout(gtx, 5, el)
+	// First should advance to show last items.
+	if l.Position.First+l.Position.Count != 5 {
+		t.Errorf("ScrollToEnd: First=%d, Count=%d, sum=%d, want 5",
+			l.Position.First, l.Position.Count, l.Position.First+l.Position.Count)
+	}
+}
+
+func TestListReuseAcrossLayouts(t *testing.T) {
+	// Subsequent layouts should not duplicate children.
+	var l List
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(20, 10)),
+	}
+	el := func(gtx Context, idx int) Dimensions {
+		return Dimensions{Size: image.Pt(10, 10)}
+	}
+	for i := 0; i < 3; i++ {
+		gtx.Ops.Reset()
+		l.Layout(gtx, 5, el)
+		if l.Position.Count != 2 {
+			t.Errorf("iteration %d: Count=%d, want 2", i, l.Position.Count)
+		}
+	}
+}
+
+func TestListScrollByItemAdvancesFirst(t *testing.T) {
+	var l List
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(20, 10)),
+	}
+	el := func(gtx Context, idx int) Dimensions {
+		return Dimensions{Size: image.Pt(10, 10)}
+	}
+	l.Layout(gtx, 10, el)
+	l.ScrollBy(2)
+	l.Layout(gtx, 10, el)
+	if l.Position.First != 2 {
+		t.Errorf("ScrollBy(2): First=%d, want 2", l.Position.First)
 	}
 }

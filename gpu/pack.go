@@ -46,7 +46,7 @@ func (p *packer) tryAdd(s image.Point) (placement, bool) {
 
 	var (
 		bestIdx  *image.Rectangle
-		bestSize = p.maxDims
+		bestSize image.Point
 		lastSize = p.sizes[len(p.sizes)-1]
 	)
 
@@ -70,7 +70,7 @@ func (p *packer) tryAdd(s image.Point) (placement, bool) {
 			}
 			size.Y = y
 		}
-		if size.X*size.Y < bestSize.X*bestSize.Y {
+		if bestIdx == nil || size.X*size.Y < bestSize.X*bestSize.Y {
 			bestIdx = space
 			bestSize = size
 		}

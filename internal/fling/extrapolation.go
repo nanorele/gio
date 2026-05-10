@@ -94,7 +94,7 @@ func (e *Extrapolation) Estimate() Estimate {
 	}
 	dist := values[len(values)-1] - values[0]
 	return Estimate{
-		Velocity: coef[1],
+		Velocity: -coef[1],
 		Distance: dist,
 	}
 }

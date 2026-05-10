@@ -59,6 +59,11 @@ func (r *textureCache) put(key textureCacheKey, val resource) {
 	if exists && v.used {
 		panic(fmt.Errorf("key exists, %v", key))
 	}
+	if exists && v.resource != nil {
+		// frame() marked the entry unused but did not yet evict; if we
+		// overwrite without releasing the previous GPU handle it leaks.
+		v.resource.release()
+	}
 	v.used = true
 	v.resource = val
 	r.res[key] = v
@@ -71,14 +76,18 @@ func (r *textureCache) frame() {
 			r.res[k] = v
 		} else {
 			delete(r.res, k)
-			v.resource.release()
+			if v.resource != nil {
+				v.resource.release()
+			}
 		}
 	}
 }
 
 func (r *textureCache) release() {
 	for _, v := range r.res {
-		v.resource.release()
+		if v.resource != nil {
+			v.resource.release()
+		}
 	}
 	r.res = nil
 }

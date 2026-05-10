@@ -101,7 +101,7 @@ func ExampleDraggable_Layout() {
 			switch e := ev.(type) {
 			case transfer.DataEvent:
 				data := e.Open()
-				defer data.Close()
+				defer data.Close() //nolint:errcheck // Example code; close error not actionable.
 				content, _ := io.ReadAll(data)
 				fmt.Println(string(content))
 			}

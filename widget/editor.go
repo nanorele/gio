@@ -798,6 +798,9 @@ func (e *Editor) Delete(graphemeClusters int) (deletedRunes int) {
 
 	e.text.MoveCaret(0, 0)
 	e.ClearSelection()
+	if end < start {
+		start, end = end, start
+	}
 	return end - start
 }
 
@@ -905,8 +908,6 @@ func (e *Editor) replace(start, end int, s string, addHistory bool) int {
 		if filtered && idx >= len(s) {
 			s = b.String()
 		}
-	} else {
-		sc = utf8.RuneCountInString(s)
 	}
 
 	if addHistory && !e.ReadOnly {

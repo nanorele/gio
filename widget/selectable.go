@@ -135,6 +135,9 @@ func (l *Selectable) SetText(s string) {
 		l.source = newStringSource(s)
 		l.lastValue = s
 		l.text.SetSource(l.source)
+		// Reset caret/selection so stale rune indices from the previous
+		// text don't leak into queries before the next Layout reshape.
+		l.text.ResetCaretToOrigin()
 	}
 }
 

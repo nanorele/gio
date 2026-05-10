@@ -1,7 +1,6 @@
 package fling
 
 import (
-	"runtime"
 	"testing"
 	"time"
 
@@ -75,14 +74,6 @@ func TestAnimationPlatform(t *testing.T) {
 	
 	// Just ensure it doesn't crash and behaves somewhat as expected
 	d1 := a.Tick(now.Add(16 * time.Millisecond))
-	
-	// Reset and test for different GOOS if possible or just ensure coverage
-	// Since we can't easily change runtime.GOOS, we just ensure it's covered
-	if runtime.GOOS == "darwin" {
-		// covered
-	} else {
-		// covered
-	}
 	if d1 == 0 {
 		t.Log("No movement in 16ms, might be expected depending on constants")
 	}

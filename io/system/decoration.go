@@ -37,7 +37,7 @@ func (op ActionInputOp) Add(o *op.Ops) {
 
 func (a Action) String() string {
 	var buf strings.Builder
-	for b := Action(1); a != 0; b <<= 1 {
+	for b := Action(1); a != 0 && b != 0; b <<= 1 {
 		if a&b != 0 {
 			if buf.Len() > 0 {
 				buf.WriteByte('|')
@@ -57,6 +57,12 @@ func (a Action) string() string {
 		return "ActionMaximize"
 	case ActionUnmaximize:
 		return "ActionUnmaximize"
+	case ActionFullscreen:
+		return "ActionFullscreen"
+	case ActionRaise:
+		return "ActionRaise"
+	case ActionCenter:
+		return "ActionCenter"
 	case ActionClose:
 		return "ActionClose"
 	case ActionMove:

@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/png"
 	"io"
+	"math"
 	"os"
 	"testing"
 
@@ -354,8 +355,8 @@ func TestIndexPositionBidi(t *testing.T) {
 						break
 					}
 				}
-				w.Frame(ops)
-				w.Screenshot(cap)
+				w.Frame(ops)        //nolint:errcheck // Test diagnostic; Frame errors not actionable.
+				w.Screenshot(cap)   //nolint:errcheck // Test diagnostic; Screenshot errors not actionable.
 				b := new(bytes.Buffer)
 				_ = png.Encode(b, cap)
 				screenshotName := tc.name + ".png"
@@ -706,8 +707,6 @@ func TestGraphemeReaderNext(t *testing.T) {
 			ok := true
 			for ok {
 				paragraph, ok = tc.read()
-				if ok && len(paragraph) > 0 && paragraph[len(paragraph)-1] != '\n' {
-				}
 				for i, r := range paragraph {
 					if i == len(paragraph)-1 {
 						if r != '\n' && ok {
@@ -719,7 +718,7 @@ func TestGraphemeReaderNext(t *testing.T) {
 				}
 				runes = append(runes, paragraph...)
 			}
-			tc.input.Seek(0, 0)
+			tc.input.Seek(0, 0) //nolint:errcheck // Seek on test in-memory reader cannot fail.
 			b, _ := io.ReadAll(tc.input)
 			asRunes := []rune(string(b))
 			if len(asRunes) != len(runes) {
@@ -787,7 +786,7 @@ func TestGraphemeReaderGraphemes(t *testing.T) {
 				}
 				graphemes = append(graphemes, g...)
 			}
-			tc.input.Seek(0, 0)
+			tc.input.Seek(0, 0) //nolint:errcheck // Seek on test in-memory reader cannot fail.
 			b, _ := io.ReadAll(tc.input)
 			asRunes := []rune(string(b))
 			if len(asRunes)+1 < len(graphemes) {
@@ -835,7 +834,7 @@ func BenchmarkGraphemeReaderNext(b *testing.B) {
 			read:  pr.next,
 		},
 	} {
-		var paragraph []rune = make([]rune, 4096)
+		paragraph := make([]rune, 4096)
 		b.Run(tc.name, func(b *testing.B) {
 			b.ResetTimer()
 			for b.Loop() {
@@ -894,5 +893,460 @@ func BenchmarkGraphemeReaderGraphemes(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+// buildIndex feeds glyphs through glyphIndex.Glyph and returns the populated
+// index. All methods/state of the resulting index are then available for
+// direct inspection.
+func buildIndex(glyphs []text.Glyph) *glyphIndex {
+	gi := &glyphIndex{}
+	gi.reset()
+	for _, g := range glyphs {
+		gi.Glyph(g)
+	}
+	return gi
+}
+
+// TestIndexEmpty exercises the methods of an empty (un-fed) glyphIndex.
+// All accessors must be safe on an empty index; otherwise upstream code
+// (closestToXY callers, locate) crashes with no glyphs.
+func TestIndexEmpty(t *testing.T) {
+	gi := &glyphIndex{}
+	gi.reset()
+
+	if got, idx := gi.closestToRune(0); (got != combinedPos{}) || idx != 0 {
+		t.Errorf("empty closestToRune(0)=%+v,%d", got, idx)
+	}
+	if got := gi.closestToLineCol(screenPos{line: 5, col: 9}); (got != combinedPos{}) {
+		t.Errorf("empty closestToLineCol=%+v", got)
+	}
+	if got, eol := gi.closestToXY(100, 50); (got != combinedPos{}) || eol {
+		t.Errorf("empty closestToXY=%+v eol=%v", got, eol)
+	}
+	if !gi.atStartOfLine(combinedPos{}) {
+		t.Errorf("empty atStartOfLine should be true")
+	}
+	if !gi.atEndOfLine(combinedPos{}) {
+		t.Errorf("empty atEndOfLine should be true")
+	}
+	rects := gi.locate(image.Rect(0, 0, 100, 100), 0, 0, nil)
+	if len(rects) != 0 {
+		t.Errorf("empty locate: want 0 rects, got %d", len(rects))
+	}
+}
+
+// TestIndexResetClearsState verifies that reusing a glyphIndex after reset()
+// doesn't leak state from a prior layout. Important because production code
+// reuses a single instance across re-layouts.
+func TestIndexResetClearsState(t *testing.T) {
+	first := getGlyphs(16, 0, 200, text.Start, "abc\ndef")
+	gi := buildIndex(first)
+	if len(gi.lines) == 0 || len(gi.positions) == 0 {
+		t.Fatalf("first layout produced no state")
+	}
+	prevPosCap := cap(gi.positions)
+
+	gi.reset()
+	if len(gi.glyphs) != 0 || len(gi.positions) != 0 || len(gi.lines) != 0 {
+		t.Fatal("reset did not clear slices")
+	}
+	if gi.currentLineMin != 0 || gi.currentLineMax != 0 || gi.currentLineGlyphs != 0 ||
+		gi.currentLinePosStart != 0 || gi.pos != (combinedPos{}) || gi.prog != 0 ||
+		gi.clusterAdvance != 0 || gi.truncated || gi.midCluster {
+		t.Fatalf("reset left scalar state dirty: %+v", gi)
+	}
+	if cap(gi.positions) != prevPosCap {
+		t.Errorf("reset reallocated positions slice (cap %d -> %d)", prevPosCap, cap(gi.positions))
+	}
+
+	// Second layout should produce identical positions to a fresh index.
+	second := getGlyphs(16, 0, 200, text.Start, "x")
+	for _, g := range second {
+		gi.Glyph(g)
+	}
+	fresh := buildIndex(second)
+	if len(gi.positions) != len(fresh.positions) {
+		t.Fatalf("after reset+relayout: positions len %d, fresh %d", len(gi.positions), len(fresh.positions))
+	}
+	for i := range gi.positions {
+		if gi.positions[i] != fresh.positions[i] {
+			t.Errorf("position[%d] reused=%+v fresh=%+v", i, gi.positions[i], fresh.positions[i])
+		}
+	}
+}
+
+// TestIndexEnsureCapacity validates the pre-allocation hint logic.
+func TestIndexEnsureCapacity(t *testing.T) {
+	gi := &glyphIndex{}
+	gi.ensureCapacity(0)
+	if cap(gi.glyphs) != 0 || cap(gi.positions) != 0 || cap(gi.lines) != 0 {
+		t.Errorf("hint <=0 should not allocate; got caps g=%d p=%d l=%d",
+			cap(gi.glyphs), cap(gi.positions), cap(gi.lines))
+	}
+	gi.ensureCapacity(-5)
+	if cap(gi.glyphs) != 0 {
+		t.Errorf("negative hint should not allocate")
+	}
+
+	gi.ensureCapacity(100)
+	if cap(gi.glyphs) < 100 {
+		t.Errorf("glyph cap %d < hint 100", cap(gi.glyphs))
+	}
+	if cap(gi.positions) < 125 {
+		t.Errorf("position cap %d < expected 125", cap(gi.positions))
+	}
+	if cap(gi.lines) < 1 {
+		t.Errorf("line cap %d < 1", cap(gi.lines))
+	}
+
+	// Idempotent: smaller hint must not shrink existing capacity.
+	prevG, prevP, prevL := cap(gi.glyphs), cap(gi.positions), cap(gi.lines)
+	gi.ensureCapacity(10)
+	if cap(gi.glyphs) != prevG || cap(gi.positions) != prevP || cap(gi.lines) != prevL {
+		t.Errorf("ensureCapacity shrunk caps: g %d->%d p %d->%d l %d->%d",
+			prevG, cap(gi.glyphs), prevP, cap(gi.positions), prevL, cap(gi.lines))
+	}
+}
+
+// TestIndexClosestToRune covers the binary-search behavior on the runes axis,
+// including out-of-range queries that must clamp instead of panicking.
+func TestIndexClosestToRune(t *testing.T) {
+	glyphs := getGlyphs(16, 0, 200, text.Start, "abc\ndef")
+	gi := buildIndex(glyphs)
+
+	if len(gi.positions) < 2 {
+		t.Fatalf("expected positions, got %d", len(gi.positions))
+	}
+
+	// Exact hit at runes=0 must return the first position.
+	got, idx := gi.closestToRune(0)
+	if idx != 0 || got.runes != 0 {
+		t.Errorf("closestToRune(0): got idx=%d runes=%d", idx, got.runes)
+	}
+
+	// runes far past the end clamps to the last position.
+	last := gi.positions[len(gi.positions)-1]
+	got, idx = gi.closestToRune(99999)
+	if idx != len(gi.positions)-1 || got != last {
+		t.Errorf("closestToRune(huge): got idx=%d runes=%d, want last (idx=%d)",
+			idx, got.runes, len(gi.positions)-1)
+	}
+
+	// Negative rune index returns the first position (sort.Search returns 0).
+	got, idx = gi.closestToRune(-1)
+	if idx != 0 || got != gi.positions[0] {
+		t.Errorf("closestToRune(-1): got idx=%d, want 0", idx)
+	}
+
+	// Every queried rune must satisfy the binary-search invariant
+	// (returned position has runes >= queried, or it's the last one).
+	for r := 0; r <= last.runes+2; r++ {
+		got, idx = gi.closestToRune(r)
+		if idx == len(gi.positions)-1 {
+			continue // clamped at the end
+		}
+		if got.runes < r {
+			t.Errorf("closestToRune(%d): returned runes=%d < query", r, got.runes)
+		}
+	}
+}
+
+// TestIndexClosestToLineCol checks line/column lookups.
+func TestIndexClosestToLineCol(t *testing.T) {
+	glyphs := getGlyphs(16, 0, 200, text.Start, "ab\ncde\nf")
+	gi := buildIndex(glyphs)
+
+	// Beginning of each line must land on a column-0 position.
+	for line := 0; line < len(gi.lines); line++ {
+		got := gi.closestToLineCol(screenPos{line: line, col: 0})
+		if got.lineCol.line != line || got.lineCol.col != 0 {
+			t.Errorf("line %d col 0: got %+v", line, got.lineCol)
+		}
+	}
+
+	// A column past the end of the line should clamp to the rightmost
+	// position on that line (not jump to the next line silently).
+	got := gi.closestToLineCol(screenPos{line: 0, col: math.MaxInt})
+	if got.lineCol.line != 0 {
+		t.Errorf("col=MaxInt on line 0 jumped to line %d", got.lineCol.line)
+	}
+
+	// Beyond the last line clamps to the last position.
+	got = gi.closestToLineCol(screenPos{line: 999, col: 999})
+	last := gi.positions[len(gi.positions)-1]
+	if got != last {
+		t.Errorf("line=999: got %+v, want last %+v", got, last)
+	}
+}
+
+// TestIndexClosestToXY tests the spatial query in different regions.
+func TestIndexClosestToXY(t *testing.T) {
+	// Multi-line layout so we exercise vertical + horizontal search.
+	glyphs := getGlyphs(16, 0, 200, text.Start, "abc\ndef\nghi")
+	gi := buildIndex(glyphs)
+
+	// y way above the first line returns the first position.
+	got, eol := gi.closestToXY(0, -10000)
+	if got.lineCol.line != 0 {
+		t.Errorf("y<<min: returned line %d, want 0", got.lineCol.line)
+	}
+	_ = eol
+
+	// y way below the last line returns the last position.
+	got, _ = gi.closestToXY(0, 1<<30)
+	if got != gi.positions[len(gi.positions)-1] {
+		t.Errorf("y>>max: got %+v, want last", got)
+	}
+
+	// x slightly right of the rightmost glyph on a line should snap
+	// to either the line-end position or the start of the next line.
+	if len(gi.lines) >= 2 {
+		line := gi.lines[0]
+		// Use a y inside the first line.
+		got, _ = gi.closestToXY(line.getLineEnd()+fixed.I(50), gi.positions[0].y)
+		if got.lineCol.line != 0 && got.lineCol.line != 1 {
+			t.Errorf("x past end of line 0: got line %d", got.lineCol.line)
+		}
+	}
+}
+
+// TestAtEndOfLine_Bidi exposes a bug in atEndOfLine (and atStartOfLine):
+// they index g.positions with pos.runes as if it were a position index,
+// but with bidi/truncation a single rune index can map to multiple positions
+// or vice-versa. With BIDI text, runes is no longer in lockstep with the
+// position index.
+func TestAtEndOfLine_Bidi(t *testing.T) {
+	fontSize := 16
+	source := "The\nquick سماء של\nום لا fox\nتمط של\nום."
+	glyphs := makeAccountingTestText(source, fontSize, fontSize*10)
+	gi := buildIndex(glyphs)
+
+	// Walk through every position and verify that atEndOfLine returns true
+	// only for positions that are actually the rightmost-in-line (in their
+	// linear order) — i.e. the next position (by index) is on a later line.
+	for i, p := range gi.positions {
+		want := i == len(gi.positions)-1 || gi.positions[i+1].lineCol.line > p.lineCol.line
+		got := gi.atEndOfLine(p)
+		if got != want {
+			t.Errorf("pos[%d] runes=%d line=%d col=%d: atEndOfLine=%v want=%v",
+				i, p.runes, p.lineCol.line, p.lineCol.col, got, want)
+		}
+	}
+}
+
+// TestAtStartOfLine_Bidi mirrors the above for atStartOfLine.
+func TestAtStartOfLine_Bidi(t *testing.T) {
+	fontSize := 16
+	source := "The\nquick سماء של\nום لا fox\nتمط של\nום."
+	glyphs := makeAccountingTestText(source, fontSize, fontSize*10)
+	gi := buildIndex(glyphs)
+
+	for i, p := range gi.positions {
+		want := i == 0 || gi.positions[i-1].lineCol.line < p.lineCol.line
+		got := gi.atStartOfLine(p)
+		if got != want {
+			t.Errorf("pos[%d] runes=%d line=%d col=%d: atStartOfLine=%v want=%v",
+				i, p.runes, p.lineCol.line, p.lineCol.col, got, want)
+		}
+	}
+}
+
+// TestIncrementPositionWalk ensures incrementPosition can walk every
+// position front-to-back and only signals eof at the last position.
+func TestIncrementPositionWalk(t *testing.T) {
+	glyphs := getGlyphs(16, 0, 200, text.Start, "ab\ncd")
+	gi := buildIndex(glyphs)
+	if len(gi.positions) < 2 {
+		t.Fatalf("want >=2 positions, got %d", len(gi.positions))
+	}
+	cur := gi.positions[0]
+	for i := 0; i < len(gi.positions); i++ {
+		next, eof := gi.incrementPosition(cur)
+		if i == len(gi.positions)-1 {
+			if !eof {
+				t.Errorf("step %d: expected eof at last", i)
+			}
+			break
+		}
+		if eof {
+			t.Errorf("step %d: unexpected eof", i)
+			break
+		}
+		if next == cur {
+			t.Errorf("step %d: next == cur, would infinite loop", i)
+			break
+		}
+		cur = next
+	}
+}
+
+// TestLocateBasic checks that locate returns sensible rectangles for a
+// single-line selection and that out-of-order rune args are normalized.
+func TestLocateBasic(t *testing.T) {
+	glyphs := getGlyphs(16, 0, 200, text.Start, "hello")
+	gi := buildIndex(glyphs)
+
+	viewport := image.Rect(0, 0, 1000, 1000)
+	rects := gi.locate(viewport, 0, 5, nil)
+	if len(rects) != 1 {
+		t.Fatalf("want 1 rect, got %d", len(rects))
+	}
+	r := rects[0]
+	if r.Bounds.Min.X >= r.Bounds.Max.X {
+		t.Errorf("rect has zero/negative width: %+v", r.Bounds)
+	}
+	if r.Bounds.Min.Y >= r.Bounds.Max.Y {
+		t.Errorf("rect has zero/negative height: %+v", r.Bounds)
+	}
+
+	// Reversed range: locate must swap and produce the same result.
+	rects2 := gi.locate(viewport, 5, 0, nil)
+	if len(rects2) != len(rects) || rects2[0] != rects[0] {
+		t.Errorf("reversed range produced different rects: %+v vs %+v", rects2, rects)
+	}
+
+	// Empty selection at runes=0: still returns one rect (start==end).
+	rects3 := gi.locate(viewport, 0, 0, nil)
+	if len(rects3) != 1 {
+		t.Errorf("empty selection: want 1 rect, got %d", len(rects3))
+	}
+}
+
+// TestLocateMultiLine ensures locate spans multiple lines correctly.
+func TestLocateMultiLine(t *testing.T) {
+	// 3 hard lines.
+	glyphs := getGlyphs(16, 0, 200, text.Start, "abc\ndef\nghi")
+	gi := buildIndex(glyphs)
+	viewport := image.Rect(0, 0, 1000, 1000)
+
+	// Select across all three lines: produces at least 3 rects.
+	rects := gi.locate(viewport, 0, 11, nil)
+	if len(rects) < 3 {
+		t.Errorf("want >=3 rects across 3 lines, got %d", len(rects))
+	}
+	// Each rect must lie inside the (translated) viewport in y.
+	for i, r := range rects {
+		if r.Bounds.Min.Y > viewport.Max.Y || r.Bounds.Max.Y < viewport.Min.Y-viewport.Max.Y {
+			t.Errorf("rect %d outside viewport: %+v", i, r.Bounds)
+		}
+	}
+}
+
+// TestLocateRespectsViewport: rects far outside the viewport are skipped.
+func TestLocateRespectsViewport(t *testing.T) {
+	glyphs := getGlyphs(16, 0, 200, text.Start, "a\nb\nc\nd\ne\nf")
+	gi := buildIndex(glyphs)
+
+	// A 1-pixel-tall viewport at y=0 should yield very few rects.
+	viewport := image.Rect(0, 0, 1000, 1)
+	rects := gi.locate(viewport, 0, 11, nil)
+	allLines := gi.locate(image.Rect(0, 0, 1000, 100000), 0, 11, nil)
+	if len(rects) >= len(allLines) {
+		t.Errorf("tight viewport produced %d rects, full %d (expected fewer)",
+			len(rects), len(allLines))
+	}
+}
+
+// TestLineInfoPosBounds verifies the posStart/posEnd indices written into
+// lineInfo are always within bounds and point at positions on that very line.
+func TestLineInfoPosBounds(t *testing.T) {
+	cases := []string{
+		"a",
+		"a\nb",
+		"abc def ghi jkl mno", // soft wrap candidate
+		"\n\n",
+		"x\n\ny",
+	}
+	for _, src := range cases {
+		t.Run(src, func(t *testing.T) {
+			glyphs := getGlyphs(16, 0, 30, text.Start, src)
+			gi := buildIndex(glyphs)
+			for li, ln := range gi.lines {
+				if ln.posStart < 0 || ln.posEnd > len(gi.positions) {
+					t.Fatalf("line %d posStart=%d posEnd=%d out of [0,%d]",
+						li, ln.posStart, ln.posEnd, len(gi.positions))
+				}
+				if ln.posStart > ln.posEnd {
+					t.Fatalf("line %d posStart > posEnd", li)
+				}
+				for k := ln.posStart; k < ln.posEnd; k++ {
+					if gi.positions[k].lineCol.line != li {
+						t.Errorf("line %d: positions[%d] is on line %d",
+							li, k, gi.positions[k].lineCol.line)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestSingleGlyphBuilds checks behavior with exactly one glyph: positions and
+// at least one line must be created when the glyph carries the line-break flag.
+func TestSingleGlyphBuilds(t *testing.T) {
+	glyphs := getGlyphs(16, 0, 200, text.Start, "x")
+	gi := buildIndex(glyphs)
+	if len(gi.positions) < 1 {
+		t.Fatalf("want >=1 position, got 0")
+	}
+	if len(gi.lines) < 1 {
+		t.Fatalf("want >=1 line, got 0")
+	}
+	// First position must be at column 0, line 0, runes 0.
+	p := gi.positions[0]
+	if p.lineCol != (screenPos{}) || p.runes != 0 {
+		t.Errorf("first pos = %+v, expected zero", p)
+	}
+}
+
+// TestTrailingNewlineCreatesLine ensures a trailing "\n" produces an extra
+// line entry and a position on that empty line.
+func TestTrailingNewlineCreatesLine(t *testing.T) {
+	withoutNL := buildIndex(getGlyphs(16, 0, 200, text.Start, "ab"))
+	withNL := buildIndex(getGlyphs(16, 0, 200, text.Start, "ab\n"))
+
+	if len(withNL.lines) <= len(withoutNL.lines) {
+		t.Errorf("trailing \\n should add a line: %d -> %d",
+			len(withoutNL.lines), len(withNL.lines))
+	}
+	last := withNL.positions[len(withNL.positions)-1]
+	if last.lineCol.line == 0 {
+		t.Errorf("trailing-NL last position should be on a new line, got %+v", last.lineCol)
+	}
+	if last.lineCol.col != 0 {
+		t.Errorf("trailing-NL last position col=%d, want 0", last.lineCol.col)
+	}
+}
+
+// TestRuneCountMonotonic asserts that runes in stored positions never decrease
+// even across bidi run boundaries (they may stay equal — that's the bidi
+// flip case — but never go backwards).
+func TestRuneCountMonotonic(t *testing.T) {
+	fontSize := 16
+	source := "The\nquick سماء של\nום لا fox\nتمط של\nום."
+	glyphs := makeAccountingTestText(source, fontSize, fontSize*10)
+	gi := buildIndex(glyphs)
+	for i := 1; i < len(gi.positions); i++ {
+		if gi.positions[i].runes < gi.positions[i-1].runes {
+			t.Errorf("positions[%d].runes=%d < positions[%d].runes=%d (decreased)",
+				i, gi.positions[i].runes, i-1, gi.positions[i-1].runes)
+		}
+	}
+}
+
+// TestPositionIndexAdvancesWithGlyphs verifies that for plain LTR text every
+// rune produces a distinct position with monotonically increasing y for
+// successive lines.
+func TestLinesAdvanceY(t *testing.T) {
+	glyphs := getGlyphs(16, 0, 200, text.Start, "a\nb\nc\nd")
+	gi := buildIndex(glyphs)
+	if len(gi.lines) < 4 {
+		t.Fatalf("want 4+ lines, got %d", len(gi.lines))
+	}
+	for i := 1; i < len(gi.lines); i++ {
+		if gi.lines[i].yOff <= gi.lines[i-1].yOff {
+			t.Errorf("line %d yOff %d not greater than prev %d",
+				i, gi.lines[i].yOff, gi.lines[i-1].yOff)
+		}
 	}
 }

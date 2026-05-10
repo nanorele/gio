@@ -1,3 +1,5 @@
+// Win32 syscall .Call() returns non-nil errno on success; OutputDebugStringW errors are not actionable.
+//nolint:errcheck
 package app
 
 import (

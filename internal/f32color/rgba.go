@@ -98,7 +98,7 @@ func linearTosRGB(c float32) float32 {
 	case c < 0.0031308:
 		return 12.92 * c
 	case c < 1:
-		return 1.055*float32(math.Pow(float64(c), 0.41666)) - 0.055
+		return 1.055*float32(math.Pow(float64(c), 1.0/2.4)) - 0.055
 	}
 	return 1
 }

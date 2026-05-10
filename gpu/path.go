@@ -279,7 +279,9 @@ func (s *fboSet) resize(ctx driver.Device, format driver.TextureFormat, sizes []
 func (s *fboSet) delete(ctx driver.Device, idx int) {
 	for i := idx; i < len(s.fbos); i++ {
 		f := s.fbos[i]
-		f.tex.Release()
+		if f.tex != nil {
+			f.tex.Release()
+		}
 	}
 	s.fbos = s.fbos[:idx]
 }
@@ -317,6 +319,9 @@ func buildPath(ctx driver.Device, p []byte) pathData {
 }
 
 func (p pathData) release() {
+	if p.data == nil {
+		return
+	}
 	p.data.Release()
 }
 
@@ -342,6 +347,9 @@ func (s *stenciler) begin(sizes []image.Point) {
 }
 
 func (s *stenciler) stencilPath(bounds image.Rectangle, offset f32.Point, uv image.Point, data pathData) {
+	if bounds.Dx() == 0 || bounds.Dy() == 0 {
+		return
+	}
 	s.ctx.Viewport(uv.X, uv.Y, bounds.Dx(), bounds.Dy())
 
 	texSize := f32.Point{X: float32(bounds.Dx()), Y: float32(bounds.Dy())}

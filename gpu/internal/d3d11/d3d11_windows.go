@@ -862,5 +862,5 @@ func toBlendFactor(f driver.BlendFactor) (uint32, uint32) {
 }
 
 func sliceOf(ptr uintptr, cap int) []byte {
-	return unsafe.Slice((*byte)(unsafe.Pointer(ptr)), cap)
+	return unsafe.Slice((*byte)(unsafe.Pointer(ptr)), cap) //nolint:govet // ptr is a fresh function arg pointing to D3D11-mapped memory.
 }

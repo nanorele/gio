@@ -5,8 +5,6 @@ cov
 coverage
 *.exe
 *.out
-*I.md
 *_cover
 *_cover.*
-.builds
 .claude

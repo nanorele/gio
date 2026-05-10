@@ -214,12 +214,26 @@ func (g *glyphIndex) Glyph(gl text.Glyph) {
 	}
 	if needsNewLine {
 		posEnd := len(g.positions)
+		// On a SOFT line break (line break without paragraph break) that ran
+		// insertPositionsWithin, the loop's final position (g.pos with x past
+		// the cluster's end) belongs to the next line: the next glyph will
+		// overwrite it via insertPosition's replace branch (same .runes,
+		// different .y) with lineCol on the new line. Exclude that single
+		// trailing slot from this line's range so posStart/posEnd describes
+		// positions whose lineCol.line == this line.
+		if insertPositionsWithin && !breaksParagraph && posEnd > g.currentLinePosStart {
+			posEnd--
+		}
+		ascDescIdx := posEnd - 1
+		if ascDescIdx < 0 {
+			ascDescIdx = 0
+		}
 		g.lines = append(g.lines, lineInfo{
 			xOff:     g.currentLineMin,
 			yOff:     int(gl.Y),
 			width:    g.currentLineMax - g.currentLineMin,
-			ascent:   g.positions[posEnd-1].ascent,
-			descent:  g.positions[posEnd-1].descent,
+			ascent:   g.positions[ascDescIdx].ascent,
+			descent:  g.positions[ascDescIdx].descent,
 			glyphs:   g.currentLineGlyphs,
 			posStart: g.currentLinePosStart,
 			posEnd:   posEnd,
@@ -274,28 +288,47 @@ func (g *glyphIndex) closestToLineCol(lineCol screenPos) combinedPos {
 	return pos
 }
 
+// findPositionIndex returns the index of pos within g.positions, or -1.
+// Required because pos.runes is not a valid index into positions: bidi runs
+// and truncators can produce multiple positions with the same runes value.
+func (g *glyphIndex) findPositionIndex(pos combinedPos) int {
+	_, idx := g.closestToRune(pos.runes)
+	for idx < len(g.positions) && g.positions[idx].runes == pos.runes {
+		if g.positions[idx] == pos {
+			return idx
+		}
+		idx++
+	}
+	return -1
+}
+
 func (g *glyphIndex) atStartOfLine(pos combinedPos) bool {
-	if pos.runes == 0 || len(g.positions) == 0 {
+	if len(g.positions) == 0 {
 		return true
 	}
-	prevRuneIndex := pos.runes - 1
-	if prevRuneIndex >= len(g.positions) {
+	if pos.lineCol.col == 0 {
 		return true
 	}
-	lineOfPrevRune := g.positions[prevRuneIndex].lineCol.line
-	return lineOfPrevRune < pos.lineCol.line
+	idx := g.findPositionIndex(pos)
+	if idx <= 0 {
+		return true
+	}
+	return g.positions[idx-1].lineCol.line < pos.lineCol.line
 }
 
 func (g *glyphIndex) atEndOfLine(pos combinedPos) bool {
 	if len(g.positions) == 0 {
 		return true
 	}
-	if pos.runes == g.positions[len(g.positions)-1].runes {
+	last := g.positions[len(g.positions)-1]
+	if pos == last {
 		return true
 	}
-	next := pos.runes + 1
-	hasNext := next < len(g.positions)
-	return hasNext && g.positions[next].lineCol.line > pos.lineCol.line
+	idx := g.findPositionIndex(pos)
+	if idx < 0 || idx >= len(g.positions)-1 {
+		return true
+	}
+	return g.positions[idx+1].lineCol.line > pos.lineCol.line
 }
 
 func dist(a, b fixed.Int26_6) fixed.Int26_6 {

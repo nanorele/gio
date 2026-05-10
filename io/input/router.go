@@ -303,7 +303,7 @@ func (q *Router) Frame(frame *op.Ops) {
 	}
 	for _, rc := range q.transfers {
 		if rc != nil {
-			rc.Close()
+			rc.Close() //nolint:errcheck // Best-effort cleanup; transfer reader errors are not actionable here.
 		}
 	}
 	q.transfers = nil
@@ -565,7 +565,11 @@ func (q *Router) RevealFocus(viewport image.Rectangle) {
 	if focus == nil {
 		return
 	}
-	kh := &q.handlers[focus].key
+	h, ok := q.handlers[focus]
+	if !ok {
+		return
+	}
+	kh := &h.key
 	bounds := q.key.queue.BoundsFor(kh)
 	area := q.key.queue.AreaFor(kh)
 	viewport = q.pointer.queue.ClipFor(area, viewport)
@@ -592,7 +596,11 @@ func (q *Router) ScrollFocus(dist image.Point) {
 	if focus == nil {
 		return
 	}
-	kh := &q.handlers[focus].key
+	h, ok := q.handlers[focus]
+	if !ok {
+		return
+	}
+	kh := &h.key
 	area := q.key.queue.AreaFor(kh)
 	q.changeState(nil, q.lastState(), q.pointer.queue.Deliver(q.handlers, area, pointer.Event{
 		Kind:   pointer.Scroll,
@@ -632,7 +640,11 @@ func (q *Router) ClickFocus() {
 	if focus == nil {
 		return
 	}
-	kh := &q.handlers[focus].key
+	h, ok := q.handlers[focus]
+	if !ok {
+		return
+	}
+	kh := &h.key
 	bounds := q.key.queue.BoundsFor(kh)
 	center := bounds.Max.Add(bounds.Min).Div(2)
 	e := pointer.Event{
@@ -818,6 +830,9 @@ func (s SemanticGestures) String() string {
 	var gestures []string
 	if s&ClickGesture != 0 {
 		gestures = append(gestures, "Click")
+	}
+	if s&ScrollGesture != 0 {
+		gestures = append(gestures, "Scroll")
 	}
 	return strings.Join(gestures, ",")
 }

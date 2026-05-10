@@ -367,7 +367,7 @@ func (e *textView) Text(buf []byte) []byte {
 		buf = make([]byte, size)
 	}
 	buf = buf[:size]
-	e.Seek(0, io.SeekStart)
+	e.Seek(0, io.SeekStart) //nolint:errcheck // Seek on in-memory text buffer cannot fail.
 	n, _ := io.ReadFull(e, buf)
 	buf = buf[:n]
 	return buf
@@ -426,7 +426,7 @@ func (e *textView) Truncated() bool {
 }
 
 func (e *textView) layoutText(lt *text.Shaper) {
-	e.Seek(0, io.SeekStart)
+	e.Seek(0, io.SeekStart) //nolint:errcheck // Seek on in-memory text buffer cannot fail.
 	var r io.Reader = e
 	if e.Mask != 0 {
 		e.maskReader.Reset(e, e.Mask)
@@ -739,7 +739,7 @@ func (e *textView) ClearSelection() {
 }
 
 func (e *textView) WriteTo(w io.Writer) (int64, error) {
-	e.Seek(0, io.SeekStart)
+	e.Seek(0, io.SeekStart) //nolint:errcheck // Seek on in-memory text buffer cannot fail.
 	return io.Copy(w, struct{ io.Reader }{e})
 }
 

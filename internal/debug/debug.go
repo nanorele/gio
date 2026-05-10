@@ -21,7 +21,7 @@ var parseOnce sync.Once
 func Parse() {
 	parseOnce.Do(func() {
 		val, ok := os.LookupEnv(debugVariable)
-		if !ok {
+		if !ok || val == "" {
 			return
 		}
 		print := false

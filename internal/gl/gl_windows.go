@@ -1,3 +1,6 @@
+// OpenGL syscall wrappers: syscall.SyscallN returns non-nil errno on success;
+// (*T)(unsafe.Pointer(...)) is standard for proc thunks.
+//nolint:all
 package gl
 
 import (

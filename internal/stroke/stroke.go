@@ -475,7 +475,12 @@ func ArcTransform(p, f1, f2 f32.Point, angle float32) (transform f32.Affine2D, s
 		a := 0.5 * (dist(f1, p) + dist(f2, p))
 
 		c := dist(f1, f2) * 0.5
-		b := math.Sqrt(a*a - c*c)
+		// FP rounding can push c slightly past a even when a >= c geometrically.
+		bb := a*a - c*c
+		if bb < 0 {
+			bb = 0
+		}
+		b := math.Sqrt(bb)
 		switch {
 		case a > b:
 			rx = a
@@ -495,14 +500,16 @@ func ArcTransform(p, f1, f2 f32.Point, angle float32) (transform f32.Affine2D, s
 			if x < 0 {
 				x = -x
 			}
-			alpha = math.Acos(x / c)
+			r := x / c
+			if r > 1 {
+				r = 1
+			}
+			alpha = math.Acos(r)
 		}
 	}
 
 	θ := angle / float32(segments)
 	ref := f32.AffineId()
-	rot := f32.AffineId()
-	inv := f32.AffineId()
 	center := f32.Point{
 		X: 0.5 * (f1.X + f2.X),
 		Y: 0.5 * (f1.Y + f2.Y),
@@ -513,8 +520,8 @@ func ArcTransform(p, f1, f2 f32.Point, angle float32) (transform f32.Affine2D, s
 		X: float32(1 / rx),
 		Y: float32(1 / ry),
 	})
-	inv = ref.Invert()
-	rot = rot.Rotate(f32.Point{}, 0.5*θ)
+	inv := ref.Invert()
+	rot := f32.AffineId().Rotate(f32.Point{}, 0.5*θ)
 
 	return inv.Mul(rot).Mul(ref), segments
 }

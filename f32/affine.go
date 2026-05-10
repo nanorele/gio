@@ -124,7 +124,7 @@ func (a Affine2D) shear(radiansX, radiansY float32) Affine2D {
 	ty := float32(math.Tan(float64(radiansY)))
 	return Affine2D{
 		(a.a + 1) + a.d*tx - 1, a.b + (a.e+1)*tx, a.c + a.f*tx,
-		(a.a+1)*ty + a.d, a.b*ty + (a.e + 1) - 1, a.f*ty + a.f,
+		(a.a+1)*ty + a.d, a.b*ty + (a.e + 1) - 1, a.c*ty + a.f,
 	}
 }
 

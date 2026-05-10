@@ -1,3 +1,6 @@
+// EGL syscall wrappers: syscall errno is non-nil on success;
+// eglReleaseThread is kept symmetric with the Unix implementation.
+//nolint:all
 package egl
 
 import (

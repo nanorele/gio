@@ -84,7 +84,6 @@ func (l *line) insertTrailingSyntheticNewline(newLineClusterIdx int) {
 		glyphCount:   0,
 		runeCount:    1,
 		xAdvance:     0,
-		yAdvance:     0,
 		xOffset:      0,
 		yOffset:      0,
 	}
@@ -107,7 +106,7 @@ func (l *line) setTruncatedCount(truncatedCount int) {
 		if i == finalGlyphIdx {
 			l.runs[finalRunIdx].Glyphs[finalGlyphIdx].runeCount = truncatedCount
 		} else {
-			l.runs[finalRunIdx].Glyphs[finalGlyphIdx].runeCount = 0
+			l.runs[finalRunIdx].Glyphs[i].runeCount = 0
 		}
 	}
 }
@@ -123,7 +122,6 @@ type glyph struct {
 	glyphCount   int
 	runeCount    int
 	xAdvance     fixed.Int26_6
-	yAdvance     fixed.Int26_6
 	xOffset      fixed.Int26_6
 	yOffset      fixed.Int26_6
 	bounds       fixed.Rectangle26_6
@@ -158,10 +156,6 @@ type shaperImpl struct {
 	splitScratch2    []shaping.Input
 	outScratchBuf    []shaping.Output
 	scratchRunes     []rune
-	scratchLines     []line
-	scratchRuns      []runLayout
-	scratchGlyphs    []glyph
-	scratchVisual    []int
 	bitmapGlyphCache bitmapCache
 }
 
@@ -288,7 +282,7 @@ func (s *shaperImpl) splitBidi(input shaping.Input) []shaping.Input {
 	if input.Direction.Progression() == di.TowardTopLeft {
 		def = bidi.RightToLeft
 	}
-	s.bidiParagraph.SetString(string(input.Text), bidi.DefaultDirection(def))
+	s.bidiParagraph.SetString(string(input.Text), bidi.DefaultDirection(def)) //nolint:errcheck // Subsequent Order() call surfaces any error.
 	out, err := s.bidiParagraph.Order()
 	if err != nil {
 		return []shaping.Input{input}
@@ -564,11 +558,10 @@ func (s *shaperImpl) LayoutRunes(params Parameters, txt []rune) document {
 				bounds.Max = bounds.Min.Add(fixed.Point26_6{X: g.Width, Y: -g.Height})
 				runGlyphs[k] = glyph{
 					id:           newGlyphID(run.Size, s.faceToIndex[font], g.GlyphID),
-					clusterIndex: g.ClusterIndex,
-					runeCount:    g.RuneCount,
-					glyphCount:   g.GlyphCount,
-					xAdvance:     g.XAdvance,
-					yAdvance:     g.YAdvance,
+					clusterIndex: g.TextIndex(),
+					runeCount:    g.RunesCount(),
+					glyphCount:   g.GlyphsCount(),
+					xAdvance:     g.Advance,
 					xOffset:      g.XOffset,
 					yOffset:      g.YOffset,
 					bounds:       bounds,
@@ -695,7 +688,7 @@ func (s *shaperImpl) Shape(pathOps *op.Ops, gs []Glyph) clip.PathSpec {
 		}
 
 		pos := f32.Point{
-			X: fixedToFloat((g.X - x) - g.Offset.X),
+			X: fixedToFloat((g.X - x) + g.Offset.X),
 			Y: -fixedToFloat(g.Offset.Y),
 		}
 		builder.Move(pos.Sub(lastPos))
@@ -859,11 +852,10 @@ func toGioGlyphs(in []shaping.Glyph, ppem fixed.Int26_6, faceIdx int) []glyph {
 		bounds.Max = bounds.Min.Add(fixed.Point26_6{X: g.Width, Y: -g.Height})
 		out = append(out, glyph{
 			id:           newGlyphID(ppem, faceIdx, g.GlyphID),
-			clusterIndex: g.ClusterIndex,
-			runeCount:    g.RuneCount,
-			glyphCount:   g.GlyphCount,
-			xAdvance:     g.XAdvance,
-			yAdvance:     g.YAdvance,
+			clusterIndex: g.TextIndex(),
+			runeCount:    g.RunesCount(),
+			glyphCount:   g.GlyphsCount(),
+			xAdvance:     g.Advance,
 			xOffset:      g.XOffset,
 			yOffset:      g.YOffset,
 			bounds:       bounds,

@@ -1,3 +1,6 @@
+// COM-style D3D11 interop: syscall.SyscallN returns non-nil errno on success;
+// (*T)(unsafe.Pointer(...)) is the standard pattern for vtable thunks.
+//nolint:all
 package d3d11
 
 import (

@@ -208,31 +208,6 @@ func TestNewlineSynthesis(t *testing.T) {
 	}
 }
 
-func simpleGlyph(cluster int) shaping.Glyph {
-	return complexGlyph(cluster, 1, 1)
-}
-
-func ligatureGlyph(cluster, runes int) shaping.Glyph {
-	return complexGlyph(cluster, runes, 1)
-}
-
-func expansionGlyph(cluster, glyphs int) shaping.Glyph {
-	return complexGlyph(cluster, 1, glyphs)
-}
-
-func complexGlyph(cluster, runes, glyphs int) shaping.Glyph {
-	return shaping.Glyph{
-		Width:        fixed.I(10),
-		Height:       fixed.I(10),
-		XAdvance:     fixed.I(10),
-		YAdvance:     fixed.I(10),
-		YBearing:     fixed.I(10),
-		ClusterIndex: cluster,
-		GlyphCount:   glyphs,
-		RuneCount:    runes,
-	}
-}
-
 func copyLines(lines []shaping.Line) []shaping.Line {
 	out := make([]shaping.Line, len(lines))
 	for lineIdx, line := range lines {
@@ -272,10 +247,10 @@ func makeTestText(shaper *shaperImpl, primaryDir system.TextDirection, fontSize,
 		simpleRunes := []rune(simpleSource)
 		complexRunes := []rune(complexSource)
 		if runeLimit < len(simpleRunes) {
-			ltrSource = string(simpleRunes[:runeLimit])
+			simpleSource = string(simpleRunes[:runeLimit])
 		}
 		if runeLimit < len(complexRunes) {
-			rtlSource = string(complexRunes[:runeLimit])
+			complexSource = string(complexRunes[:runeLimit])
 		}
 	}
 	simpleText, _ := shaper.shapeAndWrapText(Parameters{
@@ -655,5 +630,646 @@ func TestArabicDiacriticClustering(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestFixedFloatRoundTrip(t *testing.T) {
+	cases := []fixed.Int26_6{
+		0,
+		1,
+		-1,
+		64,
+		-64,
+		fixed.I(1),
+		fixed.I(-1),
+		fixed.I(100),
+		fixed.I(-100),
+		fixed.Int26_6(1<<20) - 1,
+		-(fixed.Int26_6(1<<20) - 1),
+	}
+	for _, c := range cases {
+		f := fixedToFloat(c)
+		got := floatToFixed(f)
+		if got != c {
+			t.Errorf("fixedToFloat/floatToFixed round trip failed: in=%d float=%f out=%d", c, f, got)
+		}
+	}
+}
+
+func TestFixedToFloatScale(t *testing.T) {
+	if got, want := fixedToFloat(fixed.I(1)), float32(1.0); got != want {
+		t.Errorf("fixedToFloat(1.0) = %f, want %f", got, want)
+	}
+	if got, want := fixedToFloat(fixed.Int26_6(32)), float32(0.5); got != want {
+		t.Errorf("fixedToFloat(0.5) = %f, want %f", got, want)
+	}
+	if got, want := fixedToFloat(fixed.Int26_6(-32)), float32(-0.5); got != want {
+		t.Errorf("fixedToFloat(-0.5) = %f, want %f", got, want)
+	}
+}
+
+func TestFloatToFixedScale(t *testing.T) {
+	if got, want := floatToFixed(1.0), fixed.I(1); got != want {
+		t.Errorf("floatToFixed(1.0) = %d, want %d", got, want)
+	}
+	if got, want := floatToFixed(0.5), fixed.Int26_6(32); got != want {
+		t.Errorf("floatToFixed(0.5) = %d, want %d", got, want)
+	}
+	if got, want := floatToFixed(-0.5), fixed.Int26_6(-32); got != want {
+		t.Errorf("floatToFixed(-0.5) = %d, want %d", got, want)
+	}
+}
+
+func TestSplitBidiPureASCIIFastPath(t *testing.T) {
+	shaper := testShaper()
+	txt := []rune("hello world")
+	in := shaping.Input{
+		Text:      txt,
+		RunStart:  0,
+		RunEnd:    len(txt),
+		Direction: di.DirectionLTR,
+		Size:      fixed.I(10),
+	}
+	out := shaper.splitBidi(in)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 run for pure-ASCII LTR fast path, got %d", len(out))
+	}
+	if out[0].Direction != di.DirectionLTR {
+		t.Errorf("expected LTR, got %v", out[0].Direction)
+	}
+	if out[0].RunStart != 0 || out[0].RunEnd != len(txt) {
+		t.Errorf("range modified by ASCII fast path: %d..%d", out[0].RunStart, out[0].RunEnd)
+	}
+}
+
+func TestSplitBidiEmptyInput(t *testing.T) {
+	shaper := testShaper()
+	in := shaping.Input{
+		Text:      []rune{},
+		RunStart:  0,
+		RunEnd:    0,
+		Direction: di.DirectionLTR,
+		Size:      fixed.I(10),
+	}
+	out := shaper.splitBidi(in)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 input back for empty text, got %d", len(out))
+	}
+}
+
+func TestSplitBidiMixedLTRRTL(t *testing.T) {
+	shaper := testShaper()
+	txt := []rune("abc אבג def")
+	in := shaping.Input{
+		Text:      txt,
+		RunStart:  0,
+		RunEnd:    len(txt),
+		Direction: di.DirectionLTR,
+		Size:      fixed.I(10),
+	}
+	out := shaper.splitBidi(in)
+	if len(out) < 2 {
+		t.Fatalf("expected multiple runs from mixed bidi text, got %d", len(out))
+	}
+	sawLTR, sawRTL := false, false
+	for _, r := range out {
+		if r.Direction == di.DirectionLTR {
+			sawLTR = true
+		}
+		if r.Direction == di.DirectionRTL {
+			sawRTL = true
+		}
+	}
+	if !sawLTR || !sawRTL {
+		t.Errorf("expected both LTR and RTL runs, got LTR=%v RTL=%v", sawLTR, sawRTL)
+	}
+	// Runs should be contiguous with no gaps and cover the full input range.
+	prevEnd := 0
+	for i, r := range out {
+		if r.RunStart != prevEnd {
+			t.Errorf("run %d: expected RunStart=%d (after previous), got %d", i, prevEnd, r.RunStart)
+		}
+		prevEnd = r.RunEnd
+	}
+	if prevEnd != len(txt) {
+		t.Errorf("runs ended at %d, expected %d", prevEnd, len(txt))
+	}
+}
+
+func TestSplitByScriptEmptyInput(t *testing.T) {
+	in := []shaping.Input{{Text: []rune{}, RunStart: 0, RunEnd: 0}}
+	out := splitByScript(in, di.DirectionLTR, nil)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 input from empty splitByScript, got %d", len(out))
+	}
+}
+
+func TestSplitByScriptLatinOnly(t *testing.T) {
+	txt := []rune("hello world")
+	in := []shaping.Input{{
+		Text:     txt,
+		RunStart: 0,
+		RunEnd:   len(txt),
+	}}
+	out := splitByScript(in, di.DirectionLTR, nil)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 run for latin-only text, got %d", len(out))
+	}
+	if out[0].Script != language.Latin {
+		t.Errorf("expected Latin script, got %v", out[0].Script)
+	}
+}
+
+func TestIsASCII(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []rune
+		want bool
+	}{
+		{"empty", []rune(""), true},
+		{"plain", []rune("Hello, World!"), true},
+		{"control chars", []rune("\t\n\r"), true},
+		{"high ascii boundary", []rune{0x7F}, true},
+		{"first non-ascii", []rune{0x80}, false},
+		{"arabic", []rune("الحب"), false},
+		{"mixed", []rune("abcé"), false},
+	}
+	for _, c := range cases {
+		if got := isASCII(c.in); got != c.want {
+			t.Errorf("%s: isASCII = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestReplaceControlCharacters(t *testing.T) {
+	in := []rune("hello\tworld​zero⁠width")
+	out := replaceControlCharacters(append([]rune(nil), in...))
+	for i, r := range out {
+		if r == '\t' {
+			t.Errorf("tab not replaced at index %d", i)
+		}
+		if r == '​' || r == '⁠' {
+			t.Errorf("zero-width char not replaced at index %d", i)
+		}
+	}
+	// tab gets replaced with em-space  .
+	if out[5] != ' ' {
+		t.Errorf("expected tab -> em space, got %U", out[5])
+	}
+}
+
+func TestReplaceControlCharactersNewline(t *testing.T) {
+	// '\n' is a unicode space; replaceControlCharacters substitutes it with ' '.
+	// LayoutRunes strips the trailing newline before calling replaceControlCharacters.
+	in := []rune("a\nb")
+	out := replaceControlCharacters(append([]rune(nil), in...))
+	if out[1] != ' ' {
+		t.Errorf("expected newline -> space, got %U", out[1])
+	}
+}
+
+func TestWrapPolicyToGoText(t *testing.T) {
+	if wrapPolicyToGoText(WrapGraphemes) != shaping.Always {
+		t.Errorf("WrapGraphemes should map to shaping.Always")
+	}
+	if wrapPolicyToGoText(WrapWords) != shaping.Never {
+		t.Errorf("WrapWords should map to shaping.Never")
+	}
+	if wrapPolicyToGoText(WrapHeuristically) != shaping.WhenNecessary {
+		t.Errorf("WrapHeuristically should map to shaping.WhenNecessary")
+	}
+}
+
+func TestMapDirectionRoundTrip(t *testing.T) {
+	cases := []system.TextDirection{system.LTR, system.RTL}
+	for _, d := range cases {
+		got := unmapDirection(mapDirection(d))
+		if got != d {
+			t.Errorf("round trip failed: %v -> %v", d, got)
+		}
+	}
+	// Unknown di.Direction maps back to LTR (default).
+	if unmapDirection(di.Direction(0xFF)) != system.LTR {
+		t.Errorf("unknown direction should default to LTR")
+	}
+}
+
+func TestCalculateYOffsetsEmpty(t *testing.T) {
+	// Should not panic on empty input.
+	calculateYOffsets(nil)
+	calculateYOffsets([]line{})
+	calculateYOffsetsFrom(nil, 0)
+	calculateYOffsetsFrom([]line{}, 5)
+}
+
+func TestCalculateYOffsetsMonotonic(t *testing.T) {
+	lines := []line{
+		{ascent: fixed.I(10), lineHeight: fixed.I(15)},
+		{ascent: fixed.I(10), lineHeight: fixed.I(15)},
+		{ascent: fixed.I(10), lineHeight: fixed.I(15)},
+	}
+	calculateYOffsets(lines)
+	if lines[0].yOffset != 10 {
+		t.Errorf("first line yOffset = %d, want 10", lines[0].yOffset)
+	}
+	for i := 1; i < len(lines); i++ {
+		if lines[i].yOffset <= lines[i-1].yOffset {
+			t.Errorf("yOffsets not monotonic: lines[%d].yOffset=%d <= lines[%d].yOffset=%d",
+				i, lines[i].yOffset, i-1, lines[i-1].yOffset)
+		}
+	}
+}
+
+func TestCalculateYOffsetsFromCarry(t *testing.T) {
+	lines := []line{
+		{ascent: fixed.I(10), lineHeight: fixed.I(15), yOffset: 100},
+		{ascent: fixed.I(10), lineHeight: fixed.I(15)},
+		{ascent: fixed.I(10), lineHeight: fixed.I(15)},
+	}
+	// startIdx=1 should treat lines[0].yOffset as the carry.
+	calculateYOffsetsFrom(lines, 1)
+	if lines[0].yOffset != 100 {
+		t.Errorf("startIdx=1 should not modify lines[0].yOffset; got %d", lines[0].yOffset)
+	}
+	if lines[1].yOffset != 115 {
+		t.Errorf("lines[1].yOffset = %d, want 115", lines[1].yOffset)
+	}
+	if lines[2].yOffset != 130 {
+		t.Errorf("lines[2].yOffset = %d, want 130", lines[2].yOffset)
+	}
+}
+
+func TestLayoutEmptyHasOneLine(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	shaper := testShaper(ltrFace)
+	doc := shaper.LayoutString(Parameters{
+		PxPerEm:  fixed.I(10),
+		MaxWidth: 200,
+		Locale:   english,
+	}, "")
+	if len(doc.lines) != 1 {
+		t.Fatalf("expected 1 line for empty string, got %d", len(doc.lines))
+	}
+}
+
+func TestLayoutSingleCharacter(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	shaper := testShaper(ltrFace)
+	doc := shaper.LayoutString(Parameters{
+		PxPerEm:  fixed.I(10),
+		MaxWidth: 200,
+		Locale:   english,
+	}, "x")
+	if len(doc.lines) != 1 {
+		t.Fatalf("expected 1 line for single char, got %d", len(doc.lines))
+	}
+	if doc.lines[0].runeCount < 1 {
+		t.Errorf("expected runeCount >= 1, got %d", doc.lines[0].runeCount)
+	}
+}
+
+func TestLayoutAllWhitespace(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	shaper := testShaper(ltrFace)
+	doc := shaper.LayoutString(Parameters{
+		PxPerEm:  fixed.I(10),
+		MaxWidth: 200,
+		Locale:   english,
+	}, "     ")
+	if len(doc.lines) < 1 {
+		t.Fatalf("expected at least 1 line for whitespace, got %d", len(doc.lines))
+	}
+}
+
+func TestLayoutAllNewlines(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	shaper := testShaper(ltrFace)
+	doc := shaper.LayoutString(Parameters{
+		PxPerEm:  fixed.I(10),
+		MaxWidth: 200,
+		Locale:   english,
+	}, "\n\n\n")
+	if len(doc.lines) < 1 {
+		t.Fatalf("expected at least 1 line for newline-only text, got %d", len(doc.lines))
+	}
+	// Y offsets must be monotonically non-decreasing across lines.
+	prev := doc.lines[0].yOffset
+	for i := 1; i < len(doc.lines); i++ {
+		if doc.lines[i].yOffset < prev {
+			t.Errorf("non-monotonic yOffset at line %d: %d < %d", i, doc.lines[i].yOffset, prev)
+		}
+		prev = doc.lines[i].yOffset
+	}
+}
+
+func TestLayoutMultiParagraph(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	collection := []FontFace{{Face: ltrFace}}
+	shaper := NewShaper(NoSystemFonts(), WithCollection(collection))
+	shaper.LayoutString(Parameters{
+		PxPerEm:  fixed.I(10),
+		MaxWidth: 200,
+		Locale:   english,
+	}, "para one\npara two\npara three")
+	var glyphs []Glyph
+	for g, ok := shaper.NextGlyph(); ok; g, ok = shaper.NextGlyph() {
+		glyphs = append(glyphs, g)
+	}
+	// Expect at least two ParagraphStart flags (one for "para two", one for "para three").
+	starts := 0
+	for _, g := range glyphs {
+		if g.Flags&FlagParagraphStart != 0 {
+			starts++
+		}
+	}
+	if starts < 2 {
+		t.Errorf("expected >= 2 ParagraphStart glyphs across 3 paragraphs, got %d", starts)
+	}
+}
+
+func TestLayoutTinyConstraintWraps(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	shaper := testShaper(ltrFace)
+	doc := shaper.LayoutString(Parameters{
+		PxPerEm:    fixed.I(10),
+		MaxWidth:   1,
+		Locale:     english,
+		WrapPolicy: WrapGraphemes,
+	}, "abcde")
+	if len(doc.lines) < 5 {
+		t.Errorf("MaxWidth=1 with WrapGraphemes should produce >= 5 lines for 5 chars, got %d", len(doc.lines))
+	}
+}
+
+func TestLayoutConstraintExactlyLineWidth(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	shaper := testShaper(ltrFace)
+	// First measure with a generous width.
+	wide := shaper.LayoutString(Parameters{
+		PxPerEm:  fixed.I(10),
+		MaxWidth: 10000,
+		Locale:   english,
+	}, "hello")
+	if len(wide.lines) != 1 {
+		t.Fatalf("expected 1 line for wide layout, got %d", len(wide.lines))
+	}
+	exact := wide.lines[0].width.Ceil()
+	got := shaper.LayoutString(Parameters{
+		PxPerEm:  fixed.I(10),
+		MaxWidth: exact,
+		Locale:   english,
+	}, "hello")
+	if len(got.lines) != 1 {
+		t.Errorf("MaxWidth = exact line width should keep text on 1 line, got %d", len(got.lines))
+	}
+}
+
+func TestLayoutTruncatorAppears(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	collection := []FontFace{{Face: ltrFace}}
+	shaper := NewShaper(NoSystemFonts(), WithCollection(collection))
+	shaper.LayoutString(Parameters{
+		PxPerEm:  fixed.I(10),
+		MaxWidth: 30,
+		MaxLines: 1,
+		Locale:   english,
+	}, "the quick brown fox jumps over the lazy dog")
+	sawTruncator := false
+	for g, ok := shaper.NextGlyph(); ok; g, ok = shaper.NextGlyph() {
+		if g.Flags&FlagTruncator != 0 {
+			sawTruncator = true
+		}
+	}
+	if !sawTruncator {
+		t.Errorf("expected truncator glyph to be emitted when MaxLines<text length")
+	}
+}
+
+func TestLayoutCustomTruncator(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	collection := []FontFace{{Face: ltrFace}}
+	shaper := NewShaper(NoSystemFonts(), WithCollection(collection))
+	shaper.LayoutString(Parameters{
+		PxPerEm:   fixed.I(10),
+		MaxWidth:  30,
+		MaxLines:  1,
+		Truncator: ">>",
+		Locale:    english,
+	}, "the quick brown fox jumps over the lazy dog")
+	sawTruncator := false
+	for g, ok := shaper.NextGlyph(); ok; g, ok = shaper.NextGlyph() {
+		if g.Flags&FlagTruncator != 0 {
+			sawTruncator = true
+		}
+	}
+	if !sawTruncator {
+		t.Errorf("expected truncator glyph to be emitted with custom truncator")
+	}
+}
+
+func TestShapeOffsetXMultipleGlyphs(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	collection := []FontFace{{Face: ltrFace}}
+	shaper := NewShaper(NoSystemFonts(), WithCollection(collection))
+	shaper.LayoutString(Parameters{
+		PxPerEm:  fixed.I(40),
+		MinWidth: 200,
+		MaxWidth: 200,
+		Locale:   english,
+	}, "abcd")
+	var raw []Glyph
+	for g, ok := shaper.NextGlyph(); ok; g, ok = shaper.NextGlyph() {
+		raw = append(raw, g)
+	}
+	var gs []Glyph
+	for _, g := range raw {
+		if g.Advance != 0 {
+			gs = append(gs, g)
+			if len(gs) == 4 {
+				break
+			}
+		}
+	}
+	if len(gs) < 4 {
+		t.Skip("font produced fewer than 4 advancing glyphs")
+	}
+	// Apply a different offset to each glyph.
+	offsets := []fixed.Int26_6{0, fixed.I(5), fixed.I(-5), fixed.I(10)}
+	for i := range gs {
+		gs[i].Offset.X = offsets[i]
+	}
+	// Should not panic. The Shape call exercises the Offset.X path.
+	_ = shaper.Shape(gs)
+}
+
+func TestShapeBitmapsEmptyGlyphs(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	collection := []FontFace{{Face: ltrFace}}
+	shaper := NewShaper(NoSystemFonts(), WithCollection(collection))
+	// Both should handle empty input without crashing.
+	_ = shaper.Shape(nil)
+	_ = shaper.Bitmaps(nil)
+	_ = shaper.Shape([]Glyph{})
+	_ = shaper.Bitmaps([]Glyph{})
+}
+
+func TestShapeInvalidFaceIdx(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	collection := []FontFace{{Face: ltrFace}}
+	shaper := NewShaper(NoSystemFonts(), WithCollection(collection))
+	// Build a glyph with a face index way beyond what the shaper has loaded.
+	bogus := Glyph{
+		ID:      newGlyphID(fixed.I(10), 1000, 0),
+		Advance: fixed.I(10),
+	}
+	// Should be skipped silently, no panic.
+	_ = shaper.Shape([]Glyph{bogus})
+	_ = shaper.Bitmaps([]Glyph{bogus})
+}
+
+func TestSetTruncatedCountClearsNonFinalGlyphs(t *testing.T) {
+	// Regression: setTruncatedCount used to write to runs[finalRunIdx].Glyphs[finalGlyphIdx]
+	// for every iteration, never zeroing the non-final glyphs. Construct a line whose final
+	// run has multiple glyphs and verify only the final one carries the count.
+	l := line{
+		runs: []runLayout{{
+			Glyphs: []glyph{
+				{runeCount: 5},
+				{runeCount: 7},
+				{runeCount: 9},
+			},
+		}},
+	}
+	l.setTruncatedCount(42)
+	final := len(l.runs[0].Glyphs) - 1
+	for i, g := range l.runs[0].Glyphs {
+		if i == final {
+			if g.runeCount != 42 {
+				t.Errorf("final glyph runeCount = %d, want 42", g.runeCount)
+			}
+		} else {
+			if g.runeCount != 0 {
+				t.Errorf("non-final glyph %d runeCount = %d, want 0 (write-to-wrong-index bug)", i, g.runeCount)
+			}
+		}
+	}
+	if !l.runs[0].truncator {
+		t.Errorf("setTruncatedCount must mark final run as truncator")
+	}
+	if l.runs[0].Runes.Count != 42 {
+		t.Errorf("setTruncatedCount must set Runes.Count = 42, got %d", l.runs[0].Runes.Count)
+	}
+}
+
+func TestInsertTrailingSyntheticNewlineLTR(t *testing.T) {
+	l := line{
+		runs: []runLayout{{
+			Direction: system.LTR,
+			Glyphs: []glyph{
+				{id: 1, glyphCount: 1, runeCount: 1, xAdvance: fixed.I(5)},
+			},
+			Runes: Range{Count: 1},
+		}},
+		runeCount: 1,
+	}
+	l.insertTrailingSyntheticNewline(99)
+	if l.runeCount != 2 {
+		t.Errorf("expected runeCount=2, got %d", l.runeCount)
+	}
+	gs := l.runs[0].Glyphs
+	// LTR (FromOrigin) appends to the end.
+	if gs[len(gs)-1].clusterIndex != 99 {
+		t.Errorf("synthetic glyph cluster idx = %d, want 99", gs[len(gs)-1].clusterIndex)
+	}
+	if gs[len(gs)-1].glyphCount != 0 {
+		t.Errorf("synthetic glyph must have glyphCount=0")
+	}
+	if gs[len(gs)-1].xAdvance != 0 {
+		t.Errorf("synthetic glyph must have zero xAdvance")
+	}
+}
+
+func TestInsertTrailingSyntheticNewlineRTL(t *testing.T) {
+	l := line{
+		runs: []runLayout{{
+			Direction: system.RTL,
+			Glyphs: []glyph{
+				{id: 1, glyphCount: 1, runeCount: 1, xAdvance: fixed.I(5)},
+			},
+			Runes: Range{Count: 1},
+		}},
+		runeCount: 1,
+	}
+	l.insertTrailingSyntheticNewline(99)
+	gs := l.runs[0].Glyphs
+	// RTL (TowardOrigin) prepends to position 0.
+	if gs[0].clusterIndex != 99 {
+		t.Errorf("RTL synthetic glyph should be at index 0, cluster=%d", gs[0].clusterIndex)
+	}
+	if gs[0].glyphCount != 0 {
+		t.Errorf("RTL synthetic glyph must have glyphCount=0")
+	}
+}
+
+func TestStateLeakAcrossLayouts(t *testing.T) {
+	// Layouts in sequence must not leak document state.
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	shaper := testShaper(ltrFace)
+	d1 := shaper.LayoutString(Parameters{
+		PxPerEm: fixed.I(10), MaxWidth: 200, Locale: english,
+	}, "first paragraph here")
+	d2 := shaper.LayoutString(Parameters{
+		PxPerEm: fixed.I(10), MaxWidth: 200, Locale: english,
+	}, "x")
+	if d2.lines[0].runeCount != 1 {
+		t.Errorf("second layout leaked rune count from first; got %d, want 1", d2.lines[0].runeCount)
+	}
+	// Confirm d1 unchanged.
+	if d1.lines[0].runeCount < 5 {
+		t.Errorf("first layout document mutated by second; got runeCount=%d", d1.lines[0].runeCount)
+	}
+}
+
+func TestDocumentResetClears(t *testing.T) {
+	d := document{
+		lines:           []line{{}},
+		runs:            []runLayout{{}},
+		glyphs:          []glyph{{}},
+		visual:          []int{0},
+		alignment:       End,
+		alignWidth:      123,
+		unreadRuneCount: 5,
+	}
+	d.reset()
+	if len(d.lines) != 0 || len(d.runs) != 0 || len(d.glyphs) != 0 || len(d.visual) != 0 {
+		t.Errorf("reset should empty slices: lines=%d runs=%d glyphs=%d visual=%d",
+			len(d.lines), len(d.runs), len(d.glyphs), len(d.visual))
+	}
+	if d.alignment != Start {
+		t.Errorf("reset should restore Start alignment, got %v", d.alignment)
+	}
+	if d.alignWidth != 0 {
+		t.Errorf("reset should clear alignWidth, got %d", d.alignWidth)
+	}
+	if d.unreadRuneCount != 0 {
+		t.Errorf("reset should clear unreadRuneCount, got %d", d.unreadRuneCount)
+	}
+}
+
+func TestToInputDefaults(t *testing.T) {
+	runes := []rune("abc")
+	lc := langConfig{
+		Language:  language.NewLanguage("en"),
+		Direction: di.DirectionLTR,
+	}
+	in := toInput(nil, fixed.I(12), lc, runes)
+	if in.RunStart != 0 || in.RunEnd != len(runes) {
+		t.Errorf("toInput RunStart/RunEnd = %d..%d, want 0..%d", in.RunStart, in.RunEnd, len(runes))
+	}
+	if in.Direction != di.DirectionLTR {
+		t.Errorf("toInput direction not propagated, got %v", in.Direction)
+	}
+	if in.Size != fixed.I(12) {
+		t.Errorf("toInput size not propagated, got %v", in.Size)
 	}
 }

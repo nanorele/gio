@@ -1,3 +1,5 @@
+// Frame errors in benchmarks are not actionable.
+//nolint:errcheck
 package rendertest
 
 import (

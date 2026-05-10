@@ -390,8 +390,10 @@ func (l *List) ScrollBy(num float32) {
 
 	l.Position.First += int(i)
 
-	itemHeight := float64(l.Position.Length) / float64(l.len)
-	l.Position.Offset += int(math.Round(itemHeight * f))
+	if l.len > 0 {
+		itemHeight := float64(l.Position.Length) / float64(l.len)
+		l.Position.Offset += int(math.Round(itemHeight * f))
+	}
 
 	l.Position.BeforeEnd = true
 }

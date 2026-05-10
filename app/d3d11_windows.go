@@ -121,7 +121,7 @@ func (c *d3d11Context) Release() {
 	}
 	*c = d3d11Context{}
 	if debugDirectX {
-		d3d11.ReportLiveObjects()
+		d3d11.ReportLiveObjects() //nolint:errcheck // debug-only diagnostic; error not actionable.
 	}
 }
 

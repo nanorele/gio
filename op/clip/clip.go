@@ -152,7 +152,7 @@ func (p *Path) Move(delta f32.Point) {
 }
 
 func (p *Path) MoveTo(to f32.Point) {
-	if p.pen == to {
+	if p.pen == to && p.pen == p.start {
 		return
 	}
 	p.gap()

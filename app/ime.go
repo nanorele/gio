@@ -123,6 +123,9 @@ func areSnippetsConsistent(old, new key.Snippet) bool {
 }
 
 func snippetSubstring(s key.Snippet, r key.Range) string {
+	if r.Start >= s.End || r.End <= s.Start {
+		return ""
+	}
 	for r.Start > s.Start && r.Start < s.End {
 		_, n := utf8.DecodeRuneInString(s.Text)
 		s.Text = s.Text[n:]

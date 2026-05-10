@@ -95,7 +95,7 @@ func NewWindow(width, height int) (*Window, error) {
 }
 
 func (w *Window) Release() {
-	contextDo(w.ctx, func() error {
+	contextDo(w.ctx, func() error { //nolint:errcheck // Errors during Release are unrecoverable.
 		if w.fboTex != nil {
 			w.fboTex.Release()
 			w.fboTex = nil

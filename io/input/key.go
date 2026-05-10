@@ -319,7 +319,9 @@ func (q *keyQueue) setSelection(state keyState, req key.SelectionCmd) keyState {
 func (q *keyQueue) editorState(handlers map[event.Tag]*handler, state keyState) EditorState {
 	s := state.content
 	if f := state.focus; f != nil {
-		s.Selection.Transform = handlers[f].key.trans
+		if h, ok := handlers[f]; ok {
+			s.Selection.Transform = h.key.trans
+		}
 	}
 	return s
 }

@@ -124,7 +124,7 @@ func minimizeWindow(gtx layout.Context) layout.Dimensions {
 	var p clip.Path
 	p.Begin(gtx.Ops)
 	p.MoveTo(f32.Point{X: margin, Y: size32 - margin})
-	p.LineTo(f32.Point{X: size32 - 2*margin, Y: size32 - margin})
+	p.LineTo(f32.Point{X: size32 - margin, Y: size32 - margin})
 	st := clip.Stroke{
 		Path:  p.End(),
 		Width: width,

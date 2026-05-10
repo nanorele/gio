@@ -111,7 +111,9 @@ func (r *Reader) Decode() (EncodedOp, bool) {
 			r.pc.refs += nrefs
 			continue
 		case TypeAux:
-
+			if len(r.stack) == 0 {
+				panic("TypeAux outside of macro block")
+			}
 			block := r.stack[len(r.stack)-1]
 			n += block.endPC.data - r.pc.data - TypeAuxLen
 			data = data[:n]

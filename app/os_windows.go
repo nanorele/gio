@@ -1,3 +1,6 @@
+// Win32 API calls (CloseClipboard/PostMessage/DwmExtend*) typically have unactionable errors;
+// best-effort cleanup helpers (readClipboard/writeClipboard) intentionally swallow.
+//nolint:errcheck
 package app
 
 import (
@@ -19,7 +22,6 @@ import (
 	"github.com/nanorele/gio/app/internal/windows"
 	"github.com/nanorele/gio/op"
 	"github.com/nanorele/gio/unit"
-	gowindows "golang.org/x/sys/windows"
 
 	"github.com/nanorele/gio/f32"
 	"github.com/nanorele/gio/io/event"
@@ -226,7 +228,24 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		return windows.TRUE
 	case windows.WM_DPICHANGED:
 		w.dpi = int(wParam & 0xFFFF)
+		// System cursor handles are tied to DPI; the cached one is now stale.
+		w.w.MarkCursorDirty()
 		return windows.TRUE
+	case windows.WM_DISPLAYCHANGE:
+		// Cursor handles can be recreated on display/resolution change.
+		w.w.MarkCursorDirty()
+		w.update()
+	case windows.WM_ACTIVATE:
+		// LOWORD(wParam) is the activation state.
+		if act := wParam & 0xFFFF; act == windows.WA_ACTIVE || act == windows.WA_CLICKACTIVE {
+			w.w.MarkCursorDirty()
+			w.update()
+		}
+	case windows.WM_ACTIVATEAPP:
+		if wParam == windows.TRUE {
+			w.w.MarkCursorDirty()
+			w.update()
+		}
 	case windows.WM_ERASEBKGND:
 		return windows.TRUE
 	case windows.WM_KEYDOWN, windows.WM_KEYUP, windows.WM_SYSKEYDOWN, windows.WM_SYSKEYUP:
@@ -272,14 +291,22 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		}
 		if (pi.PointerFlags&windows.POINTER_FLAG_CANCELED != 0) || (msg == windows.WM_POINTERCAPTURECHANGED) {
 			kind = pointer.Cancel
+			// Cancel clears state.pointers in the input router; on the next
+			// frame the cursor would otherwise stay stale until a fresh
+			// pointer event arrives, which on capture-change can be a long
+			// time. Force the next updateCursor to push the new value.
+			w.w.MarkCursorDirty()
 		}
 		w.pointerUpdate(pi, pid, kind, lParam)
 	case windows.WM_CANCELMODE:
+		w.w.MarkCursorDirty()
 		w.ProcessEvent(pointer.Event{
 			Kind: pointer.Cancel,
 		})
 	case windows.WM_SETFOCUS:
 		w.config.Focused = true
+		// Other apps may have changed the OS cursor while we were unfocused.
+		w.w.MarkCursorDirty()
 		w.ProcessEvent(ConfigEvent{Config: w.config})
 	case windows.WM_KILLFOCUS:
 		w.config.Focused = false
@@ -318,7 +345,7 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		if !place.IsMaximized() {
 			return 0
 		}
-		szp := (*windows.NCCalcSizeParams)(unsafe.Pointer(lParam))
+		szp := (*windows.NCCalcSizeParams)(unsafe.Pointer(lParam)) //nolint:govet // Win32 lParam is a fresh function arg, not stored.
 		mi := windows.GetMonitorInfo(w.hwnd)
 		szp.Rgrc[0] = mi.WorkArea
 		return 0
@@ -330,9 +357,14 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		w.update()
 	case windows.WM_SIZE:
 		w.minimized = wParam == windows.SIZE_MINIMIZED
+		// On restore from minimized or when maximized, the OS cursor
+		// state from before the size change is no longer reliable.
+		if wParam == windows.SIZE_RESTORED || wParam == windows.SIZE_MAXIMIZED {
+			w.w.MarkCursorDirty()
+		}
 		w.update()
 	case windows.WM_GETMINMAXINFO:
-		mm := (*windows.MinMaxInfo)(unsafe.Pointer(lParam))
+		mm := (*windows.MinMaxInfo)(unsafe.Pointer(lParam)) //nolint:govet // Win32 lParam is a fresh function arg, not stored.
 		var frameDims image.Point
 		if w.config.Decorated {
 			frameDims = w.frameDims
@@ -443,6 +475,17 @@ func (w *window) hitTest(x, y int) uintptr {
 	ppdp := float32(w.dpi) / 96.0
 	titleHeightPx := int(30 * ppdp)
 	buttonsWidthPx := int(138 * ppdp)
+	// Consult app-registered ActionAt FIRST so the app can opt regions out of
+	// resize/caption zones (e.g. in-titlebar buttons that overlap the border).
+	// ActionMove still maps to HTCAPTION; any other action is treated as
+	// interactive client area.
+	p := f32.Pt(float32(x), float32(y))
+	if a, ok := w.w.ActionAt(p); ok {
+		if a == system.ActionMove {
+			return windows.HTCAPTION
+		}
+		return windows.HTCLIENT
+	}
 	if w.config.Mode == Windowed {
 		top := y <= w.borderSize.Y
 		bottom := y >= w.config.Size.Y-w.borderSize.Y
@@ -466,17 +509,6 @@ func (w *window) hitTest(x, y int) uintptr {
 		case right:
 			return windows.HTRIGHT
 		}
-	}
-	// Consult app-registered ActionAt FIRST so the app can opt regions inside
-	// the hardcoded title-bar zone out of HTCAPTION (e.g. for in-titlebar
-	// buttons). ActionMove still maps to HTCAPTION; any other action is
-	// treated as interactive client area.
-	p := f32.Pt(float32(x), float32(y))
-	if a, ok := w.w.ActionAt(p); ok {
-		if a == system.ActionMove {
-			return windows.HTCAPTION
-		}
-		return windows.HTCLIENT
 	}
 	if y <= titleHeightPx && x < w.config.Size.X-buttonsWidthPx {
 		return windows.HTCAPTION
@@ -668,7 +700,7 @@ func (w *window) readClipboard() error {
 		return err
 	}
 	defer windows.GlobalUnlock(mem)
-	content := gowindows.UTF16PtrToString((*uint16)(unsafe.Pointer(ptr)))
+	content := syscall.UTF16PtrToString((*uint16)(unsafe.Pointer(ptr)))
 	w.ProcessEvent(transfer.DataEvent{
 		Type: "application/text",
 		Open: func() io.ReadCloser {
@@ -753,7 +785,7 @@ func (w *window) writeClipboard(s string) error {
 	if err := windows.EmptyClipboard(); err != nil {
 		return err
 	}
-	u16, err := gowindows.UTF16FromString(s)
+	u16, err := syscall.UTF16FromString(s)
 	if err != nil {
 		return err
 	}

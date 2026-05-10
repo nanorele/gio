@@ -95,7 +95,7 @@ func BenchmarkLabelStatic(b *testing.B) {
 		for b.Loop() {
 			l.Layout(gtx, cache, font, fontSize, runesStr, op.CallOp{})
 			if render {
-				win.Frame(gtx.Ops)
+				win.Frame(gtx.Ops) //nolint:errcheck // Benchmark; Frame errors not actionable.
 			}
 			gtx.Ops.Reset()
 		}
@@ -131,7 +131,7 @@ func BenchmarkLabelDynamic(b *testing.B) {
 			runes[a], runes[b] = runes[b], runes[a]
 			l.Layout(gtx, cache, font, fontSize, string(runes), op.CallOp{})
 			if render {
-				win.Frame(gtx.Ops)
+				win.Frame(gtx.Ops) //nolint:errcheck // Benchmark; Frame errors not actionable.
 			}
 			gtx.Ops.Reset()
 		}
@@ -164,7 +164,7 @@ func BenchmarkEditorStatic(b *testing.B) {
 		for b.Loop() {
 			e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
 			if render {
-				win.Frame(gtx.Ops)
+				win.Frame(gtx.Ops) //nolint:errcheck // Benchmark; Frame errors not actionable.
 			}
 			gtx.Ops.Reset()
 		}
@@ -205,7 +205,7 @@ func BenchmarkEditorDynamic(b *testing.B) {
 			e.Insert(takeStr)
 			e.Layout(gtx, cache, font, fontSize, op.CallOp{}, op.CallOp{})
 			if render {
-				win.Frame(gtx.Ops)
+				win.Frame(gtx.Ops) //nolint:errcheck // Benchmark; Frame errors not actionable.
 			}
 			gtx.Ops.Reset()
 		}

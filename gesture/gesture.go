@@ -21,6 +21,10 @@ type Hover struct {
 	entered bool
 
 	pid pointer.ID
+
+	// count tracks the number of pointers currently inside the area so that
+	// the gesture stays "hovered" while any pointer is still inside.
+	count int
 }
 
 func (h *Hover) Add(ops *op.Ops) {
@@ -41,17 +45,20 @@ func (h *Hover) Update(q input.Source) bool {
 			continue
 		}
 		switch e.Kind {
-		case pointer.Leave, pointer.Cancel:
-			if h.entered && h.pid == e.PointerID {
-				h.entered = false
+		case pointer.Leave:
+			if h.count > 0 {
+				h.count--
 			}
+			h.entered = h.count > 0
+		case pointer.Cancel:
+			h.count = 0
+			h.entered = false
 		case pointer.Enter:
+			h.count++
 			if !h.entered {
 				h.pid = e.PointerID
 			}
-			if h.pid == e.PointerID {
-				h.entered = true
-			}
+			h.entered = true
 		}
 	}
 	return h.entered
@@ -384,11 +391,27 @@ func (d *Drag) Update(cfg unit.Metric, q input.Source, axis Axis) (pointer.Event
 				}
 			}
 		case pointer.Release, pointer.Cancel:
-			d.pressed = false
-			if !d.dragging || e.PointerID != d.pid {
-				continue
+			// Cancel is a global event from the router (empty PointerID),
+			// so clear state unconditionally when we have any. For Release,
+			// only the owning pointer should clear state.
+			if e.Kind == pointer.Cancel {
+				if !d.dragging && !d.pressed {
+					continue
+				}
+				d.pressed = false
+				d.dragging = false
+			} else {
+				if e.PointerID != d.pid {
+					// A non-owning pointer's release must not affect
+					// owning pointer state.
+					continue
+				}
+				if !d.dragging {
+					continue
+				}
+				d.pressed = false
+				d.dragging = false
 			}
-			d.dragging = false
 		}
 
 		return e, true

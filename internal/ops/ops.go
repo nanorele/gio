@@ -516,7 +516,17 @@ func (t OpType) String() string {
 	case TypeStroke:
 		return "Stroke"
 	case TypeSemanticLabel:
+		return "SemanticLabel"
+	case TypeSemanticDesc:
 		return "SemanticDescription"
+	case TypeSemanticClass:
+		return "SemanticClass"
+	case TypeSemanticSelected:
+		return "SemanticSelected"
+	case TypeSemanticEnabled:
+		return "SemanticEnabled"
+	case TypeActionInput:
+		return "ActionInput"
 	default:
 		panic("unknown OpType")
 	}

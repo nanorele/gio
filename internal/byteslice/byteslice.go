@@ -22,6 +22,9 @@ func Uint32(s []uint32) []byte {
 
 func Slice(s any) []byte {
 	v := reflect.ValueOf(s)
+	if v.Len() == 0 {
+		return nil
+	}
 	first := v.Index(0)
 	sz := int(first.Type().Size())
 	res := unsafe.Slice((*byte)(unsafe.Pointer(v.Pointer())), sz*v.Cap())

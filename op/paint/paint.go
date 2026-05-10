@@ -143,11 +143,10 @@ func Fill(ops *op.Ops, c color.NRGBA) {
 }
 
 func PushOpacity(o *op.Ops, opacity float32) OpacityStack {
-	if opacity > 1 {
-		opacity = 1
-	}
-	if opacity < 0 {
+	if math.IsNaN(float64(opacity)) || opacity < 0 {
 		opacity = 0
+	} else if opacity > 1 {
+		opacity = 1
 	}
 	id, macroID := ops.PushOp(&o.Internal, ops.OpacityStack)
 	data := ops.Write(&o.Internal, ops.TypePushOpacityLen)

@@ -60,7 +60,7 @@ func lexText(l *lexer) lexState {
 }
 
 func lexBareStr(l *lexer) lexState {
-	defer l.emitProcessed(tokenStr, func(s string) (string, error) {
+	defer l.emitProcessed(tokenStr, func(s string) (string, error) { //nolint:errcheck // Post-processor returns nil unconditionally.
 		return strings.TrimSpace(s), nil
 	})
 	for {
@@ -169,7 +169,7 @@ func (l *lexer) next() int32 {
 }
 
 func (l *lexer) emit(t tokenKind) {
-	l.emitProcessed(t, func(s string) (string, error) { return s, nil })
+	l.emitProcessed(t, func(s string) (string, error) { return s, nil }) //nolint:errcheck // Post-processor returns nil unconditionally.
 }
 
 func (l *lexer) emitProcessed(t tokenKind, f func(string) (string, error)) error {
@@ -186,6 +186,7 @@ func (l *lexer) run(input string) ([]token, error) {
 	l.input = input
 	l.tokens = l.tokens[:0]
 	l.pos = 0
+	l.err = nil
 	for state := lexText; state != nil; {
 		state = state(l)
 	}

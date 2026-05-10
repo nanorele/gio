@@ -1,3 +1,6 @@
+// glErr() flushes pre-existing GL errors before a fallible call; the prior
+// error is intentionally discarded.
+//nolint:errcheck
 package opengl
 
 import (

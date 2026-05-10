@@ -52,8 +52,8 @@ func (p ProgressBarStyle) Layout(gtx layout.Context) layout.Dimensions {
 			if !gtx.Enabled() {
 				fillColor = f32color.Disabled(fillColor)
 			}
-			if fillWidth < int(p.Radius*2) {
-				fillWidth = int(p.Radius * 2)
+			if minWidth := gtx.Dp(p.Radius * 2); fillWidth < minWidth {
+				fillWidth = minWidth
 			}
 			return shader(fillWidth, fillColor)
 		}),

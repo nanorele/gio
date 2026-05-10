@@ -149,7 +149,7 @@ type Shaper struct {
 	paragraph []byte
 
 	brokeParagraph   bool
-	pararagraphStart Glyph
+	paragraphStart Glyph
 	txt              document
 	line             int
 	run              int
@@ -230,6 +230,14 @@ func (l *Shaper) ReleaseLayoutBuffers() {
 	l.txt.alignWidth = 0
 	l.txt.unreadRuneCount = 0
 	l.line, l.run, l.glyph, l.advance = 0, 0, 0, 0
+	// Drop any remaining iteration state so the next Layout starts clean
+	// even if the caller never invokes reset() (e.g. invokes NextGlyph
+	// before re-laying out — though that's a misuse, the field carry-over
+	// would otherwise corrupt the FIRST glyph of the next layout).
+	l.brokeParagraph = false
+	l.paragraphStart = Glyph{}
+	l.paragraph = l.paragraph[:0]
+	l.err = nil
 	l.done = true
 }
 
@@ -241,6 +249,15 @@ func (l *Shaper) LayoutString(params Parameters, str string) {
 func (l *Shaper) reset(align Alignment) {
 	l.line, l.run, l.glyph, l.advance = 0, 0, 0, 0
 	l.done = false
+	// Clear paragraph-break carry-over from a partially-iterated previous
+	// layout — otherwise the first glyph of the new layout is incorrectly
+	// flagged as FlagParagraphStart.
+	l.brokeParagraph = false
+	l.paragraphStart = Glyph{}
+	// Clear sticky EOF from a fully-drained previous layout. Otherwise
+	// l.err stays at io.EOF forever after the first layout exhausts —
+	// fine today because nothing reads it externally, but fragile.
+	l.err = nil
 	l.txt.reset()
 	l.txt.alignment = align
 }
@@ -371,7 +388,7 @@ func (l *Shaper) NextGlyph() (_ Glyph, ok bool) {
 		if l.line == len(l.txt.lines) {
 			if l.brokeParagraph {
 				l.brokeParagraph = false
-				return l.pararagraphStart, true
+				return l.paragraphStart, true
 			}
 			if l.err == nil {
 				l.err = io.EOF
@@ -479,14 +496,14 @@ func (l *Shaper) NextGlyph() (_ Glyph, ok bool) {
 			glyph.Flags |= FlagParagraphBreak
 			l.brokeParagraph = true
 			if endOfText {
-				l.pararagraphStart = Glyph{
+				l.paragraphStart = Glyph{
 					Ascent:  glyph.Ascent,
 					Descent: glyph.Descent,
 					Flags:   FlagParagraphStart | FlagLineBreak | FlagRunBreak | FlagClusterBreak,
 				}
 
-				l.pararagraphStart.X = l.txt.alignment.Align(line.direction, 0, l.txt.alignWidth)
-				l.pararagraphStart.Y = glyph.Y + int32(line.lineHeight.Round())
+				l.paragraphStart.X = l.txt.alignment.Align(line.direction, 0, l.txt.alignWidth)
+				l.paragraphStart.Y = glyph.Y + int32(line.lineHeight.Round())
 			}
 		}
 		return glyph, true

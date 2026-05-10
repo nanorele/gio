@@ -42,11 +42,9 @@ func TestWrappingTruncation(t *testing.T) {
 			}, textInput)
 			lineCount := 0
 			lastGlyphWasLineBreak := false
-			glyphs := []Glyph{}
 			untruncatedRunes := 0
 			truncatedRunes := 0
 			for g, ok := cache.NextGlyph(); ok; g, ok = cache.NextGlyph() {
-				glyphs = append(glyphs, g)
 				if g.Flags&FlagTruncator != 0 && g.Flags&FlagClusterBreak != 0 {
 					truncatedRunes += int(g.Runes)
 				} else {
@@ -103,11 +101,9 @@ func TestWrappingForcedTruncation(t *testing.T) {
 				Locale:    english,
 			}, textInput)
 			lineCount := 0
-			glyphs := []Glyph{}
 			untruncatedRunes := 0
 			truncatedRunes := 0
 			for g, ok := cache.NextGlyph(); ok; g, ok = cache.NextGlyph() {
-				glyphs = append(glyphs, g)
 				if g.Flags&FlagTruncator != 0 && g.Flags&FlagClusterBreak != 0 {
 					truncatedRunes += int(g.Runes)
 				} else {
@@ -605,5 +601,380 @@ func TestShaperOptions(t *testing.T) {
 	sh := NewShaper(NoSystemFonts())
 	if !sh.config.disableSystemFonts {
 		t.Error("NoSystemFonts option failed")
+	}
+}
+
+// drainGlyphs runs NextGlyph to exhaustion.
+func drainGlyphs(s *Shaper) []Glyph {
+	var out []Glyph
+	for g, ok := s.NextGlyph(); ok; g, ok = s.NextGlyph() {
+		out = append(out, g)
+	}
+	return out
+}
+
+func newTestShaper(t *testing.T) *Shaper {
+	t.Helper()
+	face, err := opentype.Parse(goregular.TTF)
+	if err != nil {
+		t.Fatalf("parse font: %v", err)
+	}
+	return NewShaper(NoSystemFonts(), WithCollection([]FontFace{{Face: face}}))
+}
+
+func defaultParams() Parameters {
+	return Parameters{
+		PxPerEm:  fixed.I(10),
+		MinWidth: 200,
+		MaxWidth: 200,
+		Locale:   english,
+	}
+}
+
+// NextGlyph must return ok=false on every call after exhaustion, and must
+// not panic on repeated calls.
+func TestShaperNextGlyphExhaustion(t *testing.T) {
+	sh := newTestShaper(t)
+	sh.LayoutString(defaultParams(), "abc")
+	count := 0
+	for {
+		_, ok := sh.NextGlyph()
+		if !ok {
+			break
+		}
+		count++
+		if count > 1000 {
+			t.Fatal("NextGlyph never returned ok=false")
+		}
+	}
+	if count == 0 {
+		t.Fatal("expected at least one glyph for non-empty string")
+	}
+	for i := 0; i < 5; i++ {
+		if _, ok := sh.NextGlyph(); ok {
+			t.Fatalf("NextGlyph returned ok=true on call %d after exhaustion", i)
+		}
+	}
+}
+
+// State (line/run/glyph/advance/done/brokeParagraph) must reset between
+// successive Layout calls; the second layout must produce the SAME glyph
+// stream as a freshly created shaper that only laid out the second input.
+func TestShaperStateResetBetweenLayouts(t *testing.T) {
+	sh1 := newTestShaper(t)
+	sh1.LayoutString(defaultParams(), "first paragraph\nwith two lines")
+	_ = drainGlyphs(sh1) // exhaust
+	sh1.LayoutString(defaultParams(), "second")
+	reused := drainGlyphs(sh1)
+
+	sh2 := newTestShaper(t)
+	sh2.LayoutString(defaultParams(), "second")
+	fresh := drainGlyphs(sh2)
+
+	if len(reused) != len(fresh) {
+		t.Fatalf("glyph count mismatch: reused=%d fresh=%d", len(reused), len(fresh))
+	}
+	for i := range reused {
+		if reused[i].ID != fresh[i].ID || reused[i].Flags != fresh[i].Flags || reused[i].X != fresh[i].X {
+			t.Fatalf("glyph %d differs after layout reuse: reused=%+v fresh=%+v", i, reused[i], fresh[i])
+		}
+	}
+	// Internal cursors must all be zeroed back to start before iteration.
+	sh1.LayoutString(defaultParams(), "x")
+	if sh1.line != 0 || sh1.run != 0 || sh1.glyph != 0 || sh1.advance != 0 || sh1.done {
+		t.Fatalf("Shaper cursors not reset: line=%d run=%d glyph=%d advance=%d done=%v",
+			sh1.line, sh1.run, sh1.glyph, sh1.advance, sh1.done)
+	}
+}
+
+// Even after a layout is partially iterated, the next Layout call must
+// reset cursors so iteration starts from the first glyph.
+func TestShaperPartialIterationThenRelayout(t *testing.T) {
+	sh := newTestShaper(t)
+	sh.LayoutString(defaultParams(), "abc\ndef\nghi")
+	// Pull just two glyphs.
+	_, _ = sh.NextGlyph()
+	_, _ = sh.NextGlyph()
+	if sh.glyph == 0 && sh.line == 0 && sh.run == 0 {
+		t.Fatal("expected internal cursors to advance after NextGlyph calls")
+	}
+	sh.LayoutString(defaultParams(), "xyz")
+	first, ok := sh.NextGlyph()
+	if !ok {
+		t.Fatal("no glyph after relayout")
+	}
+	// Should be a brand-new first glyph: not flagged as paragraph-start
+	// (single-line single-paragraph input).
+	if first.Flags&FlagParagraphStart != 0 {
+		t.Errorf("unexpected FlagParagraphStart on first glyph after relayout: %s", first.Flags)
+	}
+}
+
+// Cursor advancement across multiple lines/runs: every glyph must have a
+// monotonically non-decreasing Y, and exactly one FlagLineBreak per line.
+func TestShaperCursorMultiLineMultiRun(t *testing.T) {
+	sh := newTestShaper(t)
+	params := defaultParams()
+	params.MaxWidth = 50 // force wrap onto multiple lines
+	sh.LayoutString(params, "alpha beta gamma delta epsilon")
+	gs := drainGlyphs(sh)
+	if len(gs) == 0 {
+		t.Fatal("no glyphs")
+	}
+	lineBreaks := 0
+	var prevY int32
+	for i, g := range gs {
+		if g.Y < prevY {
+			t.Errorf("glyph %d Y=%d went backwards from prev=%d", i, g.Y, prevY)
+		}
+		prevY = g.Y
+		if g.Flags&FlagLineBreak != 0 {
+			lineBreaks++
+		}
+	}
+	if lineBreaks < 2 {
+		t.Errorf("expected wrapping to produce >=2 line breaks, got %d", lineBreaks)
+	}
+	// The very last glyph must end with all the standard break flags so a
+	// caller can reliably terminate its scan.
+	last := gs[len(gs)-1]
+	want := FlagLineBreak | FlagRunBreak | FlagClusterBreak
+	if last.Flags&want != want {
+		t.Errorf("last glyph missing terminal break flags: %s", last.Flags)
+	}
+}
+
+// LayoutString and Layout([]byte/io.Reader) must produce equivalent
+// glyphs for ASCII input.
+func TestShaperLayoutStringEquivalentToLayoutReader(t *testing.T) {
+	const input = "Hello, world!\nSecond line."
+	sh := newTestShaper(t)
+	sh.LayoutString(defaultParams(), input)
+	a := drainGlyphs(sh)
+	sh.Layout(defaultParams(), strings.NewReader(input))
+	b := drainGlyphs(sh)
+	if len(a) != len(b) {
+		t.Fatalf("glyph count differs: LayoutString=%d Layout=%d", len(a), len(b))
+	}
+	for i := range a {
+		if a[i].ID != b[i].ID {
+			t.Errorf("glyph %d ID differs: %d vs %d", i, a[i].ID, b[i].ID)
+		}
+		if a[i].Flags != b[i].Flags {
+			t.Errorf("glyph %d Flags differ: %s vs %s", i, a[i].Flags, b[i].Flags)
+		}
+		if a[i].X != b[i].X || a[i].Y != b[i].Y {
+			t.Errorf("glyph %d position differs: (%d,%d) vs (%d,%d)",
+				i, a[i].X, a[i].Y, b[i].X, b[i].Y)
+		}
+	}
+}
+
+// ReleaseLayoutBuffers zeroes the document fields and marks the shaper
+// done so subsequent NextGlyph calls return ok=false.
+func TestShaperReleaseLayoutBuffers(t *testing.T) {
+	sh := newTestShaper(t)
+	sh.LayoutString(defaultParams(), "fill the buffers with content here")
+	if sh.txt.lines == nil {
+		t.Fatal("expected lines populated after layout")
+	}
+	sh.ReleaseLayoutBuffers()
+	if sh.txt.lines != nil {
+		t.Error("expected txt.lines == nil after release")
+	}
+	if sh.txt.runs != nil {
+		t.Error("expected txt.runs == nil after release")
+	}
+	if sh.txt.glyphs != nil {
+		t.Error("expected txt.glyphs == nil after release")
+	}
+	if sh.txt.visual != nil {
+		t.Error("expected txt.visual == nil after release")
+	}
+	if sh.txt.alignWidth != 0 || sh.txt.unreadRuneCount != 0 {
+		t.Error("expected alignWidth/unreadRuneCount zeroed")
+	}
+	if sh.line != 0 || sh.run != 0 || sh.glyph != 0 || sh.advance != 0 {
+		t.Error("expected iteration cursors zeroed")
+	}
+	if !sh.done {
+		t.Error("expected done=true after release")
+	}
+	if _, ok := sh.NextGlyph(); ok {
+		t.Error("NextGlyph after Release must return ok=false")
+	}
+	// Subsequent layout must work normally.
+	sh.LayoutString(defaultParams(), "after release")
+	if gs := drainGlyphs(sh); len(gs) == 0 {
+		t.Error("expected glyphs after layout following release")
+	}
+}
+
+// After ReleaseLayoutBuffers, the next layout's first glyph must NOT carry
+// FlagParagraphStart from any previous brokeParagraph carry-over.
+func TestShaperReleaseClearsBrokeParagraph(t *testing.T) {
+	sh := newTestShaper(t)
+	sh.LayoutString(defaultParams(), "a\n")
+	for {
+		g, ok := sh.NextGlyph()
+		if !ok {
+			break
+		}
+		if g.Flags&FlagParagraphBreak != 0 {
+			break // abandon mid-iteration with brokeParagraph still true
+		}
+	}
+	sh.ReleaseLayoutBuffers()
+	sh.LayoutString(defaultParams(), "x")
+	first, ok := sh.NextGlyph()
+	if !ok {
+		t.Fatal("no glyph after layout following release")
+	}
+	if first.Flags&FlagParagraphStart != 0 {
+		t.Errorf("first glyph should not have FlagParagraphStart, got %s", first.Flags)
+	}
+}
+
+// Edge: empty string layout produces exactly one synthetic break glyph
+// (covered by TestCacheEmptyString already, here we additionally check
+// no panic and that NextGlyph is properly idempotent at end).
+func TestShaperEmptyStringIdempotentEnd(t *testing.T) {
+	sh := newTestShaper(t)
+	sh.LayoutString(defaultParams(), "")
+	gs := drainGlyphs(sh)
+	if len(gs) != 1 {
+		t.Fatalf("expected 1 glyph for empty input, got %d", len(gs))
+	}
+	for i := 0; i < 3; i++ {
+		if _, ok := sh.NextGlyph(); ok {
+			t.Fatalf("NextGlyph returned ok=true on extra call %d", i)
+		}
+	}
+}
+
+// Edge: single glyph layout — single character; must yield at least one
+// glyph carrying every terminal flag combo.
+func TestShaperSingleGlyph(t *testing.T) {
+	sh := newTestShaper(t)
+	sh.LayoutString(defaultParams(), "a")
+	gs := drainGlyphs(sh)
+	if len(gs) == 0 {
+		t.Fatal("no glyphs")
+	}
+	last := gs[len(gs)-1]
+	want := FlagLineBreak | FlagRunBreak | FlagClusterBreak
+	if last.Flags&want != want {
+		t.Errorf("last glyph missing terminal flags: %s", last.Flags)
+	}
+}
+
+// Edge: MaxLines=1 must produce at most one line of real content.
+func TestShaperMaxLinesOne(t *testing.T) {
+	sh := newTestShaper(t)
+	params := defaultParams()
+	params.MaxLines = 1
+	params.MaxWidth = 50
+	sh.LayoutString(params, "alpha beta gamma delta epsilon zeta eta")
+	gs := drainGlyphs(sh)
+	lineBreaks := 0
+	for _, g := range gs {
+		if g.Flags&FlagLineBreak != 0 {
+			lineBreaks++
+		}
+	}
+	if lineBreaks != 1 {
+		t.Errorf("expected exactly 1 line break with MaxLines=1, got %d", lineBreaks)
+	}
+}
+
+// Edge: explicit Truncator ellipsis. At least one glyph must carry
+// FlagTruncator when the input exceeds MaxLines.
+func TestShaperTruncatorFlag(t *testing.T) {
+	sh := newTestShaper(t)
+	params := defaultParams()
+	params.MaxLines = 1
+	params.MaxWidth = 30
+	params.Truncator = "..."
+	sh.LayoutString(params, "alpha beta gamma delta epsilon")
+	gs := drainGlyphs(sh)
+	hasTrunc := false
+	for _, g := range gs {
+		if g.Flags&FlagTruncator != 0 {
+			hasTrunc = true
+			break
+		}
+	}
+	if !hasTrunc {
+		t.Error("expected at least one glyph with FlagTruncator")
+	}
+}
+
+// Mutating the Glyph slice returned from NextGlyph must NOT affect a
+// subsequent layout's glyphs (NextGlyph returns by value, so mutation of
+// the local copies must not feed back into the shaper's internal state).
+func TestShaperReturnedGlyphsAreCopies(t *testing.T) {
+	sh := newTestShaper(t)
+	sh.LayoutString(defaultParams(), "abc")
+	first := drainGlyphs(sh)
+	for i := range first {
+		first[i].ID = 0xDEAD
+		first[i].X = 0
+		first[i].Flags = 0
+	}
+	sh.LayoutString(defaultParams(), "abc")
+	second := drainGlyphs(sh)
+	if len(first) != len(second) {
+		t.Fatalf("glyph count differs: %d vs %d", len(first), len(second))
+	}
+	for i := range second {
+		if second[i].ID == 0xDEAD {
+			t.Errorf("glyph %d ID was clobbered by mutation of previous result", i)
+		}
+	}
+}
+
+// LayoutString with both empty bytes and empty string still produces
+// exactly one synthetic glyph (regression for the txt == nil && len==0
+// branch in layoutText).
+func TestShaperLayoutEmptyReader(t *testing.T) {
+	sh := newTestShaper(t)
+	sh.Layout(defaultParams(), strings.NewReader(""))
+	gs := drainGlyphs(sh)
+	if len(gs) != 1 {
+		t.Fatalf("expected 1 glyph from empty reader, got %d", len(gs))
+	}
+}
+
+// The reset() bug fix also clears l.err. After draining one layout,
+// a subsequent layout must reset err back to nil.
+func TestShaperResetClearsErr(t *testing.T) {
+	sh := newTestShaper(t)
+	sh.LayoutString(defaultParams(), "a")
+	_ = drainGlyphs(sh) // sets l.err = io.EOF
+	if sh.err == nil {
+		t.Skip("err was never set; nothing to test")
+	}
+	sh.LayoutString(defaultParams(), "b")
+	if sh.err != nil {
+		t.Errorf("expected l.err cleared by reset(), got %v", sh.err)
+	}
+}
+
+// ResetLayoutCache must drop cached entries; a subsequent Layout still
+// produces correct glyphs.
+func TestShaperResetLayoutCache(t *testing.T) {
+	sh := newTestShaper(t)
+	sh.LayoutString(defaultParams(), "abc")
+	a := drainGlyphs(sh)
+	sh.ResetLayoutCache()
+	sh.LayoutString(defaultParams(), "abc")
+	b := drainGlyphs(sh)
+	if len(a) != len(b) {
+		t.Fatalf("glyph count differs after cache reset: %d vs %d", len(a), len(b))
+	}
+	for i := range a {
+		if a[i].ID != b[i].ID {
+			t.Errorf("glyph %d ID differs after cache reset", i)
+		}
 	}
 }

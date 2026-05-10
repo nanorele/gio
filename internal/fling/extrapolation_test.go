@@ -135,14 +135,10 @@ func TestDecomposeQR_Failure(t *testing.T) {
 			1, 1,
 		},
 	}
-	_, _, ok := decomposeQR(A)
-	if ok {
-		// Actually Gram-Schmidt might succeed if rows are dependent but not zero?
-		// Wait, if rows are 1,1 and 1,1.
-		// row 0: n = sqrt(2). normalized: 1/sqrt(2), 1/sqrt(2)
-		// row 1: d = dot([1/sqrt(2), 1/sqrt(2)], [1, 1]) = 2/sqrt(2) = sqrt(2)
-		// row 1 = [1, 1] - sqrt(2)*[1/sqrt(2), 1/sqrt(2)] = [1, 1] - [1, 1] = [0, 0]
-		// n = 0. norm failure.
+	// Gram-Schmidt on A: row 0 normalized = [1/sqrt(2), 1/sqrt(2)],
+	// row 1 - dot * row0 = [0, 0], norm of zero row fails.
+	if _, _, ok := decomposeQR(A); ok {
+		t.Errorf("expected decomposeQR to fail on dependent rows, got ok")
 	}
 }
 

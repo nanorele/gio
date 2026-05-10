@@ -213,7 +213,7 @@ func TestAxisMethods(t *testing.T) {
 	if Vertical.Convert(pt) != image.Pt(20, 10) {
 		t.Error("Vertical.Convert failed")
 	}
-	
+
 	fpt := f32.Pt(10, 20)
 	if Horizontal.FConvert(fpt) != fpt {
 		t.Error("Horizontal.FConvert failed")
@@ -241,10 +241,7 @@ func TestContextMethods(t *testing.T) {
 		t.Errorf("gtx.Sp(10) = %d, expected %d", got, exp)
 	}
 	dgtx := gtx.Disabled()
-	if !dgtx.Source.Enabled() {
-		// This depends on how input.Source handles Disabled.
-		// Usually it sets a flag.
-	}
+	_ = dgtx
 }
 
 func TestAlignmentStrings(t *testing.T) {
@@ -267,7 +264,6 @@ func TestDirectionStrings(t *testing.T) {
 		}
 	}
 }
-
 
 func TestConstraints_AddSub(t *testing.T) {
 	c := Constraints{Min: image.Pt(10, 10), Max: image.Pt(100, 100)}
@@ -303,3 +299,298 @@ func TestFPt(t *testing.T) {
 	}
 }
 
+func TestConstraintsConstrainCases(t *testing.T) {
+	cases := []struct {
+		name string
+		c    Constraints
+		in   image.Point
+		want image.Point
+	}{
+		{"within", Constraints{Min: image.Pt(10, 10), Max: image.Pt(50, 50)}, image.Pt(30, 30), image.Pt(30, 30)},
+		{"belowMin", Constraints{Min: image.Pt(10, 10), Max: image.Pt(50, 50)}, image.Pt(0, 0), image.Pt(10, 10)},
+		{"aboveMax", Constraints{Min: image.Pt(10, 10), Max: image.Pt(50, 50)}, image.Pt(100, 100), image.Pt(50, 50)},
+		{"negative", Constraints{Min: image.Pt(0, 0), Max: image.Pt(50, 50)}, image.Pt(-10, -20), image.Pt(0, 0)},
+		{"zeroRange", Constraints{Min: image.Pt(20, 20), Max: image.Pt(20, 20)}, image.Pt(5, 5), image.Pt(20, 20)},
+		// Min > Max: clamp first to Min, then to Max => Max wins.
+		{"minGtMax", Constraints{Min: image.Pt(50, 50), Max: image.Pt(10, 10)}, image.Pt(0, 0), image.Pt(10, 10)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.c.Constrain(tc.in); got != tc.want {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExact(t *testing.T) {
+	c := Exact(image.Pt(42, 24))
+	if c.Min != image.Pt(42, 24) || c.Max != image.Pt(42, 24) {
+		t.Errorf("Exact: %+v", c)
+	}
+}
+
+func TestConstraintsAddMinNegative(t *testing.T) {
+	c := Constraints{Min: image.Pt(10, 10), Max: image.Pt(100, 100)}
+	c2 := c.AddMin(image.Pt(-50, -50))
+	if c2.Min != (image.Point{}) {
+		t.Errorf("AddMin negative not clamped: %v", c2.Min)
+	}
+}
+
+func TestConstraintsAddMinClampsToMax(t *testing.T) {
+	c := Constraints{Min: image.Pt(0, 0), Max: image.Pt(20, 20)}
+	c2 := c.AddMin(image.Pt(100, 100))
+	if c2.Min != image.Pt(20, 20) {
+		t.Errorf("AddMin overflow not clamped to Max: %v", c2.Min)
+	}
+}
+
+func TestConstraintsSubMaxNegative(t *testing.T) {
+	c := Constraints{Min: image.Pt(0, 0), Max: image.Pt(50, 50)}
+	c2 := c.SubMax(image.Pt(100, 100))
+	if c2.Max != (image.Point{}) {
+		t.Errorf("SubMax overflow not clamped to 0: %v", c2.Max)
+	}
+}
+
+func TestConstraintsSubMaxAdjustsMin(t *testing.T) {
+	c := Constraints{Min: image.Pt(40, 40), Max: image.Pt(50, 50)}
+	c2 := c.SubMax(image.Pt(20, 20))
+	if c2.Max != image.Pt(30, 30) {
+		t.Errorf("SubMax wrong Max: %v", c2.Max)
+	}
+	if c2.Min.X > c2.Max.X || c2.Min.Y > c2.Max.Y {
+		t.Errorf("SubMax left Min > Max: %+v", c2)
+	}
+}
+
+func TestInsetUniform(t *testing.T) {
+	in := UniformInset(7)
+	if in.Top != 7 || in.Bottom != 7 || in.Left != 7 || in.Right != 7 {
+		t.Errorf("UniformInset wrong: %+v", in)
+	}
+}
+
+func TestInsetZero(t *testing.T) {
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Constraints{Max: image.Pt(100, 100)},
+	}
+	dims := Inset{}.Layout(gtx, func(gtx Context) Dimensions {
+		return Dimensions{Size: image.Pt(50, 60)}
+	})
+	if dims.Size != image.Pt(50, 60) {
+		t.Errorf("zero inset: got %v", dims.Size)
+	}
+}
+
+func TestInsetExceedsAvailable(t *testing.T) {
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Constraints{Max: image.Pt(20, 20)},
+	}
+	// 30+30 horizontal padding > 20 available; widget should get max=0.
+	in := Inset{Top: 30, Bottom: 30, Left: 30, Right: 30}
+	var childMax image.Point
+	dims := in.Layout(gtx, func(gtx Context) Dimensions {
+		childMax = gtx.Constraints.Max
+		return Dimensions{Size: gtx.Constraints.Max}
+	})
+	if childMax.X != 0 || childMax.Y != 0 {
+		t.Errorf("child max not clamped to 0: %v", childMax)
+	}
+	if dims.Size.X < 0 || dims.Size.Y < 0 {
+		t.Errorf("inset returned negative size: %v", dims.Size)
+	}
+}
+
+func TestInsetNegativeValues(t *testing.T) {
+	// Negative insets are unusual but should not crash.
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Constraints{Max: image.Pt(100, 100)},
+		Metric:      unit.Metric{PxPerDp: 1},
+	}
+	in := Inset{Top: -5, Bottom: -5, Left: -5, Right: -5}
+	dims := in.Layout(gtx, func(gtx Context) Dimensions {
+		return Dimensions{Size: image.Pt(20, 20)}
+	})
+	// Widget=20, plus -10 horizontally and -10 vertically => 10x10.
+	if dims.Size != image.Pt(10, 10) {
+		t.Errorf("negative inset: got %v, want (10,10)", dims.Size)
+	}
+}
+
+func TestInsetBaseline(t *testing.T) {
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Constraints{Max: image.Pt(100, 100)},
+		Metric:      unit.Metric{PxPerDp: 1},
+	}
+	in := Inset{Top: 5, Bottom: 7, Left: 3, Right: 4}
+	dims := in.Layout(gtx, func(gtx Context) Dimensions {
+		return Dimensions{Size: image.Pt(20, 20), Baseline: 8}
+	})
+	// Inset adds Bottom (7) to child Baseline (8) per Inset.Layout.
+	if dims.Baseline != 15 {
+		t.Errorf("inset baseline: got %d, want 15", dims.Baseline)
+	}
+}
+
+func TestSpacerConstrained(t *testing.T) {
+	gtx := Context{
+		Constraints: Constraints{
+			Min: image.Pt(50, 50),
+			Max: image.Pt(80, 80),
+		},
+		Metric: unit.Metric{PxPerDp: 1},
+	}
+	dims := Spacer{Width: 10, Height: 10}.Layout(gtx)
+	if dims.Size != image.Pt(50, 50) {
+		t.Errorf("spacer below Min: %v", dims.Size)
+	}
+	dims = Spacer{Width: 200, Height: 200}.Layout(gtx)
+	if dims.Size != image.Pt(80, 80) {
+		t.Errorf("spacer above Max: %v", dims.Size)
+	}
+}
+
+func TestSpacerZero(t *testing.T) {
+	gtx := Context{
+		Constraints: Constraints{Max: image.Pt(100, 100)},
+	}
+	dims := Spacer{}.Layout(gtx)
+	if dims.Size != (image.Point{}) {
+		t.Errorf("zero spacer not zero: %v", dims.Size)
+	}
+}
+
+func TestDirectionPositionAll(t *testing.T) {
+	widget := image.Pt(20, 20)
+	bounds := image.Pt(100, 100)
+	cases := []struct {
+		d    Direction
+		want image.Point
+	}{
+		{NW, image.Pt(0, 0)},
+		{N, image.Pt(40, 0)},
+		{NE, image.Pt(80, 0)},
+		{E, image.Pt(80, 40)},
+		{SE, image.Pt(80, 80)},
+		{S, image.Pt(40, 80)},
+		{SW, image.Pt(0, 80)},
+		{W, image.Pt(0, 40)},
+		{Center, image.Pt(40, 40)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.d.String(), func(t *testing.T) {
+			if got := tc.d.Position(widget, bounds); got != tc.want {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDirectionLayoutMinClearing(t *testing.T) {
+	cases := []struct {
+		d       Direction
+		wantMin image.Point
+	}{
+		{NW, image.Pt(0, 0)},
+		{NE, image.Pt(0, 0)},
+		{SW, image.Pt(0, 0)},
+		{SE, image.Pt(0, 0)},
+		{Center, image.Pt(0, 0)},
+		{N, image.Pt(100, 0)},
+		{S, image.Pt(100, 0)},
+		{E, image.Pt(0, 100)},
+		{W, image.Pt(0, 100)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.d.String(), func(t *testing.T) {
+			gtx := Context{
+				Ops:         new(op.Ops),
+				Constraints: Exact(image.Pt(100, 100)),
+			}
+			var got image.Point
+			tc.d.Layout(gtx, func(gtx Context) Dimensions {
+				got = gtx.Constraints.Min
+				return Dimensions{Size: image.Pt(20, 20)}
+			})
+			if got != tc.wantMin {
+				t.Errorf("Direction %s: child Min = %v, want %v", tc.d, got, tc.wantMin)
+			}
+		})
+	}
+}
+
+func TestDirectionLayoutFillsConstraints(t *testing.T) {
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(100, 100)),
+	}
+	dims := Center.Layout(gtx, func(gtx Context) Dimensions {
+		return Dimensions{Size: image.Pt(20, 20)}
+	})
+	if dims.Size != image.Pt(100, 100) {
+		t.Errorf("Direction.Layout did not fill Min: %v", dims.Size)
+	}
+}
+
+func TestContextDpSp(t *testing.T) {
+	gtx := Context{
+		Metric: unit.Metric{PxPerDp: 2, PxPerSp: 3},
+	}
+	if got := gtx.Dp(10); got != 20 {
+		t.Errorf("Dp: got %d, want 20", got)
+	}
+	if got := gtx.Sp(10); got != 30 {
+		t.Errorf("Sp: got %d, want 30", got)
+	}
+	// Zero metric defaults to 1.
+	gtx2 := Context{}
+	if got := gtx2.Dp(5); got != 5 {
+		t.Errorf("Dp default: got %d, want 5", got)
+	}
+	if got := gtx2.Sp(7); got != 7 {
+		t.Errorf("Sp default: got %d, want 7", got)
+	}
+}
+
+func TestAlignmentStringAll(t *testing.T) {
+	cases := map[Alignment]string{
+		Start:    "Start",
+		End:      "End",
+		Middle:   "Middle",
+		Baseline: "Baseline",
+	}
+	for a, want := range cases {
+		if got := a.String(); got != want {
+			t.Errorf("Alignment %d: got %q, want %q", a, got, want)
+		}
+	}
+}
+
+func TestAxisCrossConstraint(t *testing.T) {
+	cs := Constraints{Min: image.Pt(1, 2), Max: image.Pt(3, 4)}
+	min, max := Horizontal.crossConstraint(cs)
+	if min != 2 || max != 4 {
+		t.Errorf("Horizontal.crossConstraint: %d,%d", min, max)
+	}
+	min, max = Vertical.crossConstraint(cs)
+	if min != 1 || max != 3 {
+		t.Errorf("Vertical.crossConstraint: %d,%d", min, max)
+	}
+}
+
+func TestAxisConstraints(t *testing.T) {
+	c := Horizontal.constraints(1, 2, 3, 4)
+	if c.Min != image.Pt(1, 3) || c.Max != image.Pt(2, 4) {
+		t.Errorf("Horizontal.constraints: %+v", c)
+	}
+	c = Vertical.constraints(1, 2, 3, 4)
+	if c.Min != image.Pt(3, 1) || c.Max != image.Pt(4, 2) {
+		t.Errorf("Vertical.constraints: %+v", c)
+	}
+}

@@ -52,7 +52,7 @@ func (c Command) String() string {
 		from, to := DecodeLine(c)
 		return fmt.Sprintf("line(%v, %v)", from, to)
 	case OpGap:
-		from, to := DecodeLine(c)
+		from, to := DecodeGap(c)
 		return fmt.Sprintf("gap(%v, %v)", from, to)
 	case OpQuad:
 		from, ctrl, to := DecodeQuad(c)
@@ -63,7 +63,7 @@ func (c Command) String() string {
 	case OpFillColor:
 		return fmt.Sprintf("fillcolor %#.8x", c[1])
 	case OpLineWidth:
-		return "linewidth"
+		return fmt.Sprintf("linewidth %v", math.Float32frombits(c[1]))
 	case OpTransform:
 		t := f32.NewAffine2D(
 			math.Float32frombits(c[1]),
@@ -87,9 +87,11 @@ func (c Command) String() string {
 		}
 		return fmt.Sprintf("endclip (%v)", bounds)
 	case OpFillImage:
-		return "fillimage"
+		x := int(int16(uint16(c[2] & 0xffff)))
+		y := int(int16(uint16(c[2] >> 16)))
+		return fmt.Sprintf("fillimage %d (%d,%d)", c[1], x, y)
 	case OpSetFillMode:
-		return "setfillmode"
+		return fmt.Sprintf("setfillmode %d", c[1])
 	default:
 		panic("unreachable")
 	}
@@ -189,6 +191,9 @@ func FillColor(col color.RGBA) Command {
 }
 
 func FillImage(index int, offset image.Point) Command {
+	if index < 0 {
+		panic("FillImage: negative index")
+	}
 	x := int16(offset.X)
 	y := int16(offset.Y)
 	return Command{

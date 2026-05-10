@@ -47,6 +47,15 @@ func (l *lru[K, V]) Put(k K, v V) {
 		l.head.prev = l.tail
 		l.tail.next = l.head
 	}
+	// If the key already exists, drop the previous entry: leaving it in the
+	// linked list would desync the list from the map (eviction would walk
+	// the stale tail entry and delete the new map entry).
+	if old, ok := l.m[k]; ok {
+		l.remove(old)
+		if l.onEvict != nil {
+			l.onEvict(old.v)
+		}
+	}
 	val := &entry[K, V]{key: k, v: v}
 	l.m[k] = val
 	l.insert(val)

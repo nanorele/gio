@@ -58,7 +58,7 @@ func (ic *Icon) image(sz int, color color.NRGBA) paint.ImageOp {
 	var ico iconvg.Rasterizer
 	ico.SetDstImage(img, img.Bounds(), draw.Src)
 	m.Palette[0] = f32color.NRGBAToLinearRGBA(color)
-	iconvg.Decode(&ico, ic.src, &iconvg.DecodeOptions{
+	iconvg.Decode(&ico, ic.src, &iconvg.DecodeOptions{ //nolint:errcheck // Source pre-validated by DecodeMetadata above.
 		Palette: &m.Palette,
 	})
 	ic.op = paint.NewImageOp(img)

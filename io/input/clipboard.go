@@ -43,7 +43,7 @@ func (q *clipboardQueue) Push(state clipboardState, e event.Event) (clipboardSta
 }
 
 func (q *clipboardQueue) ProcessWriteClipboard(req clipboard.WriteCmd) {
-	defer req.Data.Close()
+	defer req.Data.Close() //nolint:errcheck // Best-effort cleanup of caller-provided reader.
 	content, err := io.ReadAll(req.Data)
 	if err != nil {
 		return

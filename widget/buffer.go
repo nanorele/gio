@@ -86,9 +86,10 @@ func (e *editBuffer) ReadAt(p []byte, offset int64) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if offset == e.Size() {
+	if offset >= e.Size() {
 		return 0, io.EOF
 	}
+	want := len(p)
 	var total int
 	if offset < int64(e.gapstart) {
 		n := copy(p, e.text[offset:e.gapstart])
@@ -99,6 +100,9 @@ func (e *editBuffer) ReadAt(p []byte, offset int64) (int, error) {
 	if offset >= int64(e.gapstart) {
 		n := copy(p, e.text[offset+int64(e.gapLen()):])
 		total += n
+	}
+	if total < want {
+		return total, io.EOF
 	}
 	return total, nil
 }

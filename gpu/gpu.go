@@ -1323,6 +1323,9 @@ func (p *pipeline) Release() {
 }
 
 func texSpaceTransform(r f32.Rectangle, bounds image.Point) (f32.Point, f32.Point) {
+	if bounds.X == 0 || bounds.Y == 0 {
+		return f32.Point{}, f32.Point{}
+	}
 	size := f32.Point{X: float32(bounds.X), Y: float32(bounds.Y)}
 	scale := f32.Point{X: r.Dx() / size.X, Y: r.Dy() / size.Y}
 	offset := f32.Point{X: r.Min.X / size.X, Y: r.Min.Y / size.Y}
@@ -1332,6 +1335,9 @@ func texSpaceTransform(r f32.Rectangle, bounds image.Point) (f32.Point, f32.Poin
 func gradientSpaceTransform(clip image.Rectangle, off f32.Point, stop1, stop2 f32.Point) f32.Affine2D {
 	d := stop2.Sub(stop1)
 	l := float32(math.Sqrt(float64(d.X*d.X + d.Y*d.Y)))
+	if l == 0 {
+		return f32.AffineId()
+	}
 	a := float32(math.Atan2(float64(-d.Y), float64(d.X)))
 
 	zp := f32.Point{}
@@ -1344,7 +1350,9 @@ func gradientSpaceTransform(clip image.Rectangle, off f32.Point, stop1, stop2 f3
 }
 
 func clipSpaceTransform(r image.Rectangle, viewport image.Point) (f32.Point, f32.Point) {
-
+	if viewport.X == 0 || viewport.Y == 0 {
+		return f32.Point{}, f32.Point{}
+	}
 	x, y := float32(r.Min.X), float32(r.Min.Y)
 	w, h := float32(r.Dx()), float32(r.Dy())
 	vx, vy := 2/float32(viewport.X), 2/float32(viewport.Y)

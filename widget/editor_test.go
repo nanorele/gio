@@ -7,6 +7,7 @@ import (
 	"io"
 	"math/rand"
 	"reflect"
+	"strings"
 	"testing"
 	"testing/quick"
 	"time"
@@ -41,7 +42,6 @@ func TestEditor_Basic(t *testing.T) {
 	}
 }
 
-
 func TestEditor_Scroll(t *testing.T) {
 	e := new(Editor)
 	e.SetText("line 1\nline 2\nline 3\nline 4\nline 5")
@@ -52,7 +52,7 @@ func TestEditor_Scroll(t *testing.T) {
 	}
 	cache := text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
 	e.Layout(gtx, cache, font.Font{}, unit.Sp(10), op.CallOp{}, op.CallOp{})
-	
+
 	e.SetScrollY(10)
 	if got := e.GetScrollY(); got != 10 {
 		t.Errorf("SetScrollY/GetScrollY failed: got %d", got)
@@ -71,7 +71,7 @@ func TestEditor_Regions(t *testing.T) {
 	}
 	cache := text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
 	e.Layout(gtx, cache, font.Font{}, unit.Sp(10), op.CallOp{}, op.CallOp{})
-	
+
 	regs := e.Regions(0, 5, nil)
 	if len(regs) == 0 {
 		t.Error("Regions returned nothing")
@@ -1320,3 +1320,621 @@ func textBaseline(e *Editor, lineNum int) float32 {
 	start := e.text.closestToLineCol(lineNum, 0)
 	return float32(start.y)
 }
+
+// updateEditor advances the editor without requiring a Layout call.
+func updateEditor(e *Editor) {
+	gtx := layout.Context{
+		Ops:         new(op.Ops),
+		Constraints: layout.Exact(image.Pt(100, 100)),
+		Locale:      english,
+	}
+	e.Update(gtx)
+}
+
+// --- Insert ---
+
+func TestEditorExtra_Insert(t *testing.T) {
+	t.Run("AtStart", func(t *testing.T) {
+		e := new(Editor)
+		e.SetText("world")
+		e.SetCaret(0, 0)
+		e.Insert("hello ")
+		if got, want := e.Text(), "hello world"; got != want {
+			t.Errorf("got %q want %q", got, want)
+		}
+	})
+	t.Run("AtEnd", func(t *testing.T) {
+		e := new(Editor)
+		e.SetText("hello")
+		e.SetCaret(e.Len(), e.Len())
+		e.Insert(" world")
+		if got, want := e.Text(), "hello world"; got != want {
+			t.Errorf("got %q want %q", got, want)
+		}
+	})
+	t.Run("InMiddle", func(t *testing.T) {
+		e := new(Editor)
+		e.SetText("helloworld")
+		e.SetCaret(5, 5)
+		e.Insert(" ")
+		if got, want := e.Text(), "hello world"; got != want {
+			t.Errorf("got %q want %q", got, want)
+		}
+	})
+	t.Run("ReplaceSelection", func(t *testing.T) {
+		e := new(Editor)
+		e.SetText("hello world")
+		e.SetCaret(6, 11)
+		e.Insert("Bob")
+		if got, want := e.Text(), "hello Bob"; got != want {
+			t.Errorf("got %q want %q", got, want)
+		}
+	})
+	t.Run("ReplaceReversedSelection", func(t *testing.T) {
+		e := new(Editor)
+		e.SetText("hello world")
+		e.SetCaret(11, 6) // reversed
+		e.Insert("Bob")
+		if got, want := e.Text(), "hello Bob"; got != want {
+			t.Errorf("got %q want %q", got, want)
+		}
+	})
+	t.Run("InvalidUTF8Sanitised", func(t *testing.T) {
+		e := new(Editor)
+		// Invalid UTF-8 sequence; editBuffer.prepend should sanitize via
+		// runes.ReplaceIllFormed.
+		bad := "ab" + string([]byte{0xff, 0xfe}) + "cd"
+		e.Insert(bad)
+		got := e.Text()
+		if !utf8.ValidString(got) {
+			t.Errorf("editor stored invalid UTF-8: %q", got)
+		}
+		if !strings.HasPrefix(got, "ab") || !strings.HasSuffix(got, "cd") {
+			t.Errorf("expected ab...cd, got %q", got)
+		}
+	})
+}
+
+// --- Delete ---
+
+func TestEditorExtra_Delete(t *testing.T) {
+	t.Run("ZeroIsNoop", func(t *testing.T) {
+		e := new(Editor)
+		e.SetText("abcdef")
+		e.SetCaret(3, 3)
+		if n := e.Delete(0); n != 0 {
+			t.Errorf("Delete(0) returned %d", n)
+		}
+		if e.Text() != "abcdef" {
+			t.Errorf("text changed: %q", e.Text())
+		}
+	})
+	t.Run("ForwardOne", func(t *testing.T) {
+		e := new(Editor)
+		e.SetText("abcdef")
+		e.SetCaret(2, 2)
+		e.Delete(1)
+		if got := e.Text(); got != "abdef" {
+			t.Errorf("got %q", got)
+		}
+	})
+	t.Run("BackwardOne", func(t *testing.T) {
+		e := new(Editor)
+		e.SetText("abcdef")
+		e.SetCaret(3, 3)
+		e.Delete(-1)
+		if got := e.Text(); got != "abdef" {
+			t.Errorf("got %q", got)
+		}
+	})
+	t.Run("DeleteSelection", func(t *testing.T) {
+		e := new(Editor)
+		e.SetText("abcdef")
+		e.SetCaret(1, 4)
+		// When a selection exists, Delete(±1) should just remove the selection.
+		n := e.Delete(1)
+		if n != 3 {
+			t.Errorf("expected 3 runes deleted, got %d", n)
+		}
+		if got := e.Text(); got != "aef" {
+			t.Errorf("got %q", got)
+		}
+	})
+	t.Run("OverflowForward", func(t *testing.T) {
+		e := new(Editor)
+		e.SetText("abc")
+		e.SetCaret(1, 1)
+		e.Delete(100)
+		if got := e.Text(); got != "a" {
+			t.Errorf("got %q", got)
+		}
+	})
+	t.Run("OverflowBackward", func(t *testing.T) {
+		e := new(Editor)
+		e.SetText("abc")
+		e.SetCaret(2, 2)
+		e.Delete(-100)
+		if got := e.Text(); got != "c" {
+			t.Errorf("got %q", got)
+		}
+	})
+	t.Run("ReversedSelectionReturnsAbs", func(t *testing.T) {
+		// Editor.Delete returns end - start which can be negative when the
+		// caret selection is reversed (start > end). Callers expect a
+		// non-negative count of deleted runes.
+		e := new(Editor)
+		e.SetText("abcdef")
+		e.SetCaret(4, 1) // reversed
+		n := e.Delete(1)
+		if n < 0 {
+			t.Errorf("Delete returned negative count %d", n)
+		}
+		if n != 3 {
+			t.Errorf("expected 3 runes deleted, got %d", n)
+		}
+		if got := e.Text(); got != "aef" {
+			t.Errorf("text after delete: got %q want %q", got, "aef")
+		}
+	})
+}
+
+// --- Selection / SetCaret ---
+
+func TestEditorExtra_SetCaret_Clamp(t *testing.T) {
+	e := new(Editor)
+	e.SetText("hello")
+	e.SetCaret(1000, 1000)
+	s, end := e.Selection()
+	if s != e.Len() || end != e.Len() {
+		t.Errorf("expected (%d,%d), got (%d,%d)", e.Len(), e.Len(), s, end)
+	}
+}
+
+func TestEditorExtra_SetCaret_NegativeClamps(t *testing.T) {
+	e := new(Editor)
+	e.SetText("hello")
+	e.SetCaret(-5, -2)
+	s, end := e.Selection()
+	if s != 0 || end != 0 {
+		t.Errorf("expected (0,0), got (%d,%d)", s, end)
+	}
+}
+
+func TestEditorExtra_SelectionLen_Empty(t *testing.T) {
+	e := new(Editor)
+	e.SetText("hello")
+	e.SetCaret(2, 2)
+	if n := e.SelectionLen(); n != 0 {
+		t.Errorf("expected 0, got %d", n)
+	}
+}
+
+func TestEditorExtra_SelectionLen_ReversedAbs(t *testing.T) {
+	e := new(Editor)
+	e.SetText("hello")
+	e.SetCaret(4, 1) // reversed
+	if n := e.SelectionLen(); n != 3 {
+		t.Errorf("SelectionLen should be |start-end|=3, got %d", n)
+	}
+}
+
+func TestEditorExtra_Selection_PreservesDirection(t *testing.T) {
+	e := new(Editor)
+	e.SetText("hello")
+	e.SetCaret(4, 1)
+	s, end := e.Selection()
+	// Selection() returns raw (start,end) without swap; document & test that.
+	if s != 4 || end != 1 {
+		t.Errorf("expected (4,1), got (%d,%d)", s, end)
+	}
+}
+
+func TestEditorExtra_SelectedText_ReversedSelection(t *testing.T) {
+	e := new(Editor)
+	e.SetText("hello world")
+	e.SetCaret(8, 3)
+	// SelectedText must work regardless of direction.
+	if got := e.SelectedText(); got != "lo wo" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestEditorExtra_ClearSelection(t *testing.T) {
+	e := new(Editor)
+	e.SetText("hello")
+	e.SetCaret(1, 4)
+	e.ClearSelection()
+	if n := e.SelectionLen(); n != 0 {
+		t.Errorf("expected 0, got %d", n)
+	}
+	// caret end should collapse to caret start
+	s, end := e.Selection()
+	if s != end {
+		t.Errorf("after ClearSelection caret is split: (%d,%d)", s, end)
+	}
+}
+
+// --- Navigation (text.go layer wrappers used inside Editor) ---
+
+func TestEditorExtra_MoveLines_RoundTrip(t *testing.T) {
+	e := new(Editor)
+	e.SetText("line one\nline two\nline three")
+	gtx := layout.Context{
+		Ops:         new(op.Ops),
+		Constraints: layout.Exact(image.Pt(200, 200)),
+		Locale:      english,
+	}
+	cache := text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
+	e.Layout(gtx, cache, gioFont(), unit.Sp(10), op.CallOp{}, op.CallOp{})
+	e.SetCaret(3, 3)
+	startLine, startCol := e.CaretPos()
+	e.text.MoveLines(+1, selectionClear)
+	e.text.MoveLines(-1, selectionClear)
+	gotLine, gotCol := e.CaretPos()
+	if gotLine != startLine || gotCol != startCol {
+		t.Errorf("round-trip moved caret: (%d,%d) -> (%d,%d)",
+			startLine, startCol, gotLine, gotCol)
+	}
+}
+
+func TestEditorExtra_MoveLineStart_BlankLine(t *testing.T) {
+	e := new(Editor)
+	e.SetText("a\n\nb")
+	gtx := layout.Context{
+		Ops:         new(op.Ops),
+		Constraints: layout.Exact(image.Pt(100, 100)),
+		Locale:      english,
+	}
+	cache := text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
+	e.Layout(gtx, cache, gioFont(), unit.Sp(10), op.CallOp{}, op.CallOp{})
+	// Move to the blank line (rune index 2 is just after the first '\n').
+	e.SetCaret(2, 2)
+	e.text.MoveLineStart(selectionClear)
+	if s, _ := e.Selection(); s != 2 {
+		t.Errorf("MoveLineStart on blank line moved caret: got %d, want 2", s)
+	}
+	e.text.MoveLineEnd(selectionClear)
+	if s, _ := e.Selection(); s != 2 {
+		t.Errorf("MoveLineEnd on blank line moved caret: got %d, want 2", s)
+	}
+}
+
+func TestEditorExtra_MoveTextStartEnd_Empty(t *testing.T) {
+	e := new(Editor)
+	gtx := layout.Context{
+		Ops:         new(op.Ops),
+		Constraints: layout.Exact(image.Pt(100, 100)),
+		Locale:      english,
+	}
+	cache := text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
+	e.Layout(gtx, cache, gioFont(), unit.Sp(10), op.CallOp{}, op.CallOp{})
+	e.text.MoveTextStart(selectionClear)
+	if s, end := e.Selection(); s != 0 || end != 0 {
+		t.Errorf("MoveTextStart on empty: got (%d,%d)", s, end)
+	}
+	e.text.MoveTextEnd(selectionClear)
+	if s, end := e.Selection(); s != 0 || end != 0 {
+		t.Errorf("MoveTextEnd on empty: got (%d,%d)", s, end)
+	}
+}
+
+// --- Word movement: unicode coverage ---
+
+func TestEditorExtra_MoveWord_Unicode(t *testing.T) {
+	type tc struct {
+		text  string
+		start int
+		dist  int
+		want  int
+	}
+	cases := []tc{
+		// Accented Latin: word stays a single word.
+		{"héllo wörld", 0, 1, 5},
+		{"héllo wörld", 6, 1, 11},
+		// CJK characters – treated as non-space, so they form one word.
+		{"你好 世界", 0, 1, 2},
+		{"你好 世界", 3, 1, 5},
+		// Punctuation cluster + word.
+		{"!!! word", 0, 1, 3},
+		{"!!! word", 0, 2, 8},
+	}
+	for i, c := range cases {
+		e := new(Editor)
+		e.SetText(c.text)
+		updateEditor(e)
+		e.SetCaret(c.start, c.start)
+		e.text.MoveWord(c.dist, selectionClear)
+		if s, _ := e.Selection(); s != c.want {
+			t.Errorf("[%d] %q from %d dist %d: got %d want %d",
+				i, c.text, c.start, c.dist, s, c.want)
+		}
+	}
+}
+
+// --- History / undo / redo ---
+
+func TestEditorExtra_Undo_InsertEmpty(t *testing.T) {
+	e := new(Editor)
+	e.Insert("hello")
+	if e.Text() != "hello" {
+		t.Fatalf("setup failed")
+	}
+	e.undo()
+	if got := e.Text(); got != "" {
+		t.Errorf("after undo expected empty, got %q", got)
+	}
+}
+
+func TestEditorExtra_Undo_TwoInserts(t *testing.T) {
+	e := new(Editor)
+	e.Insert("foo")
+	e.Insert("bar")
+	if e.Text() != "foobar" {
+		t.Fatalf("setup: %q", e.Text())
+	}
+	e.undo()
+	if got := e.Text(); got != "foo" {
+		t.Errorf("first undo expected %q got %q", "foo", got)
+	}
+	e.undo()
+	if got := e.Text(); got != "" {
+		t.Errorf("second undo expected empty got %q", got)
+	}
+}
+
+func TestEditorExtra_RedoAfterUndo(t *testing.T) {
+	e := new(Editor)
+	e.Insert("foo")
+	e.Insert("bar")
+	e.undo()
+	e.redo()
+	if got := e.Text(); got != "foobar" {
+		t.Errorf("redo expected foobar got %q", got)
+	}
+}
+
+func TestEditorExtra_Undo_Delete(t *testing.T) {
+	e := new(Editor)
+	e.Insert("hello")
+	e.SetCaret(5, 5)
+	e.Delete(-3) // remove "llo"
+	if e.Text() != "he" {
+		t.Fatalf("setup: %q", e.Text())
+	}
+	e.undo()
+	if got := e.Text(); got != "hello" {
+		t.Errorf("undo of delete expected hello got %q", got)
+	}
+}
+
+func TestEditorExtra_Undo_ReplaceRestoresOriginal(t *testing.T) {
+	e := new(Editor)
+	e.Insert("hello")
+	e.SetCaret(0, 5)
+	e.Insert("WORLD")
+	if e.Text() != "WORLD" {
+		t.Fatalf("setup: %q", e.Text())
+	}
+	e.undo()
+	if got := e.Text(); got != "hello" {
+		t.Errorf("undo of replace expected hello got %q", got)
+	}
+}
+
+func TestEditorExtra_NewEditDropsRedoStack(t *testing.T) {
+	e := new(Editor)
+	e.Insert("foo")
+	e.Insert("bar")
+	e.undo() // text == "foo"
+	e.Insert("baz")
+	if got := e.Text(); got != "foobaz" {
+		t.Fatalf("setup: %q", e.Text())
+	}
+	// Redo should be a no-op now.
+	if _, ok := e.redo(); ok {
+		t.Errorf("redo unexpectedly succeeded after new edit")
+	}
+}
+
+func TestEditorExtra_Redo_NoopWhenNothingToRedo(t *testing.T) {
+	e := new(Editor)
+	e.Insert("hi")
+	if _, ok := e.redo(); ok {
+		t.Errorf("redo on fresh history should fail")
+	}
+}
+
+func TestEditorExtra_Undo_NoopWhenNothingToUndo(t *testing.T) {
+	e := new(Editor)
+	if _, ok := e.undo(); ok {
+		t.Errorf("undo on empty editor should fail")
+	}
+}
+
+// --- Filter ---
+
+func TestEditorExtra_Filter_DigitsOnly(t *testing.T) {
+	e := new(Editor)
+	e.Filter = "0123456789"
+	e.Insert("abc12def3")
+	if got := e.Text(); got != "123" {
+		t.Errorf("filter digit-only expected 123 got %q", got)
+	}
+}
+
+func TestEditorExtra_Filter_AllRejected(t *testing.T) {
+	e := new(Editor)
+	e.Filter = "x"
+	e.Insert("hello")
+	if got := e.Text(); got != "" {
+		t.Errorf("expected empty, got %q", got)
+	}
+}
+
+func TestEditorExtra_Filter_Unicode(t *testing.T) {
+	e := new(Editor)
+	e.Filter = "héllo "
+	e.Insert("hello, héllo!")
+	got := e.Text()
+	for _, r := range got {
+		if !strings.ContainsRune(e.Filter, r) {
+			t.Errorf("rune %q leaked through filter; text=%q", r, got)
+		}
+	}
+}
+
+// --- Password mask ---
+
+func TestEditorExtra_Mask_StoresUnmaskedText(t *testing.T) {
+	// The mask is a display-only feature: the underlying text and the
+	// bytes returned from ReadAt/Read are unmasked.  This documents that
+	// behaviour and guards against a regression that would silently mask
+	// the buffer contents (which would also corrupt undo history and any
+	// API consumer that reads from the editor).
+	e := new(Editor)
+	e.Mask = '*'
+	e.SetText("secret")
+	if got := e.Text(); got != "secret" {
+		t.Errorf("Text() should not be masked: got %q", got)
+	}
+	buf := make([]byte, 6)
+	if _, err := e.Seek(0, 0); err != nil {
+		t.Fatalf("Seek: %v", err)
+	}
+	n, _ := e.Read(buf)
+	if string(buf[:n]) != "secret" {
+		t.Errorf("Read should not be masked: got %q", string(buf[:n]))
+	}
+}
+
+func TestEditorExtra_Mask_HistoryUnmasked(t *testing.T) {
+	// Undo / redo should round-trip the real text, not the mask.
+	e := new(Editor)
+	e.Mask = '*'
+	e.Insert("abc")
+	e.Insert("def")
+	e.undo()
+	if got := e.Text(); got != "abc" {
+		t.Errorf("undo with mask: got %q want %q", got, "abc")
+	}
+	e.redo()
+	if got := e.Text(); got != "abcdef" {
+		t.Errorf("redo with mask: got %q want %q", got, "abcdef")
+	}
+}
+
+// --- Single-line mode ---
+
+func TestEditorExtra_SingleLine_SetTextNewlinesReplaced(t *testing.T) {
+	e := new(Editor)
+	e.SingleLine = true
+	e.SetText("a\nb\nc")
+	if got := e.Text(); got != "a b c" {
+		t.Errorf("got %q want %q", got, "a b c")
+	}
+}
+
+func TestEditorExtra_SingleLine_InsertNewlinesReplaced(t *testing.T) {
+	e := new(Editor)
+	e.SingleLine = true
+	e.Insert("hello\nworld")
+	if got := e.Text(); got != "hello world" {
+		t.Errorf("got %q want %q", got, "hello world")
+	}
+}
+
+func TestEditorExtra_SingleLine_ClipboardPasteReplaceNewlines(t *testing.T) {
+	// Simulates a paste of multi-line content into a single-line editor.
+	e := new(Editor)
+	e.SingleLine = true
+	e.Insert("line1\nline2\nline3")
+	if got := e.Text(); got != "line1 line2 line3" {
+		t.Errorf("paste: got %q", got)
+	}
+}
+
+// --- MaxLen ---
+
+func TestEditorExtra_MaxLen_InsertTruncated(t *testing.T) {
+	e := new(Editor)
+	e.MaxLen = 4
+	e.Insert("abcdef")
+	if got := e.Text(); got != "abcd" {
+		t.Errorf("MaxLen Insert: got %q", got)
+	}
+}
+
+func TestEditorExtra_MaxLen_SetTextTruncated(t *testing.T) {
+	e := new(Editor)
+	e.MaxLen = 3
+	e.SetText("hello")
+	if got := e.Text(); got != "hel" {
+		t.Errorf("MaxLen SetText: got %q", got)
+	}
+}
+
+func TestEditorExtra_MaxLen_AppendIgnoredAtCap(t *testing.T) {
+	e := new(Editor)
+	e.MaxLen = 3
+	e.Insert("abc")
+	e.SetCaret(3, 3)
+	// At cap, an Insert should add 0 runes.
+	if n := e.Insert("x"); n != 0 {
+		t.Errorf("expected 0 runes inserted, got %d", n)
+	}
+	if got := e.Text(); got != "abc" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestEditorExtra_MaxLen_TruncatesMultibyte(t *testing.T) {
+	// MaxLen counts runes – ensure we don't truncate mid-rune.
+	e := new(Editor)
+	e.MaxLen = 3
+	e.Insert("héllo")
+	got := e.Text()
+	if !utf8.ValidString(got) {
+		t.Errorf("MaxLen produced invalid UTF-8: %q", got)
+	}
+	if utf8.RuneCountInString(got) != 3 {
+		t.Errorf("expected 3 runes, got %d (%q)", utf8.RuneCountInString(got), got)
+	}
+	if got != "hél" {
+		t.Errorf("expected %q got %q", "hél", got)
+	}
+}
+
+// --- Submit / SingleLine via key.EditEvent ---
+
+func TestEditorExtra_SingleLine_EditEventNewlineReplaced(t *testing.T) {
+	// Sanity: route a multi-line key.EditEvent through Update and ensure
+	// newlines turn into spaces.
+	e := new(Editor)
+	e.SingleLine = true
+	r := new(input.Router)
+	gtx := layout.Context{
+		Ops:         new(op.Ops),
+		Constraints: layout.Exact(image.Pt(100, 100)),
+		Source:      r.Source(),
+		Locale:      english,
+	}
+	cache := text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
+	gtx.Execute(key.FocusCmd{Tag: e})
+	e.Layout(gtx, cache, gioFont(), unit.Sp(10), op.CallOp{}, op.CallOp{})
+	r.Frame(gtx.Ops)
+	r.Queue(key.EditEvent{Text: "ab\ncd"})
+	for {
+		_, ok := e.Update(gtx)
+		if !ok {
+			break
+		}
+	}
+	if got := e.Text(); got != "ab cd" {
+		t.Errorf("expected %q got %q", "ab cd", got)
+	}
+}
+
+// --- Helpers ---
+
+// gioFont is a font.Font zero value used across tests.
+func gioFont() font.Font { return font.Font{} }

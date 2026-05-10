@@ -2,7 +2,6 @@ package app
 
 import (
 	"errors"
-	"fmt"
 	"image"
 	"image/color"
 	"runtime"
@@ -52,6 +51,7 @@ type Window struct {
 	metric      unit.Metric
 	queue       input.Router
 	cursor      pointer.Cursor
+	cursorDirty bool
 	decorations struct {
 		op.Ops
 
@@ -372,6 +372,10 @@ func (c *callbacks) ProcessEvent(e event.Event) bool {
 	return c.w.processEvent(e)
 }
 
+func (c *callbacks) MarkCursorDirty() {
+	c.w.cursorDirty = true
+}
+
 func (c *callbacks) SemanticRoot() input.SemanticID {
 	c.w.updateSemantics()
 	return c.w.semantic.root
@@ -468,7 +472,7 @@ func (c *callbacks) ActionAt(p f32.Point) (system.Action, bool) {
 
 func (w *Window) destroyGPU() {
 	if w.gpu != nil {
-		w.ctx.Lock()
+		w.ctx.Lock() //nolint:errcheck // Best-effort lock during teardown; failure is unrecoverable.
 		w.gpu.Release()
 		w.ctx.Unlock()
 		w.gpu = nil
@@ -612,7 +616,7 @@ func (w *Window) processEvent(e event.Event) bool {
 		w.coalesced.destroy = &e2
 	case ViewEvent:
 		if !e2.Valid() && w.gpu != nil {
-			w.ctx.Lock()
+			w.ctx.Lock() //nolint:errcheck // Best-effort lock during view invalidation cleanup.
 			w.gpu.Release()
 			w.gpu = nil
 			w.ctx.Unlock()
@@ -719,10 +723,13 @@ func (w *Window) init() {
 }
 
 func (w *Window) updateCursor() {
-	if c := w.queue.Cursor(); c != w.cursor {
-		w.cursor = c
-		w.driver.SetCursor(c)
+	c := w.queue.Cursor()
+	if !w.cursorDirty && c == w.cursor {
+		return
 	}
+	w.cursorDirty = false
+	w.cursor = c
+	w.driver.SetCursor(c)
 }
 
 func (w *Window) fallbackDecorate() bool {
@@ -739,19 +746,6 @@ func (w *Window) decorate(e FrameEvent, o *op.Ops) image.Point {
 		system.ActionClose | system.ActionMove
 	style := material.Decorations(w.decorations.Theme, deco, allActions, w.decorations.Config.Title)
 
-	var actions system.Action
-	switch m := w.decorations.Config.Mode; m {
-	case Windowed:
-		actions |= system.ActionUnmaximize
-	case Minimized:
-		actions |= system.ActionMinimize
-	case Maximized:
-		actions |= system.ActionMaximize
-	case Fullscreen:
-		actions |= system.ActionFullscreen
-	default:
-		panic(fmt.Errorf("unknown WindowMode %v", m))
-	}
 	gtx := layout.Context{
 		Ops:         o,
 		Now:         e.Now,
@@ -827,10 +821,10 @@ func Title(t string) Option {
 
 func Size(w, h unit.Dp) Option {
 	if w <= 0 {
-		panic("width must be larger than or equal to 0")
+		panic("width must be larger than 0")
 	}
 	if h <= 0 {
-		panic("height must be larger than or equal to 0")
+		panic("height must be larger than 0")
 	}
 	return func(m unit.Metric, cnf *Config) {
 		cnf.Mode = Windowed
@@ -843,10 +837,10 @@ func Size(w, h unit.Dp) Option {
 
 func MaxSize(w, h unit.Dp) Option {
 	if w <= 0 {
-		panic("width must be larger than or equal to 0")
+		panic("width must be larger than 0")
 	}
 	if h <= 0 {
-		panic("height must be larger than or equal to 0")
+		panic("height must be larger than 0")
 	}
 	return func(m unit.Metric, cnf *Config) {
 		cnf.MaxSize = image.Point{
@@ -858,10 +852,10 @@ func MaxSize(w, h unit.Dp) Option {
 
 func MinSize(w, h unit.Dp) Option {
 	if w <= 0 {
-		panic("width must be larger than or equal to 0")
+		panic("width must be larger than 0")
 	}
 	if h <= 0 {
-		panic("height must be larger than or equal to 0")
+		panic("height must be larger than 0")
 	}
 	return func(m unit.Metric, cnf *Config) {
 		cnf.MinSize = image.Point{

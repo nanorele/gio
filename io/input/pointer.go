@@ -724,12 +724,6 @@ func (q *pointerQueue) Push(handlers map[event.Tag]*handler, state pointerState,
 			})
 		}
 		state.pointers = nil
-		// Reset cursor too. Otherwise Frame() never recomputes it
-		// (its loop iterates state.pointers, now nil) and updateCursor
-		// keeps the stale value forever — until the next pointer event
-		// arrives, which on Windows after WM_POINTERCAPTURECHANGED may
-		// not happen for a long time.
-		state.cursor = pointer.CursorDefault
 		return state, evts
 	}
 	state, pidx := state.pointerOf(e)

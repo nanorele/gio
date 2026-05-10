@@ -117,9 +117,14 @@ func newURLEvent(rawurl string) (URLEvent, error) {
 	if err != nil {
 		return URLEvent{}, err
 	}
-	u.Host, err = idna.Punycode.ToUnicode(u.Hostname())
+	host, err := idna.Punycode.ToUnicode(u.Hostname())
 	if err != nil {
 		return URLEvent{}, err
+	}
+	if port := u.Port(); port != "" {
+		u.Host = host + ":" + port
+	} else {
+		u.Host = host
 	}
 	u, err = url.Parse(u.String())
 	if err != nil {

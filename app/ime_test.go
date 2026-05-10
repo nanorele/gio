@@ -1,10 +1,10 @@
 package app
 
 import (
-	"github.com/nanorele/gio/f32"
 	"testing"
 	"unicode/utf8"
 
+	"github.com/nanorele/gio/f32"
 	"github.com/nanorele/gio/font"
 	"github.com/nanorele/gio/font/gofont"
 	"github.com/nanorele/gio/io/input"
@@ -157,5 +157,221 @@ func TestEditorIndices(t *testing.T) {
 		if want, got := p.Runes, s.RunesIndex(p.UTF16); want != got {
 			t.Errorf("RunesIndex(%d) = %d, wanted %d", p.UTF16, got, want)
 		}
+	}
+}
+
+func newEditorState(text string, start int) *editorState {
+	s := &editorState{}
+	s.compose.Start = -1
+	s.compose.End = -1
+	s.Snippet = key.Snippet{
+		Text: text,
+		Range: key.Range{
+			Start: start,
+			End:   start + utf8.RuneCountInString(text),
+		},
+	}
+	return s
+}
+
+func TestReplaceInsertAtEnd(t *testing.T) {
+	s := newEditorState("abc", 0)
+	s.Selection.Start, s.Selection.End = 3, 3
+	s.Replace(key.Range{Start: 3, End: 3}, "de")
+	if s.Snippet.Text != "abcde" {
+		t.Errorf("Snippet.Text = %q, want abcde", s.Snippet.Text)
+	}
+	if s.Snippet.Start != 0 || s.Snippet.End != 5 {
+		t.Errorf("Snippet range = [%d,%d], want [0,5]", s.Snippet.Start, s.Snippet.End)
+	}
+	// adjust() only shifts positions strictly past r.End; selection at r.End stays put.
+	if s.Selection.Start != 3 || s.Selection.End != 3 {
+		t.Errorf("Selection = [%d,%d], want [3,3]", s.Selection.Start, s.Selection.End)
+	}
+}
+
+func TestReplaceInsertAtStart(t *testing.T) {
+	s := newEditorState("abc", 0)
+	s.Selection.Start, s.Selection.End = 1, 1
+	s.Replace(key.Range{Start: 0, End: 0}, "XY")
+	if s.Snippet.Text != "XYabc" {
+		t.Errorf("Snippet.Text = %q, want XYabc", s.Snippet.Text)
+	}
+	// Selection should shift by the inserted length.
+	if s.Selection.Start != 3 || s.Selection.End != 3 {
+		t.Errorf("Selection = [%d,%d], want [3,3]", s.Selection.Start, s.Selection.End)
+	}
+}
+
+func TestReplaceDeleteRangeContainingSelection(t *testing.T) {
+	s := newEditorState("abcdef", 0)
+	s.Selection.Start, s.Selection.End = 2, 4
+	s.Replace(key.Range{Start: 1, End: 5}, "")
+	// After replace, selection collapses to the new end position (1).
+	if s.Selection.Start != 1 || s.Selection.End != 1 {
+		t.Errorf("Selection = [%d,%d], want [1,1]", s.Selection.Start, s.Selection.End)
+	}
+	if s.Snippet.Text != "af" {
+		t.Errorf("Snippet.Text = %q, want af", s.Snippet.Text)
+	}
+}
+
+func TestReplaceSwapsReversedRange(t *testing.T) {
+	s := newEditorState("abcdef", 0)
+	s.Selection.Start, s.Selection.End = 0, 0
+	// End < Start should be swapped.
+	s.Replace(key.Range{Start: 4, End: 1}, "XX")
+	if s.Snippet.Text != "aXXef" {
+		t.Errorf("Snippet.Text = %q, want aXXef", s.Snippet.Text)
+	}
+}
+
+func TestReplaceUpdatesCompose(t *testing.T) {
+	s := newEditorState("abcdef", 0)
+	s.compose.Start, s.compose.End = 2, 4
+	s.Replace(key.Range{Start: 0, End: 0}, "XX")
+	// Compose range should shift by +2.
+	if s.compose.Start != 4 || s.compose.End != 6 {
+		t.Errorf("compose = [%d,%d], want [4,6]", s.compose.Start, s.compose.End)
+	}
+}
+
+func TestReplaceUnicodeRunes(t *testing.T) {
+	s := newEditorState("ab", 0)
+	s.Selection.Start, s.Selection.End = 2, 2
+	s.Replace(key.Range{Start: 2, End: 2}, "😀世")
+	// Snippet.End is in runes, so 2 + 2 runes = 4.
+	if s.Snippet.End != 4 {
+		t.Errorf("Snippet.End = %d, want 4", s.Snippet.End)
+	}
+	if s.Snippet.Text != "ab😀世" {
+		t.Errorf("Snippet.Text = %q, want ab😀世", s.Snippet.Text)
+	}
+}
+
+func TestReplaceOutsideSnippetResets(t *testing.T) {
+	s := newEditorState("abc", 10) // snippet at runes [10,13]
+	s.Selection.Start, s.Selection.End = 10, 10
+	// Replace far outside the snippet — should reset snippet to a fresh window.
+	s.Replace(key.Range{Start: 100, End: 100}, "X")
+	if s.Snippet.Text != "X" {
+		t.Errorf("Snippet.Text = %q, want X", s.Snippet.Text)
+	}
+	if s.Snippet.Start != 100 || s.Snippet.End != 101 {
+		t.Errorf("Snippet range = [%d,%d], want [100,101]", s.Snippet.Start, s.Snippet.End)
+	}
+}
+
+func TestUTF16IndexAndRunesIndexNegOne(t *testing.T) {
+	s := newEditorState("hello", 0)
+	if got := s.UTF16Index(-1); got != -1 {
+		t.Errorf("UTF16Index(-1) = %d, want -1", got)
+	}
+	if got := s.RunesIndex(-1); got != -1 {
+		t.Errorf("RunesIndex(-1) = %d, want -1", got)
+	}
+}
+
+func TestUTF16IndexBeforeSnippet(t *testing.T) {
+	s := newEditorState("xyz", 10)
+	// For positions before the snippet, the function returns the input unchanged.
+	if got := s.UTF16Index(5); got != 5 {
+		t.Errorf("UTF16Index(5) = %d, want 5", got)
+	}
+	if got := s.RunesIndex(5); got != 5 {
+		t.Errorf("RunesIndex(5) = %d, want 5", got)
+	}
+}
+
+func TestUTF16IndexAfterSurrogatePair(t *testing.T) {
+	// 😀 is a surrogate pair in UTF-16 (2 chars), 1 rune.
+	s := newEditorState("a😀b", 0)
+	// rune index 0 -> utf16 0
+	// rune index 1 -> utf16 1 (after 'a')
+	// rune index 2 -> utf16 3 (after surrogate pair)
+	// rune index 3 -> utf16 4 (after 'b')
+	cases := []struct{ runes, utf16 int }{
+		{0, 0}, {1, 1}, {2, 3}, {3, 4},
+	}
+	for _, c := range cases {
+		if got := s.UTF16Index(c.runes); got != c.utf16 {
+			t.Errorf("UTF16Index(%d) = %d, want %d", c.runes, got, c.utf16)
+		}
+		if got := s.RunesIndex(c.utf16); got != c.runes {
+			t.Errorf("RunesIndex(%d) = %d, want %d", c.utf16, got, c.runes)
+		}
+	}
+}
+
+func TestUTF16IndexBeyondSnippet(t *testing.T) {
+	// Indices past the snippet's end should be returned offset by the snippet length.
+	s := newEditorState("ab", 5) // runes 5..7
+	// rune 7 -> utf16 7 (no surrogate). rune 10 -> utf16 10.
+	if got := s.UTF16Index(10); got != 10 {
+		t.Errorf("UTF16Index(10) = %d, want 10", got)
+	}
+}
+
+func TestSnippetSubstringFullRange(t *testing.T) {
+	s := key.Snippet{Text: "abcdef", Range: key.Range{Start: 0, End: 6}}
+	got := snippetSubstring(s, key.Range{Start: 0, End: 6})
+	if got != "abcdef" {
+		t.Errorf("snippetSubstring full = %q, want abcdef", got)
+	}
+}
+
+func TestSnippetSubstringPartial(t *testing.T) {
+	s := key.Snippet{Text: "abcdef", Range: key.Range{Start: 0, End: 6}}
+	got := snippetSubstring(s, key.Range{Start: 2, End: 5})
+	if got != "cde" {
+		t.Errorf("snippetSubstring [2,5] = %q, want cde", got)
+	}
+}
+
+func TestSnippetSubstringWithUnicode(t *testing.T) {
+	s := key.Snippet{Text: "a😀b", Range: key.Range{Start: 0, End: 3}}
+	got := snippetSubstring(s, key.Range{Start: 1, End: 2})
+	if got != "😀" {
+		t.Errorf("snippetSubstring rune range = %q, want 😀", got)
+	}
+}
+
+func TestSnippetSubstringOffsetStart(t *testing.T) {
+	s := key.Snippet{Text: "abcdef", Range: key.Range{Start: 10, End: 16}}
+	got := snippetSubstring(s, key.Range{Start: 12, End: 15})
+	if got != "cde" {
+		t.Errorf("snippetSubstring offset = %q, want cde", got)
+	}
+}
+
+func TestAreSnippetsConsistentSame(t *testing.T) {
+	a := key.Snippet{Text: "abcdef", Range: key.Range{Start: 0, End: 6}}
+	if !areSnippetsConsistent(a, a) {
+		t.Errorf("snippets identical to themselves should be consistent")
+	}
+}
+
+func TestAreSnippetsConsistentOverlap(t *testing.T) {
+	old := key.Snippet{Text: "abcdef", Range: key.Range{Start: 0, End: 6}}
+	new := key.Snippet{Text: "cdefgh", Range: key.Range{Start: 2, End: 8}}
+	if !areSnippetsConsistent(old, new) {
+		t.Errorf("overlapping consistent snippets should be consistent")
+	}
+}
+
+func TestAreSnippetsConsistentDiverge(t *testing.T) {
+	old := key.Snippet{Text: "abcdef", Range: key.Range{Start: 0, End: 6}}
+	new := key.Snippet{Text: "XYZdef", Range: key.Range{Start: 0, End: 6}}
+	if areSnippetsConsistent(old, new) {
+		t.Errorf("divergent snippets should NOT be consistent")
+	}
+}
+
+func TestAreSnippetsConsistentNoOverlap(t *testing.T) {
+	// Disjoint ranges: intersection is empty, both yield empty string => consistent.
+	old := key.Snippet{Text: "abc", Range: key.Range{Start: 0, End: 3}}
+	new := key.Snippet{Text: "xyz", Range: key.Range{Start: 10, End: 13}}
+	if !areSnippetsConsistent(old, new) {
+		t.Errorf("non-overlapping snippets should be trivially consistent (empty intersection)")
 	}
 }

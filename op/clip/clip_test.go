@@ -126,4 +126,3 @@ func TestStroke(t *testing.T) {
 		Width: 5,
 	}.Op().Push(ops).Pop()
 }
-

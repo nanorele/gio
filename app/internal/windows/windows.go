@@ -1,6 +1,9 @@
 //go:build windows
 // +build windows
 
+// Win32 syscall .Call() returns non-nil errno on success; struct fields mirror Win32 ABI;
+// (*T)(unsafe.Pointer(lParam)) is the standard window-message pattern.
+//nolint:all
 package windows
 
 import (
@@ -247,6 +250,10 @@ const (
 	SIZE_MINIMIZED = 1
 	SIZE_RESTORED  = 0
 
+	WA_INACTIVE    = 0
+	WA_ACTIVE      = 1
+	WA_CLICKACTIVE = 2
+
 	SCS_SETSTR = GCS_COMPREADSTR | GCS_COMPSTR
 
 	SM_CXSIZEFRAME = 32
@@ -316,11 +323,14 @@ const (
 
 	UNICODE_NOCHAR = 65535
 
+	WM_ACTIVATE              = 0x0006
+	WM_ACTIVATEAPP           = 0x001C
 	WM_CANCELMODE            = 0x001F
 	WM_CHAR                  = 0x0102
 	WM_CLOSE                 = 0x0010
 	WM_COPYDATA              = 0x004A
 	WM_CREATE                = 0x0001
+	WM_DISPLAYCHANGE         = 0x007E
 	WM_DPICHANGED            = 0x02E0
 	WM_DESTROY               = 0x0002
 	WM_ERASEBKGND            = 0x0014
@@ -441,7 +451,6 @@ var (
 	_GetWindowLong               = user32.NewProc("GetWindowLongPtrW")
 	_GetWindowLong32             = user32.NewProc("GetWindowLongW")
 	_GetWindowPlacement          = user32.NewProc("GetWindowPlacement")
-	_KillTimer                   = user32.NewProc("KillTimer")
 	_LoadCursor                  = user32.NewProc("LoadCursorW")
 	_LoadImage                   = user32.NewProc("LoadImageW")
 	_MonitorFromPoint            = user32.NewProc("MonitorFromPoint")

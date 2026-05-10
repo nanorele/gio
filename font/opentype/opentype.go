@@ -18,7 +18,7 @@ type Face struct {
 func Parse(src []byte) (Face, error) {
 	ld, err := opentype.NewLoader(bytes.NewReader(src))
 	if err != nil {
-		return Face{}, err
+		return Face{}, fmt.Errorf("failed parsing truetype font: %w", err)
 	}
 	font, md, err := parseLoader(ld)
 	if err != nil {
