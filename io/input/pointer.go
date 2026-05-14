@@ -724,6 +724,17 @@ func (q *pointerQueue) Push(handlers map[event.Tag]*handler, state pointerState,
 			})
 		}
 		state.pointers = nil
+		// With state.pointers cleared, Frame()'s hit-test loop is a no-op
+		// and state.cursor would stay stuck at whatever value was last
+		// committed by deliverEnterLeaveEvents — e.g. CursorText if Cancel
+		// fired while hovering an editor. On Windows under
+		// EnableMouseInPointer(1), WM_POINTERCAPTURECHANGED can fire long
+		// before the next pointer event, so the stale cursor would persist
+		// indefinitely. Cancel is the only path where the pointer position
+		// becomes unknown; other state.pointers drains (Release/Move with
+		// empty entered) still have a valid cursor computed at the event's
+		// own position, so they don't need this reset.
+		state.cursor = pointer.CursorDefault
 		return state, evts
 	}
 	state, pidx := state.pointerOf(e)
