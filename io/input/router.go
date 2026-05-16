@@ -680,7 +680,16 @@ func (q *Router) ClipboardRequested() bool {
 }
 
 func (q *Router) Cursor() pointer.Cursor {
-	return q.state().cursor
+	// Read lastState rather than state(): cursor is a pure display query
+	// with no event-ordering semantics. state() returns changes[0] (frozen
+	// at the last Frame collapse), but changeState appends a new entry
+	// whenever an event carries tagged events (Cancel emits one per
+	// handler; Move emits Enter/Leave for any handler with a pointer
+	// filter), so the fresh cursor lives at changes[len-1] and is invisible
+	// to a state() reader until the next Frame. Window.updateCursor would
+	// then short-circuit on c == w.cursor and never push the new value to
+	// the driver, leaving the OS cursor stuck.
+	return q.lastState().cursor
 }
 
 func (q *Router) SemanticAt(pos f32.Point) (SemanticID, bool) {
