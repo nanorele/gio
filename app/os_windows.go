@@ -97,8 +97,11 @@ func newWindow(win *callbacks, options []Option) {
 		defer winMap.Delete(w.hwnd)
 		w.Configure(options)
 		w.ProcessEvent(Win32ViewEvent{HWND: uintptr(w.hwnd)})
-		windows.SetForegroundWindow(w.hwnd)
-		windows.SetFocus(w.hwnd)
+		// Configure() ends with ShowWindow(SW_SHOWNORMAL), which already
+		// activates user-launched windows via the normal Win32 path. An
+		// explicit SetForegroundWindow/SetFocus here steals focus from the
+		// app the user is currently in (the foreground lock is bypassed
+		// because we own the process being launched). Drop them.
 		w.SetCursor(pointer.CursorDefault)
 		w.runLoop()
 	}()
@@ -209,6 +212,39 @@ func (w *window) update() {
 	w.draw(true)
 }
 
+// clampToVisibleMonitor moves the window into the nearest monitor's work area
+// if its rect doesn't overlap that monitor. Called from WM_DISPLAYCHANGE (when
+// a monitor is disconnected, taking the window's coordinates with it) and from
+// WM_SIZE on SIZE_RESTORED (the saved position may belong to a now-gone
+// monitor). Not called during user drags: that runs through WM_WINDOWPOSCHANGED
+// where any user-driven position is intentional and the window is on-screen.
+// No-op when the window already intersects the nearest monitor, so unaffected
+// multi-monitor layouts are preserved.
+func (w *window) clampToVisibleMonitor() {
+	if w.minimized {
+		// GetWindowRect on a minimized window returns the special off-screen
+		// "iconic" position (~ -32000, -32000). Don't clamp that; Configure
+		// or the OS will reposition on restore.
+		return
+	}
+	r := windows.GetWindowRect(w.hwnd)
+	wa := windows.GetMonitorInfo(w.hwnd).WorkArea
+	if r.Right > wa.Left && r.Left < wa.Right &&
+		r.Bottom > wa.Top && r.Top < wa.Bottom {
+		return
+	}
+	width := r.Right - r.Left
+	height := r.Bottom - r.Top
+	if width > wa.Right-wa.Left {
+		width = wa.Right - wa.Left
+	}
+	if height > wa.Bottom-wa.Top {
+		height = wa.Bottom - wa.Top
+	}
+	windows.SetWindowPos(w.hwnd, 0, wa.Left, wa.Top, width, height,
+		windows.SWP_NOZORDER|windows.SWP_NOACTIVATE)
+}
+
 func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr {
 	win, exists := winMap.Load(hwnd)
 	if !exists {
@@ -228,23 +264,38 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		return windows.TRUE
 	case windows.WM_DPICHANGED:
 		w.dpi = int(wParam & 0xFFFF)
+		// Per Win32 docs, lParam is a RECT* with a suggested position+size for
+		// the new monitor. The application MUST apply it via SetWindowPos or
+		// the window stays at coordinates of the old DPI/monitor — e.g. when
+		// dragged between monitors of different DPI it visibly jumps off the
+		// new monitor. Return 0 (do not call DefWindowProc) per docs.
+		r := (*windows.Rect)(unsafe.Pointer(lParam)) //nolint:govet // Win32 lParam is a fresh function arg, not stored.
+		windows.SetWindowPos(w.hwnd, 0, r.Left, r.Top, r.Right-r.Left, r.Bottom-r.Top,
+			windows.SWP_NOZORDER|windows.SWP_NOACTIVATE)
 		// System cursor handles are tied to DPI; the cached one is now stale.
 		w.w.MarkCursorDirty()
-		return windows.TRUE
+		return 0
 	case windows.WM_DISPLAYCHANGE:
 		// Cursor handles can be recreated on display/resolution change.
 		w.w.MarkCursorDirty()
+		// A monitor may have been disconnected; recover the window if its
+		// rect now belongs to a monitor that no longer exists.
+		w.clampToVisibleMonitor()
 		w.update()
 	case windows.WM_ACTIVATE:
-		// LOWORD(wParam) is the activation state.
+		// LOWORD(wParam) is the activation state. The OS cursor may have
+		// been changed by another app while we were inactive, so refresh it.
+		// Do NOT call w.update() here — it forces a synchronous w.draw(true)
+		// and emits a ConfigEvent on every activation/deactivation, which on
+		// multi-monitor setups produces phantom frames and config churn just
+		// from focus crossing between displays. Size/Mode/Focused are already
+		// maintained by WM_SIZE, WM_WINDOWPOSCHANGED, WM_SETFOCUS, WM_KILLFOCUS.
 		if act := wParam & 0xFFFF; act == windows.WA_ACTIVE || act == windows.WA_CLICKACTIVE {
 			w.w.MarkCursorDirty()
-			w.update()
 		}
 	case windows.WM_ACTIVATEAPP:
 		if wParam == windows.TRUE {
 			w.w.MarkCursorDirty()
-			w.update()
 		}
 	case windows.WM_ERASEBKGND:
 		return windows.TRUE
@@ -361,6 +412,12 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		// state from before the size change is no longer reliable.
 		if wParam == windows.SIZE_RESTORED || wParam == windows.SIZE_MAXIMIZED {
 			w.w.MarkCursorDirty()
+		}
+		// Restoring from minimized can put the window back at the same
+		// coordinates it had when minimized — including coordinates on a
+		// monitor that has since been disconnected.
+		if wParam == windows.SIZE_RESTORED {
+			w.clampToVisibleMonitor()
 		}
 		w.update()
 	case windows.WM_GETMINMAXINFO:
@@ -517,7 +574,13 @@ func (w *window) hitTest(x, y int) uintptr {
 }
 
 func (w *window) pointerUpdate(pi windows.PointerInfo, pid pointer.ID, kind pointer.Kind, lParam uintptr) {
-	if !w.config.Focused {
+	// Only take focus on an explicit click. With EnableMouseInPointer(1) the
+	// OS delivers a steady stream of WM_POINTERUPDATE events whenever the
+	// cursor is over the window — calling SetFocus on every one of them is
+	// "click-to-focus" turned into "hover-to-focus", which is especially
+	// disruptive on multi-monitor setups where the cursor naturally passes
+	// over background windows.
+	if kind == pointer.Press && !w.config.Focused {
 		windows.SetFocus(w.hwnd)
 	}
 
@@ -887,9 +950,14 @@ func (w *window) Perform(acts system.Action) {
 			r := windows.GetWindowRect(w.hwnd)
 			dx := r.Right - r.Left
 			dy := r.Bottom - r.Top
-			mi := windows.GetMonitorInfo(w.hwnd).Monitor
-			x := (mi.Right - mi.Left - dx) / 2
-			y := (mi.Bottom - mi.Top - dy) / 2
+			// Use WorkArea (taskbar-excluded) and add the monitor's origin so
+			// centering on a secondary monitor produces absolute screen coords
+			// on THAT monitor — the previous (mi.Right-mi.Left-dx)/2 computed
+			// a relative offset and dropped it at (0,0) of virtual-screen
+			// space, sending the window off the active monitor.
+			wa := windows.GetMonitorInfo(w.hwnd).WorkArea
+			x := wa.Left + (wa.Right-wa.Left-dx)/2
+			y := wa.Top + (wa.Bottom-wa.Top-dy)/2
 			windows.SetWindowPos(w.hwnd, 0, x, y, dx, dy, windows.SWP_NOZORDER|windows.SWP_FRAMECHANGED)
 		case system.ActionRaise:
 			w.raise()
@@ -900,8 +968,12 @@ func (w *window) Perform(acts system.Action) {
 }
 
 func (w *window) raise() {
+	// HWND_TOP (= 0) brings the window to the top of the Z-order without
+	// flagging it always-on-top. The previous HWND_TOPMOST left the window
+	// pinned above every other application until process exit, which the
+	// user observed as "the window randomly grabs focus and stays on top".
 	windows.SetForegroundWindow(w.hwnd)
-	windows.SetWindowPos(w.hwnd, windows.HWND_TOPMOST, 0, 0, 0, 0,
+	windows.SetWindowPos(w.hwnd, 0, 0, 0, 0, 0,
 		windows.SWP_NOMOVE|windows.SWP_NOSIZE|windows.SWP_SHOWWINDOW)
 }
 

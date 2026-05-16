@@ -208,8 +208,6 @@ const (
 	CFS_POINT        = 0x0002
 	CFS_CANDIDATEPOS = 0x0040
 
-	HWND_TOPMOST = ^(uint32(1) - 1)
-
 	HTCAPTION     = 2
 	HTCLIENT      = 1
 	HTLEFT        = 10
@@ -243,6 +241,7 @@ const (
 	MDT_EFFECTIVE_DPI = 0
 
 	MONITOR_DEFAULTTOPRIMARY = 1
+	MONITOR_DEFAULTTONEAREST = 2
 
 	NI_COMPOSITIONSTR = 0x0015
 
@@ -266,6 +265,7 @@ const (
 	SW_SHOW          = 5
 
 	SWP_FRAMECHANGED  = 0x0020
+	SWP_NOACTIVATE    = 0x0010
 	SWP_NOMOVE        = 0x0002
 	SWP_NOOWNERZORDER = 0x0200
 	SWP_NOSIZE        = 0x0001
@@ -718,9 +718,14 @@ func GetWindowPlacement(hwnd syscall.Handle) *WindowPlacement {
 }
 
 func GetMonitorInfo(hwnd syscall.Handle) MonitorInfo {
+	// MONITOR_DEFAULTTONEAREST returns the monitor the window is on (or
+	// nearest to, if off-screen); MONITOR_DEFAULTTOPRIMARY would force all
+	// callers to compute against the primary monitor, breaking layouts on
+	// secondary monitors (maximize uses wrong work area, centering lands
+	// outside the monitor, etc.).
+	v, _, _ := _MonitorFromWindow.Call(uintptr(hwnd), MONITOR_DEFAULTTONEAREST)
 	var mi MonitorInfo
 	mi.cbSize = uint32(unsafe.Sizeof(mi))
-	v, _, _ := _MonitorFromWindow.Call(uintptr(hwnd), MONITOR_DEFAULTTOPRIMARY)
 	_GetMonitorInfo.Call(v, uintptr(unsafe.Pointer(&mi)))
 	return mi
 }
