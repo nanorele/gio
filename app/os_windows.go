@@ -1,5 +1,6 @@
 // Win32 API calls (CloseClipboard/PostMessage/DwmExtend*) typically have unactionable errors;
 // best-effort cleanup helpers (readClipboard/writeClipboard) intentionally swallow.
+//
 //nolint:errcheck
 package app
 
@@ -321,12 +322,10 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 			panic(err)
 		}
 		// A pointer event in client area implies the cursor is over our
-		// window. Without this, w.cursorIn can latch to false (Windows
-		// suppresses WM_SETCURSOR when EnableMouseInPointer is on) and
-		// (*window).SetCursor stops calling windows.SetCursor, leaving
-		// the OS cursor stuck at whatever it last was.
+		// window. cursorIn can latch to false when EnableMouseInPointer(1)
+		// makes Windows suppress WM_SETCURSOR; set it eagerly so the
+		// WM_SETCURSOR handler returns TRUE if/when it does fire.
 		w.cursorIn = true
-		windows.SetCursor(w.cursor)
 		switch msg {
 		case windows.WM_POINTERDOWN:
 			windows.SetCapture(w.hwnd)
@@ -342,13 +341,26 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		}
 		if (pi.PointerFlags&windows.POINTER_FLAG_CANCELED != 0) || (msg == windows.WM_POINTERCAPTURECHANGED) {
 			kind = pointer.Cancel
-			// Cancel clears state.pointers in the input router; on the next
-			// frame the cursor would otherwise stay stale until a fresh
-			// pointer event arrives, which on capture-change can be a long
-			// time. Force the next updateCursor to push the new value.
+			// Cancel clears state.pointers in the input router; without
+			// MarkCursorDirty, pointerQueue.Frame's loop (iterates
+			// state.pointers, now empty) can't recompute the cursor on
+			// the next Frame.
 			w.w.MarkCursorDirty()
 		}
 		w.pointerUpdate(pi, pid, kind, lParam)
+		// pointerUpdate ran synchronously through ProcessEvent →
+		// queue.Queue → updateCursor → driver.SetCursor, so w.cursor now
+		// holds the freshly hit-tested HCURSOR. The call below keeps the
+		// OS cursor in sync on no-change events (updateCursor
+		// short-circuited): under EnableMouseInPointer(1) Windows
+		// suppresses WM_SETCURSOR, so without this nudge the OS cursor
+		// can drift from w.cursor across DWM/desktop activity. Order
+		// matters: it must come AFTER pointerUpdate — putting it before
+		// (the v1.2.2 behaviour) flashes the previous cursor for one
+		// message-handler tick on every cross-region mouse move, which
+		// appears as flicker between I-beam and hand at editor↔toolbar
+		// boundaries.
+		windows.SetCursor(w.cursor)
 	case windows.WM_CANCELMODE:
 		w.w.MarkCursorDirty()
 		w.ProcessEvent(pointer.Event{
