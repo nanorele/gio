@@ -623,14 +623,39 @@ func (q *pointerQueue) Frame(handlers map[event.Tag]*handler, state pointerState
 	}
 	var evts []taggedEvent
 	for i, p := range state.pointers {
+		oldEntered := p.entered
+		oldCursor := state.cursor
 		changed := false
 		p, evts, state.cursor, changed = q.deliverEnterLeaveEvents(handlers, state.cursor, p, evts, p.last)
+		// Frame-time hit-test runs on a freshly collected hitTree and can
+		// return a different cursor than the event-time hit-test for the
+		// same p.last position if anything in the ops stream shifted between
+		// frames (sub-pixel layout drift, animated widgets, re-ordered
+		// children). The pointer-event path has the authoritative cursor;
+		// only let Frame override it when the entered handler set actually
+		// changed, which is the signal that something material moved under
+		// the cursor (widget appeared/disappeared, popup opened/closed).
+		if sameEnteredSet(oldEntered, p.entered) {
+			state.cursor = oldCursor
+		}
 		if changed {
 			state.pointers = slices.Clone(state.pointers)
 			state.pointers[i] = p
 		}
 	}
 	return state, evts
+}
+
+func sameEnteredSet(a, b []event.Tag) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for _, t := range a {
+		if _, found := searchTag(b, t); !found {
+			return false
+		}
+	}
+	return true
 }
 
 func dropHandler(state pointerState, tag event.Tag) pointerState {
