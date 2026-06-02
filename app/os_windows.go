@@ -362,12 +362,13 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		// boundaries.
 		windows.SetCursor(w.cursor)
 	case windows.WM_POINTERLEAVE:
-		// The pointer left the client area — into this window's own
-		// non-client/caption strip or off the window entirely. The OS then
-		// stops sending WM_POINTERUPDATE, so without an explicit signal the
-		// input router keeps the last-hovered handler latched (stuck hover on
-		// tabs and title-bar buttons). Cancel drains pointer state and clears
-		// hover; MarkCursorDirty lets the next Frame recompute the cursor.
+		// The pointer left the window entirely. The OS then stops sending
+		// WM_POINTERUPDATE, so without an explicit signal the input router
+		// keeps the last-hovered handler latched (stuck hover on title-bar
+		// buttons when the cursor moves off the window edge). Cancel drains
+		// pointer state and clears hover; MarkCursorDirty lets the next Frame
+		// recompute the cursor. The client -> own non-client transition (tab ->
+		// caption) does not fire this — it is handled in WM_NCHITTEST.
 		w.w.MarkCursorDirty()
 		w.ProcessEvent(pointer.Event{Kind: pointer.Cancel})
 	case windows.WM_CANCELMODE:
@@ -390,7 +391,21 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		x, y := coordsFromlParam(lParam)
 		np := windows.Point{X: int32(x), Y: int32(y)}
 		windows.ScreenToClient(w.hwnd, &np)
-		return w.hitTest(int(np.X), int(np.Y))
+		ht := w.hitTest(int(np.X), int(np.Y))
+		// Moving from the client area into this window's own non-client zone
+		// (the custom title bar's HTCAPTION drag strip, or a resize border)
+		// stops client WM_POINTERUPDATE but produces no WM_POINTERLEAVE — the
+		// pointer never left the window. Without a signal the input router
+		// keeps the last client handler hovered (stuck hover on a tab when the
+		// cursor slides up into the title bar). Emit Cancel once on the
+		// client -> non-client transition. WM_NCHITTEST precedes WM_SETCURSOR,
+		// so cursorIn still reflects the prior (client) state here.
+		if ht != windows.HTCLIENT && w.cursorIn {
+			w.cursorIn = false
+			w.w.MarkCursorDirty()
+			w.ProcessEvent(pointer.Event{Kind: pointer.Cancel})
+		}
+		return ht
 	case windows.WM_POINTERWHEEL:
 		w.scrollEvent(wParam, lParam, false, getModifiers())
 	case windows.WM_POINTERHWHEEL:
@@ -446,6 +461,25 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		var frameDims image.Point
 		if w.config.Decorated {
 			frameDims = w.frameDims
+		} else {
+			// Borderless windows maximize via SW_SHOWMAXIMIZED, but the OS
+			// derives the default maximized placement from frame metrics that
+			// don't match our frameless client. On secondary monitors (and
+			// mixed-DPI setups) that pushes the top of the window — the custom
+			// title bar — slightly off the screen edge, leaving it unreachable
+			// for caption dragging. Pin the maximized rectangle to the target
+			// monitor's work area in monitor-relative coordinates so the title
+			// bar stays on-screen on every monitor. WM_NCCALCSIZE already clamps
+			// the client to the same work area, so window rect and client agree.
+			mi := windows.GetMonitorInfo(w.hwnd)
+			mm.PtMaxPosition = windows.Point{
+				X: mi.WorkArea.Left - mi.Monitor.Left,
+				Y: mi.WorkArea.Top - mi.Monitor.Top,
+			}
+			mm.PtMaxSize = windows.Point{
+				X: mi.WorkArea.Right - mi.WorkArea.Left,
+				Y: mi.WorkArea.Bottom - mi.WorkArea.Top,
+			}
 		}
 		if p := w.config.MinSize; p.X > 0 || p.Y > 0 {
 			p = p.Add(frameDims)
