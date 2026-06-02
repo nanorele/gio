@@ -361,6 +361,15 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		// appears as flicker between I-beam and hand at editor↔toolbar
 		// boundaries.
 		windows.SetCursor(w.cursor)
+	case windows.WM_POINTERLEAVE:
+		// The pointer left the client area — into this window's own
+		// non-client/caption strip or off the window entirely. The OS then
+		// stops sending WM_POINTERUPDATE, so without an explicit signal the
+		// input router keeps the last-hovered handler latched (stuck hover on
+		// tabs and title-bar buttons). Cancel drains pointer state and clears
+		// hover; MarkCursorDirty lets the next Frame recompute the cursor.
+		w.w.MarkCursorDirty()
+		w.ProcessEvent(pointer.Event{Kind: pointer.Cancel})
 	case windows.WM_CANCELMODE:
 		w.w.MarkCursorDirty()
 		w.ProcessEvent(pointer.Event{
