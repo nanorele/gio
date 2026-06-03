@@ -228,6 +228,11 @@ func (w *window) clampToVisibleMonitor() {
 		// or the OS will reposition on restore.
 		return
 	}
+	if windows.GetWindowPlacement(w.hwnd).IsMaximized() {
+		// A maximized window is by definition on a visible monitor; repositioning
+		// it with an explicit SetWindowPos corrupts the maximized geometry.
+		return
+	}
 	r := windows.GetWindowRect(w.hwnd)
 	wa := windows.GetMonitorInfo(w.hwnd).WorkArea
 	if r.Right > wa.Left && r.Left < wa.Right &&
@@ -270,9 +275,18 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		// the window stays at coordinates of the old DPI/monitor — e.g. when
 		// dragged between monitors of different DPI it visibly jumps off the
 		// new monitor. Return 0 (do not call DefWindowProc) per docs.
-		r := (*windows.Rect)(unsafe.Pointer(lParam)) //nolint:govet // Win32 lParam is a fresh function arg, not stored.
-		windows.SetWindowPos(w.hwnd, 0, r.Left, r.Top, r.Right-r.Left, r.Bottom-r.Top,
-			windows.SWP_NOZORDER|windows.SWP_NOACTIVATE)
+		//
+		// Do NOT apply the OS-suggested rect to a maximized/fullscreen window:
+		// it is a restored-size rectangle, and applying it knocks the window out
+		// of its work-area placement on the new monitor (window ends up shifted,
+		// caption drag dead). The OS keeps a maximized window maximized across DPI
+		// changes on its own; WM_NCCALCSIZE re-clamps the client to the new work
+		// area. Only restored (windowed) state needs the suggested reposition.
+		if !windows.GetWindowPlacement(w.hwnd).IsMaximized() {
+			r := (*windows.Rect)(unsafe.Pointer(lParam)) //nolint:govet // Win32 lParam is a fresh function arg, not stored.
+			windows.SetWindowPos(w.hwnd, 0, r.Left, r.Top, r.Right-r.Left, r.Bottom-r.Top,
+				windows.SWP_NOZORDER|windows.SWP_NOACTIVATE)
+		}
 		// System cursor handles are tied to DPI; the cached one is now stale.
 		w.w.MarkCursorDirty()
 		return 0
