@@ -458,6 +458,14 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		w.update()
 	case windows.WM_SIZE:
 		w.minimized = wParam == windows.SIZE_MINIMIZED
+		if wParam == windows.SIZE_MINIMIZED {
+			// Minimizing hides the window without delivering any pointer Leave,
+			// so the control under the cursor (the minimize button just clicked)
+			// stays latched as hovered and shows the highlight when the window is
+			// restored. Drain pointer state so hover clears, same as WM_POINTERLEAVE.
+			w.w.MarkCursorDirty()
+			w.ProcessEvent(pointer.Event{Kind: pointer.Cancel})
+		}
 		// On restore from minimized or when maximized, the OS cursor
 		// state from before the size change is no longer reliable.
 		if wParam == windows.SIZE_RESTORED || wParam == windows.SIZE_MAXIMIZED {
