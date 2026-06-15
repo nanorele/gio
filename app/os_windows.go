@@ -471,6 +471,20 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		if wParam == windows.SIZE_RESTORED || wParam == windows.SIZE_MAXIMIZED {
 			w.w.MarkCursorDirty()
 		}
+		// Minimizing programmatically (a custom title-bar "minimize" button
+		// click runs ShowWindow(SW_SHOWMINIMIZED) synchronously) stops the
+		// WM_POINTERUPDATE stream but does not reliably emit WM_POINTERLEAVE:
+		// when a maximized/fullscreen window on a secondary monitor is
+		// iconified, the cursor is left over the now off-screen window and the
+		// OS sends no pointer-leave. Without a signal the input router keeps the
+		// last-hovered handler latched — the minimize button stays "stuck"
+		// highlighted and the click that triggered the minimize keeps its hover
+		// on restore. Emit Cancel to drain pointer state and clear hover, the
+		// same defensive signal used in WM_POINTERLEAVE / WM_NCHITTEST.
+		if wParam == windows.SIZE_MINIMIZED {
+			w.w.MarkCursorDirty()
+			w.ProcessEvent(pointer.Event{Kind: pointer.Cancel})
+		}
 		// Restoring from minimized can put the window back at the same
 		// coordinates it had when minimized — including coordinates on a
 		// monitor that has since been disconnected.
