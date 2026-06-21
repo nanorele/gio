@@ -59,10 +59,10 @@ type window struct {
 	// Cached result of configForDPI(dpi). cachedDPI==0 means uninitialised.
 	cachedDPI    int
 	cachedMetric unit.Metric
-	// everShown is set after the window's first show. cloaked is true while the
-	// window is DWM-cloaked (invisible) waiting for its first painted frame.
+
 	everShown bool
 	cloaked   bool
+	drawDepth int
 }
 
 const _WM_WAKEUP = windows.WM_USER + iota
@@ -829,6 +829,11 @@ func (w *window) draw(sync bool) {
 		w.cachedMetric = configForDPI(w.dpi)
 		w.cachedDPI = w.dpi
 	}
+	// drawDepth tracks re-entrant draws: a frame delivery can dispatch a
+	// window message that calls draw() again before the first ProcessEvent
+	// (which performs the synchronous GPU render+Present) returns. Only the
+	// outermost return means the real frame has actually been presented.
+	w.drawDepth++
 	w.ProcessEvent(frameEvent{
 		FrameEvent: FrameEvent{
 			Now:    time.Now(),
@@ -837,10 +842,13 @@ func (w *window) draw(sync bool) {
 		},
 		Sync: sync,
 	})
-	// The first frame has now been presented (validateAndProcess calls
-	// ctx.Present synchronously). Reveal the window Configure cloaked, so its
-	// first visible frame is fully painted and correctly placed.
-	if w.cloaked {
+	w.drawDepth--
+	// Reveal the window that Configure cloaked, but only once the outermost
+	// draw has returned — i.e. the first real frame is on the swapchain. A
+	// nested inner draw can return early without rendering; uncloaking there
+	// would expose an unpainted (white) window for the duration of the real
+	// frame's render. See Configure for why the window is cloaked.
+	if w.cloaked && w.drawDepth == 0 {
 		w.cloaked = false
 		windows.DwmSetCloak(w.hwnd, false)
 	}
@@ -957,35 +965,19 @@ func (w *window) Configure(options []Option) {
 		style &^= windows.WS_THICKFRAME
 	}
 
-	windows.SetWindowLong(w.hwnd, windows.GWL_STYLE, style)
-	if showMode == windows.SW_SHOWMAXIMIZED && !cnf.Decorated {
-		wa := windows.GetMonitorInfo(w.hwnd).WorkArea
-		waW := wa.Right - wa.Left
-		waH := wa.Bottom - wa.Top
-		rw := int32(cnf.Size.X)
-		rh := int32(cnf.Size.Y)
-		if rw <= 0 || rw > waW {
-			rw = waW * 3 / 4
-		}
-		if rh <= 0 || rh > waH {
-			rh = waH * 3 / 4
-		}
-		rx := wa.Left + (waW-rw)/2
-		ry := wa.Top + (waH-rh)/2
-		windows.SetWindowPos(w.hwnd, 0, rx, ry, rw, rh,
-			windows.SWP_NOZORDER|windows.SWP_NOACTIVATE|windows.SWP_FRAMECHANGED)
-	}
-
 	windows.SetWindowPos(w.hwnd, 0, x, y, width, height, swpStyle)
-	// On the first show, cloak the window so the user never sees the transient
-	// OS placement (the maximize/fullscreen rectangle is computed and clamped to
-	// the work area while the window is shown) nor an unpainted frame. draw()
-	// uncloaks once the first frame has been presented, so the window appears
-	// already positioned and painted. A minimized launch is skipped — it is not
-	// visible and would never reach the uncloak in draw().
+	windows.SetWindowLong(w.hwnd, windows.GWL_STYLE, style)
+	// On the first show, cloak the window (DWM-invisible, but otherwise a
+	// normally shown window) so the user never sees the transient startup
+	// frames: the maximize/fullscreen rectangle is computed and clamped to the
+	// work area while shown (a visible reposition), and the GPU's first frame
+	// is ~150ms away (an unpainted white window until then). draw() uncloaks
+	// once that first frame has been presented, so the window's first visible
+	// state is already positioned and fully painted. Minimized launches are
+	// skipped — they are not visible and would never reach the uncloak.
 	if !w.everShown {
 		w.everShown = true
-		if showMode == windows.SW_SHOWMAXIMIZED && windows.DwmSetCloak(w.hwnd, true) == nil {
+		if showMode != windows.SW_SHOWMINIMIZED && windows.DwmSetCloak(w.hwnd, true) == nil {
 			w.cloaked = true
 		}
 	}
