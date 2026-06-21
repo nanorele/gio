@@ -48,7 +48,14 @@ type window struct {
 	frameDims  image.Point
 	loop       *eventLoop
 	minimized  bool
-	dpi        int
+	// inConfigure is set while Configure() runs. ShowWindow/SetWindowPos inside
+	// Configure dispatch WM_SIZE/WM_WINDOWPOSCHANGED synchronously (re-entrant
+	// windowProc), which reach update()->draw(). When Configure was invoked via
+	// Window.Run (the app goroutine is blocked on <-done until Configure
+	// returns), a synchronous frame delivery from that re-entrant draw would
+	// deadlock. While inConfigure, draw() schedules an async redraw instead.
+	inConfigure bool
+	dpi         int
 	// Cached result of configForDPI(dpi). cachedDPI==0 means uninitialised.
 	cachedDPI    int
 	cachedMetric unit.Metric
@@ -210,7 +217,12 @@ func (w *window) update() {
 		w.config.Mode = Windowed
 	}
 	w.ProcessEvent(ConfigEvent{Config: w.config})
-	w.draw(true)
+	// A minimized (iconic) window has nothing to display, and drawing it is the
+	// most common trigger of the re-entrant synchronous frame during a minimize
+	// initiated from Configure. Skip it; WM_SIZE(SIZE_RESTORED) redraws on restore.
+	if !w.minimized {
+		w.draw(true)
+	}
 }
 
 // clampToVisibleMonitor moves the window into the nearest monitor's work area
@@ -458,14 +470,6 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		w.update()
 	case windows.WM_SIZE:
 		w.minimized = wParam == windows.SIZE_MINIMIZED
-		if wParam == windows.SIZE_MINIMIZED {
-			// Minimizing hides the window without delivering any pointer Leave,
-			// so the control under the cursor (the minimize button just clicked)
-			// stays latched as hovered and shows the highlight when the window is
-			// restored. Drain pointer state so hover clears, same as WM_POINTERLEAVE.
-			w.w.MarkCursorDirty()
-			w.ProcessEvent(pointer.Event{Kind: pointer.Cancel})
-		}
 		// On restore from minimized or when maximized, the OS cursor
 		// state from before the size change is no longer reliable.
 		if wParam == windows.SIZE_RESTORED || wParam == windows.SIZE_MAXIMIZED {
@@ -801,6 +805,19 @@ func (w *window) draw(sync bool) {
 	if w.config.Size.X == 0 || w.config.Size.Y == 0 {
 		return
 	}
+	if w.inConfigure {
+		// Re-entrant draw from a message (WM_SIZE/WM_WINDOWPOSCHANGED/WM_PAINT)
+		// dispatched synchronously inside Configure. Delivering a frame here is
+		// synchronous (ProcessEvent->FlushEvents->deliverEvent blocks on the
+		// events channel) and the app goroutine may be blocked in Window.Run
+		// awaiting Configure — that deadlocks (observed as a freeze when the
+		// custom title-bar minimize button is clicked in fullscreen, where Gio's
+		// own decorations are disabled so minimize goes through Window.Run).
+		// Defer to an async redraw: Invalidate schedules a frame that the event
+		// loop draws after Configure returns and the app goroutine is unblocked.
+		w.Invalidate()
+		return
+	}
 	if w.dpi == 0 {
 		w.dpi = windows.GetWindowDPI(w.hwnd)
 	}
@@ -865,6 +882,13 @@ func (w *window) readClipboard() error {
 }
 
 func (w *window) Configure(options []Option) {
+	// See window.inConfigure: guard against deadlocking re-entrant draws from
+	// ShowWindow/SetWindowPos below. Save/restore rather than a plain false so a
+	// nested Configure (none today, but cheap insurance) can't clear it early.
+	prevInConfigure := w.inConfigure
+	w.inConfigure = true
+	defer func() { w.inConfigure = prevInConfigure }()
+
 	dpi := windows.GetSystemDPI()
 	metric := configForDPI(dpi)
 	cnf := w.config
@@ -922,8 +946,26 @@ func (w *window) Configure(options []Option) {
 		style &^= windows.WS_THICKFRAME
 	}
 
-	windows.SetWindowPos(w.hwnd, 0, x, y, width, height, swpStyle)
 	windows.SetWindowLong(w.hwnd, windows.GWL_STYLE, style)
+	if showMode == windows.SW_SHOWMAXIMIZED && !cnf.Decorated {
+		wa := windows.GetMonitorInfo(w.hwnd).WorkArea
+		waW := wa.Right - wa.Left
+		waH := wa.Bottom - wa.Top
+		rw := int32(cnf.Size.X)
+		rh := int32(cnf.Size.Y)
+		if rw <= 0 || rw > waW {
+			rw = waW * 3 / 4
+		}
+		if rh <= 0 || rh > waH {
+			rh = waH * 3 / 4
+		}
+		rx := wa.Left + (waW-rw)/2
+		ry := wa.Top + (waH-rh)/2
+		windows.SetWindowPos(w.hwnd, 0, rx, ry, rw, rh,
+			windows.SWP_NOZORDER|windows.SWP_NOACTIVATE|windows.SWP_FRAMECHANGED)
+	}
+
+	windows.SetWindowPos(w.hwnd, 0, x, y, width, height, swpStyle)
 	windows.ShowWindow(w.hwnd, showMode)
 }
 
