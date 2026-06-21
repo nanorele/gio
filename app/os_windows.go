@@ -985,7 +985,7 @@ func (w *window) Configure(options []Option) {
 	// visible and would never reach the uncloak in draw().
 	if !w.everShown {
 		w.everShown = true
-		if showMode != windows.SW_SHOWMINIMIZED && windows.DwmSetCloak(w.hwnd, true) == nil {
+		if showMode == windows.SW_SHOWMAXIMIZED && windows.DwmSetCloak(w.hwnd, true) == nil {
 			w.cloaked = true
 		}
 	}
