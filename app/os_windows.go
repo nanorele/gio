@@ -59,6 +59,10 @@ type window struct {
 	// Cached result of configForDPI(dpi). cachedDPI==0 means uninitialised.
 	cachedDPI    int
 	cachedMetric unit.Metric
+	// everShown is set after the window's first show. cloaked is true while the
+	// window is DWM-cloaked (invisible) waiting for its first painted frame.
+	everShown bool
+	cloaked   bool
 }
 
 const _WM_WAKEUP = windows.WM_USER + iota
@@ -833,6 +837,13 @@ func (w *window) draw(sync bool) {
 		},
 		Sync: sync,
 	})
+	// The first frame has now been presented (validateAndProcess calls
+	// ctx.Present synchronously). Reveal the window Configure cloaked, so its
+	// first visible frame is fully painted and correctly placed.
+	if w.cloaked {
+		w.cloaked = false
+		windows.DwmSetCloak(w.hwnd, false)
+	}
 }
 
 func (w *window) NewContext() (context, error) {
@@ -966,6 +977,18 @@ func (w *window) Configure(options []Option) {
 	}
 
 	windows.SetWindowPos(w.hwnd, 0, x, y, width, height, swpStyle)
+	// On the first show, cloak the window so the user never sees the transient
+	// OS placement (the maximize/fullscreen rectangle is computed and clamped to
+	// the work area while the window is shown) nor an unpainted frame. draw()
+	// uncloaks once the first frame has been presented, so the window appears
+	// already positioned and painted. A minimized launch is skipped — it is not
+	// visible and would never reach the uncloak in draw().
+	if !w.everShown {
+		w.everShown = true
+		if showMode != windows.SW_SHOWMINIMIZED && windows.DwmSetCloak(w.hwnd, true) == nil {
+			w.cloaked = true
+		}
+	}
 	windows.ShowWindow(w.hwnd, showMode)
 }
 
