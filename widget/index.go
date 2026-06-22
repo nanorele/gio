@@ -394,9 +394,11 @@ func makeRegion(line lineInfo, y int, start, end fixed.Int26_6) Region {
 	return Region{
 		Bounds: image.Rectangle{
 			Min: dotStart.Sub(image.Point{Y: line.ascent.Ceil()}),
-			Max: dotEnd.Add(image.Point{Y: line.descent.Floor()}),
+			// Ceil (not Floor) so the fractional part of the descent is kept;
+			// otherwise descenders (j, g, p, q, y) get clipped by up to ~1px.
+			Max: dotEnd.Add(image.Point{Y: line.descent.Ceil()}),
 		},
-		Baseline: line.descent.Floor(),
+		Baseline: line.descent.Ceil(),
 	}
 }
 
