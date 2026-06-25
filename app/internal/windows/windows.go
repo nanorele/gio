@@ -332,6 +332,7 @@ const (
 	WM_CREATE                = 0x0001
 	WM_DISPLAYCHANGE         = 0x007E
 	WM_DPICHANGED            = 0x02E0
+	WM_DWMCOMPOSITIONCHANGED = 0x031E
 	WM_DESTROY               = 0x0002
 	WM_ERASEBKGND            = 0x0014
 	WM_GETMINMAXINFO         = 0x0024
