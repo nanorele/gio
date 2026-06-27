@@ -221,6 +221,7 @@ func (w *window) update() {
 	default:
 		w.config.Mode = Windowed
 	}
+	w.extendShadowFrame()
 	w.ProcessEvent(ConfigEvent{Config: w.config})
 	// A minimized (iconic) window has nothing to display, and drawing it is the
 	// most common trigger of the re-entrant synchronous frame during a minimize
@@ -228,6 +229,13 @@ func (w *window) update() {
 	if !w.minimized {
 		w.draw(true)
 	}
+}
+
+func (w *window) extendShadowFrame() {
+	if w.config.Decorated || w.config.Mode != Windowed || w.minimized {
+		return
+	}
+	windows.DwmExtendFrameIntoClientArea(w.hwnd, windows.Margins{CxLeftWidth: -1, CxRightWidth: -1, CyTopHeight: -1, CyBottomHeight: -1})
 }
 
 // clampToVisibleMonitor moves the window into the nearest monitor's work area
@@ -317,6 +325,8 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 		// rect now belongs to a monitor that no longer exists.
 		w.clampToVisibleMonitor()
 		w.update()
+	case windows.WM_DWMCOMPOSITIONCHANGED:
+		w.extendShadowFrame()
 	case windows.WM_ACTIVATE:
 		// LOWORD(wParam) is the activation state. The OS cursor may have
 		// been changed by another app while we were inactive, so refresh it.
