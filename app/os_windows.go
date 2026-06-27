@@ -187,6 +187,7 @@ func (w *window) init() error {
 		return err
 	}
 	w.hwnd = hwnd
+	enableDropFiles(hwnd)
 	return nil
 }
 
@@ -274,6 +275,9 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 	}
 	w := win.(*window)
 	switch msg {
+	case _WM_DROPFILES:
+		w.handleDropFiles(wParam)
+		return 0
 	case windows.WM_UNICHAR:
 		if wParam == windows.UNICODE_NOCHAR {
 			return windows.TRUE
@@ -898,6 +902,54 @@ func (w *window) readClipboard() error {
 		},
 	})
 	return nil
+}
+
+// --- Shell file drag-and-drop (WM_DROPFILES) -------------------------------
+//
+// gio's Windows backend does not otherwise accept files dropped from Explorer.
+// Register the window via DragAcceptFiles and translate WM_DROPFILES into a
+// DropFilesEvent delivered through the normal window event stream.
+
+const _WM_DROPFILES = 0x0233
+
+var (
+	shell32             = syscall.NewLazySystemDLL("shell32.dll")
+	procDragAcceptFiles = shell32.NewProc("DragAcceptFiles")
+	procDragQueryFileW  = shell32.NewProc("DragQueryFileW")
+	procDragFinish      = shell32.NewProc("DragFinish")
+)
+
+// enableDropFiles registers hwnd for shell file drops so Windows delivers
+// WM_DROPFILES (and shows the copy cursor) instead of rejecting the drag.
+func enableDropFiles(hwnd syscall.Handle) {
+	procDragAcceptFiles.Call(uintptr(hwnd), 1)
+}
+
+// handleDropFiles reads the file paths from a WM_DROPFILES drop and posts a
+// DropFilesEvent. Only paths are read here; the app reads contents off the UI thread.
+func (w *window) handleDropFiles(hDrop uintptr) {
+	defer procDragFinish.Call(hDrop)
+	n, _, _ := procDragQueryFileW.Call(hDrop, 0xFFFFFFFF, 0, 0)
+	count := int(n)
+	if count <= 0 {
+		return
+	}
+	paths := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		l, _, _ := procDragQueryFileW.Call(hDrop, uintptr(i), 0, 0)
+		size := int(l) + 1
+		if size <= 1 {
+			continue
+		}
+		buf := make([]uint16, size)
+		procDragQueryFileW.Call(hDrop, uintptr(i), uintptr(unsafe.Pointer(&buf[0])), uintptr(size))
+		if p := syscall.UTF16ToString(buf); p != "" {
+			paths = append(paths, p)
+		}
+	}
+	if len(paths) > 0 {
+		w.ProcessEvent(DropFilesEvent{Paths: paths})
+	}
 }
 
 func (w *window) Configure(options []Option) {

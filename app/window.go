@@ -96,7 +96,22 @@ type eventSummary struct {
 	frame        *frameEvent
 	framePending bool
 	destroy      *DestroyEvent
+	dropFiles    []DropFilesEvent
 }
+
+// DropFilesEvent is delivered when the user drops one or more files from the
+// OS file manager onto the window. It is currently emitted only on Windows
+// (see the WM_DROPFILES handling in os_windows.go).
+type DropFilesEvent struct {
+	Paths []string
+}
+
+func (DropFilesEvent) ImplementsEvent() {}
+
+// DroppedPaths returns the dropped file paths. Exposing it as a method lets
+// applications consume the event via an interface assertion, without a
+// compile-time dependency on this concrete type.
+func (e DropFilesEvent) DroppedPaths() []string { return e.Paths }
 
 type callbacks struct {
 	w *Window
@@ -548,6 +563,10 @@ func (w *Window) nextEvent() (event.Event, bool) {
 		e := *s.cfg
 		s.cfg = nil
 		return e, true
+	case len(s.dropFiles) > 0:
+		e := s.dropFiles[0]
+		s.dropFiles = s.dropFiles[1:]
+		return e, true
 	case s.frame != nil:
 		e := *s.frame
 		s.frame = nil
@@ -637,6 +656,8 @@ func (w *Window) processEvent(e event.Event) bool {
 			w.updateAnimation()
 		}
 		return handled
+	case DropFilesEvent:
+		w.coalesced.dropFiles = append(w.coalesced.dropFiles, e2)
 	case event.Event:
 		focusDir := key.FocusDirection(-1)
 		if e, ok := e2.(key.Event); ok && e.State == key.Press {
