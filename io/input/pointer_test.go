@@ -1097,6 +1097,70 @@ func TestPassCursor(t *testing.T) {
 	}
 }
 
+// TestCursorHeldDuringDrag verifies that once a press is held on a thin area
+// (a splitter or a table column-resize handle), the cursor stays fixed even as
+// the pointer slips off that area onto a sibling with a different cursor. This
+// is what keeps the resize cursor from flickering back to the default arrow
+// mid-drag. After release the cursor is recomputed from the hover position
+// again. See deliverEnterLeaveEvents in pointer.go.
+func TestCursorHeldDuringDrag(t *testing.T) {
+	handle := new(int)
+	content := new(int)
+	var ops op.Ops
+	var r Router
+
+	layout := func() {
+		ops.Reset()
+
+		h := clip.Rect(image.Rect(48, 0, 52, 100)).Push(&ops)
+		event.Op(&ops, handle)
+		pointer.CursorColResize.Add(&ops)
+		h.Pop()
+
+		c := clip.Rect(image.Rect(52, 0, 200, 100)).Push(&ops)
+		event.Op(&ops, content)
+		pointer.CursorDefault.Add(&ops)
+		c.Pop()
+	}
+
+	filter := func(t event.Tag) event.Filter {
+		return pointer.Filter{Target: t, Kinds: pointer.Press | pointer.Drag | pointer.Release}
+	}
+
+	layout()
+	events(&r, -1, filter(handle))
+	events(&r, -1, filter(content))
+	r.Frame(&ops)
+
+	// Press on the thin handle: the resize cursor resolves.
+	r.Queue(pointer.Event{Kind: pointer.Press, Position: f32.Pt(50, 50)})
+	if got, want := r.Cursor(), pointer.CursorColResize; got != want {
+		t.Fatalf("after press on handle: got %v, want %v", got, want)
+	}
+
+	// Drag off the handle onto the content area. The cursor must stay the
+	// resize cursor instead of flipping to the content's default arrow.
+	r.Queue(pointer.Event{Kind: pointer.Move, Position: f32.Pt(120, 50)})
+	if got, want := r.Cursor(), pointer.CursorColResize; got != want {
+		t.Fatalf("dragging off handle: got %v, want %v", got, want)
+	}
+
+	// A frame in between (layout drift while dragging) must not flip it either.
+	layout()
+	events(&r, -1, filter(handle))
+	events(&r, -1, filter(content))
+	r.Frame(&ops)
+	if got, want := r.Cursor(), pointer.CursorColResize; got != want {
+		t.Fatalf("dragging off handle after frame: got %v, want %v", got, want)
+	}
+
+	// Releasing over the content recomputes the cursor at the hover position.
+	r.Queue(pointer.Event{Kind: pointer.Release, Position: f32.Pt(120, 50)})
+	if got, want := r.Cursor(), pointer.CursorDefault; got != want {
+		t.Fatalf("after release over content: got %v, want %v", got, want)
+	}
+}
+
 // TestCursorDefaultMasks verifies that an explicit pointer.CursorDefault.Add
 // on a topmost overlay area masks a CursorText set on a lower z-order area
 // underneath it, instead of leaking through. This is the contract that lets

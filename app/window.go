@@ -97,13 +97,17 @@ type eventSummary struct {
 	framePending bool
 	destroy      *DestroyEvent
 	dropFiles    []DropFilesEvent
+	dragFiles    []DragFilesEvent
 }
 
 // DropFilesEvent is delivered when the user drops one or more files from the
 // OS file manager onto the window. It is currently emitted only on Windows
-// (see the WM_DROPFILES handling in os_windows.go).
+// (see the OLE IDropTarget handling in dnd_windows.go). Position carries the
+// drop point in window-client coordinates (the same space as pointer events),
+// so the application can route the drop to whatever zone it landed on.
 type DropFilesEvent struct {
-	Paths []string
+	Paths    []string
+	Position f32.Point
 }
 
 func (DropFilesEvent) ImplementsEvent() {}
@@ -112,6 +116,30 @@ func (DropFilesEvent) ImplementsEvent() {}
 // applications consume the event via an interface assertion, without a
 // compile-time dependency on this concrete type.
 func (e DropFilesEvent) DroppedPaths() []string { return e.Paths }
+
+// DroppedPosition returns the drop point in window-client coordinates. Like
+// DroppedPaths, it is exposed as a method so applications can consume it
+// structurally (via an interface assertion) without importing this package.
+func (e DropFilesEvent) DroppedPosition() (x, y float32) { return e.Position.X, e.Position.Y }
+
+// DragFilesEvent is delivered while the user drags files over the window,
+// before any drop. Active is true on drag-enter / drag-over (Position is the
+// current cursor point in window-client coordinates) and false on drag-leave
+// (Position is meaningless). It lets the application highlight the drop zone
+// the cursor is currently over, like a modern editor. Emitted only on Windows.
+type DragFilesEvent struct {
+	Position f32.Point
+	Active   bool
+}
+
+func (DragFilesEvent) ImplementsEvent() {}
+
+// DraggedFiles exposes the drag state structurally (cursor point in client
+// coordinates plus whether the drag is currently over the window) so apps can
+// consume it via an interface assertion without importing this package.
+func (e DragFilesEvent) DraggedFiles() (x, y float32, active bool) {
+	return e.Position.X, e.Position.Y, e.Active
+}
 
 type callbacks struct {
 	w *Window
@@ -567,6 +595,10 @@ func (w *Window) nextEvent() (event.Event, bool) {
 		e := s.dropFiles[0]
 		s.dropFiles = s.dropFiles[1:]
 		return e, true
+	case len(s.dragFiles) > 0:
+		e := s.dragFiles[0]
+		s.dragFiles = s.dragFiles[1:]
+		return e, true
 	case s.frame != nil:
 		e := *s.frame
 		s.frame = nil
@@ -658,6 +690,11 @@ func (w *Window) processEvent(e event.Event) bool {
 		return handled
 	case DropFilesEvent:
 		w.coalesced.dropFiles = append(w.coalesced.dropFiles, e2)
+	case DragFilesEvent:
+		// Like DropFilesEvent, drag-hover notifications are delivered to the app
+		// via the coalesced queue rather than the input router (which only
+		// understands pointer/key events and panics on anything else).
+		w.coalesced.dragFiles = append(w.coalesced.dragFiles, e2)
 	case event.Event:
 		focusDir := key.FocusDirection(-1)
 		if e, ok := e2.(key.Event); ok && e.State == key.Press {

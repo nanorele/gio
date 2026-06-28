@@ -840,7 +840,7 @@ func (q *pointerQueue) deliverEnterLeaveEvents(handlers map[event.Tag]*handler, 
 		if p.dataSource != nil {
 			transSrc = &handlers[p.dataSource].filter.pointer
 		}
-		cursor = q.hitTest(e.Position, func(n *hitNode) bool {
+		hitCursor := q.hitTest(e.Position, func(n *hitNode) bool {
 			h, ok := handlers[n.tag]
 			if !ok {
 				return true
@@ -863,6 +863,17 @@ func (q *pointerQueue) deliverEnterLeaveEvents(handlers map[event.Tag]*handler, 
 			}
 			return true
 		})
+		// While a (non drag-and-drop) press is held, the pointer is grabbed by
+		// the handler it was pressed on, so keep the cursor that was resolved at
+		// press time instead of recomputing it from the hover position. A thin
+		// resize handle (a splitter between panels, or a table column edge) is
+		// easy to slip off mid-drag; recomputing would flip the cursor back to
+		// whatever sits under the pointer (usually the default arrow) and make
+		// it flicker for the whole drag. Drag-and-drop (dataSource != nil) keeps
+		// the hover-based cursor so it can still reflect drop targets.
+		if !p.pressed || p.dataSource != nil {
+			cursor = hitCursor
+		}
 		if !p.pressed {
 			changed = true
 			p.handlers = hits

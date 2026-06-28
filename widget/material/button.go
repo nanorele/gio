@@ -27,13 +27,18 @@ type ButtonStyle struct {
 	CornerRadius unit.Dp
 	Inset        layout.Inset
 	Button       *widget.Clickable
-	shaper       *text.Shaper
+	// Ink enables the Material ink (ripple) press animation. It is off by
+	// default; set it to true at construction to opt a button back in.
+	Ink    bool
+	shaper *text.Shaper
 }
 
 type ButtonLayoutStyle struct {
 	Background   color.NRGBA
 	CornerRadius unit.Dp
 	Button       *widget.Clickable
+	// Ink enables the Material ink (ripple) press animation (off by default).
+	Ink bool
 }
 
 type IconButtonStyle struct {
@@ -46,6 +51,8 @@ type IconButtonStyle struct {
 	Inset       layout.Inset
 	Button      *widget.Clickable
 	Description string
+	// Ink enables the Material ink (ripple) press animation (off by default).
+	Ink bool
 }
 
 func Button(th *Theme, button *widget.Clickable, txt string) ButtonStyle {
@@ -86,7 +93,20 @@ func IconButton(th *Theme, button *widget.Clickable, icon *widget.Icon, descript
 	}
 }
 
+// Clickable lays out a pressable/focusable region with the hover/focus
+// highlight but without the Material ink (ripple) press animation. Use
+// ClickableInk to opt back in to the ripple.
 func Clickable(gtx layout.Context, button *widget.Clickable, w layout.Widget) layout.Dimensions {
+	return clickable(gtx, button, false, w)
+}
+
+// ClickableInk behaves like Clickable but also renders the Material ink
+// (ripple) press animation.
+func ClickableInk(gtx layout.Context, button *widget.Clickable, w layout.Widget) layout.Dimensions {
+	return clickable(gtx, button, true, w)
+}
+
+func clickable(gtx layout.Context, button *widget.Clickable, ink bool, w layout.Widget) layout.Dimensions {
 	return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		semantic.Button.Add(gtx.Ops)
 		return layout.Background{}.Layout(gtx,
@@ -95,8 +115,10 @@ func Clickable(gtx layout.Context, button *widget.Clickable, w layout.Widget) la
 				if button.Hovered() || gtx.Focused(button) {
 					paint.Fill(gtx.Ops, f32color.Hovered(color.NRGBA{}))
 				}
-				for _, c := range button.History() {
-					drawInk(gtx, c)
+				if ink {
+					for _, c := range button.History() {
+						drawInk(gtx, c)
+					}
 				}
 				return layout.Dimensions{Size: gtx.Constraints.Min}
 			},
@@ -110,6 +132,7 @@ func (b ButtonStyle) Layout(gtx layout.Context) layout.Dimensions {
 		Background:   b.Background,
 		CornerRadius: b.CornerRadius,
 		Button:       b.Button,
+		Ink:          b.Ink,
 	}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return b.Inset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			colMacro := op.Record(gtx.Ops)
@@ -135,8 +158,10 @@ func (b ButtonLayoutStyle) Layout(gtx layout.Context, w layout.Widget) layout.Di
 					background = f32color.Hovered(b.Background)
 				}
 				paint.Fill(gtx.Ops, background)
-				for _, c := range b.Button.History() {
-					drawInk(gtx, c)
+				if b.Ink {
+					for _, c := range b.Button.History() {
+						drawInk(gtx, c)
+					}
 				}
 				return layout.Dimensions{Size: gtx.Constraints.Min}
 			},
@@ -167,8 +192,10 @@ func (b IconButtonStyle) Layout(gtx layout.Context) layout.Dimensions {
 					background = f32color.Hovered(b.Background)
 				}
 				paint.Fill(gtx.Ops, background)
-				for _, c := range b.Button.History() {
-					drawInk(gtx, c)
+				if b.Ink {
+					for _, c := range b.Button.History() {
+						drawInk(gtx, c)
+					}
 				}
 				return layout.Dimensions{Size: gtx.Constraints.Min}
 			},

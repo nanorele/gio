@@ -63,6 +63,10 @@ type window struct {
 	everShown bool
 	cloaked   bool
 	drawDepth int
+
+	// dnd is the registered OLE IDropTarget (see dnd_windows.go), kept alive for
+	// the window's lifetime and revoked on WM_DESTROY.
+	dnd *dropTarget
 }
 
 const _WM_WAKEUP = windows.WM_USER + iota
@@ -187,7 +191,7 @@ func (w *window) init() error {
 		return err
 	}
 	w.hwnd = hwnd
-	enableDropFiles(hwnd)
+	w.registerDropTarget()
 	return nil
 }
 
@@ -283,9 +287,6 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 	}
 	w := win.(*window)
 	switch msg {
-	case _WM_DROPFILES:
-		w.handleDropFiles(wParam)
-		return 0
 	case windows.WM_UNICHAR:
 		if wParam == windows.UNICODE_NOCHAR {
 			return windows.TRUE
@@ -455,6 +456,7 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 	case windows.WM_POINTERHWHEEL:
 		w.scrollEvent(wParam, lParam, true, getModifiers())
 	case windows.WM_DESTROY:
+		w.revokeDropTarget()
 		w.ProcessEvent(Win32ViewEvent{})
 		w.ProcessEvent(DestroyEvent{})
 		w.w = nil
@@ -914,53 +916,7 @@ func (w *window) readClipboard() error {
 	return nil
 }
 
-// --- Shell file drag-and-drop (WM_DROPFILES) -------------------------------
-//
-// gio's Windows backend does not otherwise accept files dropped from Explorer.
-// Register the window via DragAcceptFiles and translate WM_DROPFILES into a
-// DropFilesEvent delivered through the normal window event stream.
-
-const _WM_DROPFILES = 0x0233
-
-var (
-	shell32             = syscall.NewLazySystemDLL("shell32.dll")
-	procDragAcceptFiles = shell32.NewProc("DragAcceptFiles")
-	procDragQueryFileW  = shell32.NewProc("DragQueryFileW")
-	procDragFinish      = shell32.NewProc("DragFinish")
-)
-
-// enableDropFiles registers hwnd for shell file drops so Windows delivers
-// WM_DROPFILES (and shows the copy cursor) instead of rejecting the drag.
-func enableDropFiles(hwnd syscall.Handle) {
-	procDragAcceptFiles.Call(uintptr(hwnd), 1)
-}
-
-// handleDropFiles reads the file paths from a WM_DROPFILES drop and posts a
-// DropFilesEvent. Only paths are read here; the app reads contents off the UI thread.
-func (w *window) handleDropFiles(hDrop uintptr) {
-	defer procDragFinish.Call(hDrop)
-	n, _, _ := procDragQueryFileW.Call(hDrop, 0xFFFFFFFF, 0, 0)
-	count := int(n)
-	if count <= 0 {
-		return
-	}
-	paths := make([]string, 0, count)
-	for i := 0; i < count; i++ {
-		l, _, _ := procDragQueryFileW.Call(hDrop, uintptr(i), 0, 0)
-		size := int(l) + 1
-		if size <= 1 {
-			continue
-		}
-		buf := make([]uint16, size)
-		procDragQueryFileW.Call(hDrop, uintptr(i), uintptr(unsafe.Pointer(&buf[0])), uintptr(size))
-		if p := syscall.UTF16ToString(buf); p != "" {
-			paths = append(paths, p)
-		}
-	}
-	if len(paths) > 0 {
-		w.ProcessEvent(DropFilesEvent{Paths: paths})
-	}
-}
+// Shell file drag-and-drop is handled via OLE IDropTarget; see dnd_windows.go.
 
 func (w *window) Configure(options []Option) {
 	// See window.inConfigure: guard against deadlocking re-entrant draws from
