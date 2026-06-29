@@ -457,6 +457,7 @@ var (
 	_LoadCursor                  = user32.NewProc("LoadCursorW")
 	_LoadImage                   = user32.NewProc("LoadImageW")
 	_MonitorFromPoint            = user32.NewProc("MonitorFromPoint")
+	_MonitorFromRect             = user32.NewProc("MonitorFromRect")
 	_MonitorFromWindow           = user32.NewProc("MonitorFromWindow")
 	_MoveWindow                  = user32.NewProc("MoveWindow")
 	_MsgWaitForMultipleObjectsEx = user32.NewProc("MsgWaitForMultipleObjectsEx")
@@ -746,6 +747,24 @@ func GetMonitorInfo(hwnd syscall.Handle) MonitorInfo {
 	// secondary monitors (maximize uses wrong work area, centering lands
 	// outside the monitor, etc.).
 	v, _, _ := _MonitorFromWindow.Call(uintptr(hwnd), MONITOR_DEFAULTTONEAREST)
+	// A minimized window's rect is the special iconic position (~ -32000,
+	// -32000), so MonitorFromWindow resolves it to the PRIMARY monitor no
+	// matter which monitor the window actually belongs to. During a
+	// restore-from-minimized transition WM_GETMINMAXINFO (and WM_NCCALCSIZE)
+	// fire before the OS has moved the window back onto its monitor; computing
+	// the maximized size/work area from the primary monitor there restores a
+	// secondary-monitor fullscreen window at the wrong size and leaves its
+	// client and hit regions out of sync — the symptom is a slightly resized
+	// window with stuck title-bar hover and dead clicks until a manual resize.
+	// Resolve the monitor from the restore (normal) rect instead: it stays on
+	// the correct monitor while the window is iconic.
+	var wp WindowPlacement
+	wp.length = uint32(unsafe.Sizeof(wp))
+	if r, _, _ := _GetWindowPlacement.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&wp))); r != 0 && wp.showCmd == SW_SHOWMINIMIZED {
+		if m, _, _ := _MonitorFromRect.Call(uintptr(unsafe.Pointer(&wp.rcNormalPosition)), MONITOR_DEFAULTTONEAREST); m != 0 {
+			v = m
+		}
+	}
 	var mi MonitorInfo
 	mi.cbSize = uint32(unsafe.Sizeof(mi))
 	_GetMonitorInfo.Call(v, uintptr(unsafe.Pointer(&mi)))
