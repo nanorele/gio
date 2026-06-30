@@ -240,6 +240,7 @@ const (
 
 	MDT_EFFECTIVE_DPI = 0
 
+	MONITOR_DEFAULTTONULL    = 0
 	MONITOR_DEFAULTTOPRIMARY = 1
 	MONITOR_DEFAULTTONEAREST = 2
 
@@ -746,23 +747,37 @@ func GetMonitorInfo(hwnd syscall.Handle) MonitorInfo {
 	// callers to compute against the primary monitor, breaking layouts on
 	// secondary monitors (maximize uses wrong work area, centering lands
 	// outside the monitor, etc.).
-	v, _, _ := _MonitorFromWindow.Call(uintptr(hwnd), MONITOR_DEFAULTTONEAREST)
-	// A minimized window's rect is the special iconic position (~ -32000,
-	// -32000), so MonitorFromWindow resolves it to the PRIMARY monitor no
-	// matter which monitor the window actually belongs to. During a
-	// restore-from-minimized transition WM_GETMINMAXINFO (and WM_NCCALCSIZE)
-	// fire before the OS has moved the window back onto its monitor; computing
-	// the maximized size/work area from the primary monitor there restores a
-	// secondary-monitor fullscreen window at the wrong size and leaves its
-	// client and hit regions out of sync — the symptom is a slightly resized
-	// window with stuck title-bar hover and dead clicks until a manual resize.
-	// Resolve the monitor from the restore (normal) rect instead: it stays on
-	// the correct monitor while the window is iconic.
-	var wp WindowPlacement
-	wp.length = uint32(unsafe.Sizeof(wp))
-	if r, _, _ := _GetWindowPlacement.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&wp))); r != 0 && wp.showCmd == SW_SHOWMINIMIZED {
-		if m, _, _ := _MonitorFromRect.Call(uintptr(unsafe.Pointer(&wp.rcNormalPosition)), MONITOR_DEFAULTTONEAREST); m != 0 {
-			v = m
+	// Resolve strictly from the window rect first (DEFAULTTONULL returns 0 if
+	// the rect is off every monitor, instead of silently snapping to the
+	// nearest/primary one).
+	v, _, _ := _MonitorFromWindow.Call(uintptr(hwnd), MONITOR_DEFAULTTONULL)
+	if v == 0 {
+		// The window rect is off-screen. The dominant case is a minimized
+		// (iconic) window: its rect is the special ~(-32000,-32000) position, so
+		// MonitorFromWindow can only ever map it to the primary monitor. During a
+		// restore-from-minimized transition WM_GETMINMAXINFO and WM_NCCALCSIZE
+		// fire while the rect is still iconic; computing the maximized size/work
+		// area from the primary monitor there restores a secondary-monitor
+		// fullscreen window against the wrong monitor and leaves its client and
+		// hit regions out of sync — the symptom is a slightly resized window with
+		// stuck title-bar hover and dead clicks until a manual resize.
+		//
+		// We deliberately do NOT gate this on GetWindowPlacement.showCmd ==
+		// SW_SHOWMINIMIZED: when restoring a window that was fullscreen/maximized,
+		// the OS flips showCmd to SW_SHOWMAXIMIZED before it moves the rect off
+		// the iconic position, so that guard is already false while the rect (the
+		// input MonitorFromWindow actually consumes) is still off-screen. The
+		// off-screen rect itself is the reliable signal. Resolve from the restore
+		// (normal) rect, which stays on the correct monitor while iconic.
+		var wp WindowPlacement
+		wp.length = uint32(unsafe.Sizeof(wp))
+		if r, _, _ := _GetWindowPlacement.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&wp))); r != 0 {
+			v, _, _ = _MonitorFromRect.Call(uintptr(unsafe.Pointer(&wp.rcNormalPosition)), MONITOR_DEFAULTTONEAREST)
+		}
+		if v == 0 {
+			// Last resort: nearest monitor to the (off-screen) window rect, which
+			// is what every caller assumed before this function existed.
+			v, _, _ = _MonitorFromWindow.Call(uintptr(hwnd), MONITOR_DEFAULTTONEAREST)
 		}
 	}
 	var mi MonitorInfo
