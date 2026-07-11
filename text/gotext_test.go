@@ -802,19 +802,16 @@ func TestIsASCII(t *testing.T) {
 }
 
 func TestReplaceControlCharacters(t *testing.T) {
-	in := []rune("hello\tworld​zero⁠width")
+	in := []rune{'h', 'i', '\t', 0x200B, 0x2060, 'z'}
 	out := replaceControlCharacters(append([]rune(nil), in...))
-	for i, r := range out {
-		if r == '\t' {
-			t.Errorf("tab not replaced at index %d", i)
-		}
-		if r == '​' || r == '⁠' {
-			t.Errorf("zero-width char not replaced at index %d", i)
-		}
+	if out[2] != 0x2003 {
+		t.Errorf("expected tab -> em space, got %U", out[2])
 	}
-	// tab gets replaced with em-space  .
-	if out[5] != ' ' {
-		t.Errorf("expected tab -> em space, got %U", out[5])
+	if out[3] != 0x200B || out[4] != 0x2060 {
+		t.Errorf("zero-width characters must be preserved, got %U %U", out[3], out[4])
+	}
+	if out[0] != 'h' || out[1] != 'i' || out[5] != 'z' {
+		t.Errorf("plain runes must be untouched")
 	}
 }
 

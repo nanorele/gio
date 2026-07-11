@@ -3,9 +3,9 @@ package app
 import (
 	"testing"
 	"unsafe"
-)
 
-func ptrOf[T any](p *T) uintptr { return uintptr(unsafe.Pointer(p)) }
+	"github.com/nanorele/gio/app/internal/windows"
+)
 
 func TestDecodePOINTL(t *testing.T) {
 	cases := []struct{ x, y int32 }{
@@ -42,20 +42,44 @@ func TestGUIDEqual(t *testing.T) {
 
 // dropQueryInterface must hand back the object for IUnknown / IDropTarget and
 // reject anything else with E_NOINTERFACE.
+//
+// The callback is only ever invoked by OLE with native pointers, so the test
+// mimics that with OS-allocated memory. Passing addresses of Go variables
+// round-tripped through uintptr would violate unsafe rules — the stack can
+// move between taking the address and using it — and checkptr (enabled by
+// -race) rightly flags that.
 func TestDropQueryInterface(t *testing.T) {
+	h, err := windows.GlobalAlloc(64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer windows.GlobalFree(h)
+	mem, err := windows.GlobalLock(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer windows.GlobalUnlock(h)
+
+	riid := (*_GUID)(mem)
+	outMem := unsafe.Add(mem, 32)
+	out := (*uintptr)(outMem)
+	riidArg := uintptr(mem)
+	outArg := uintptr(outMem)
+
 	var this uintptr = 0xDEAD00
-	var out uintptr
-	if hr := dropQueryInterface(this, ptrOf(&iidIDropTarget), ptrOf(&out)); hr != _S_OK || out != this {
-		t.Errorf("QueryInterface(IDropTarget) hr=%#x out=%#x, want S_OK and this", hr, out)
+	*riid = iidIDropTarget
+	if hr := dropQueryInterface(this, riidArg, outArg); hr != _S_OK || *out != this {
+		t.Errorf("QueryInterface(IDropTarget) hr=%#x out=%#x, want S_OK and this", hr, *out)
 	}
-	out = 0
-	if hr := dropQueryInterface(this, ptrOf(&iidIUnknown), ptrOf(&out)); hr != _S_OK || out != this {
-		t.Errorf("QueryInterface(IUnknown) hr=%#x out=%#x, want S_OK and this", hr, out)
+	*riid = iidIUnknown
+	*out = 0
+	if hr := dropQueryInterface(this, riidArg, outArg); hr != _S_OK || *out != this {
+		t.Errorf("QueryInterface(IUnknown) hr=%#x out=%#x, want S_OK and this", hr, *out)
 	}
-	out = 0xBEEF
-	other := iidIUnknown
-	other.Data1 = 0x12345678
-	if hr := dropQueryInterface(this, ptrOf(&other), ptrOf(&out)); hr != _E_NOINTERFACE || out != 0 {
-		t.Errorf("QueryInterface(other) hr=%#x out=%#x, want E_NOINTERFACE and null", hr, out)
+	*riid = iidIUnknown
+	riid.Data1 = 0x12345678
+	*out = 0xBEEF
+	if hr := dropQueryInterface(this, riidArg, outArg); hr != _E_NOINTERFACE || *out != 0 {
+		t.Errorf("QueryInterface(other) hr=%#x out=%#x, want E_NOINTERFACE and null", hr, *out)
 	}
 }

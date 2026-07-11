@@ -248,6 +248,19 @@ func (g *glyphIndex) Glyph(gl text.Glyph) {
 	}
 }
 
+// finishLayout must be called after the final Glyph of a layout pass. The
+// soft-break branch in Glyph excludes the trailing position slot from a
+// line's [posStart, posEnd) range on the assumption that the next line's
+// first glyph overwrites it. For the final line of text no further glyph
+// arrives, so the end-of-text caret position would stay excluded and
+// closestToXY could never return it; fold any trailing positions back into
+// the last line's range.
+func (g *glyphIndex) finishLayout() {
+	if n := len(g.lines); n > 0 && g.lines[n-1].posEnd < len(g.positions) {
+		g.lines[n-1].posEnd = len(g.positions)
+	}
+}
+
 func (g *glyphIndex) closestToRune(runeIdx int) (combinedPos, int) {
 	n := len(g.positions)
 	if n == 0 {

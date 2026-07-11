@@ -132,6 +132,8 @@ func (c *glyphLRU[V]) hashGlyphs(gs []Glyph) uint64 {
 		h *= 6585573582091643
 		h += uint64(g.ID)
 		h *= 3650802748644053
+		h += uint64(g.Offset.X)<<32 | uint64(uint32(g.Offset.Y))
+		h *= 7528558649875681
 	}
 
 	return h
@@ -153,7 +155,7 @@ func (c *glyphLRU[V]) Put(key uint64, glyphs []Glyph, v V) {
 			firstX = glyph.X
 		}
 
-		gids[i] = glyphInfo{ID: glyph.ID, X: glyph.X - firstX}
+		gids[i] = glyphInfo{ID: glyph.ID, X: glyph.X - firstX, Offset: glyph.Offset}
 	}
 	val := glyphValue[V]{
 		glyphs: gids,
@@ -167,8 +169,9 @@ type pathCache = glyphLRU[clip.PathSpec]
 type bitmapShapeCache = glyphLRU[op.CallOp]
 
 type glyphInfo struct {
-	ID GlyphID
-	X  fixed.Int26_6
+	ID     GlyphID
+	X      fixed.Int26_6
+	Offset fixed.Point26_6
 }
 
 type layoutKey struct {
@@ -183,6 +186,7 @@ type layoutKey struct {
 	wrapPolicy         WrapPolicy
 	lineHeight         fixed.Int26_6
 	lineHeightScale    float32
+	disableSpaceTrim   bool
 }
 
 const maxSize = 1000
@@ -197,7 +201,7 @@ func gidsEqual(a []glyphInfo, glyphs []Glyph) bool {
 			firstX = glyphs[i].X
 		}
 
-		if a[i].ID != glyphs[i].ID || a[i].X != (glyphs[i].X-firstX) {
+		if a[i].ID != glyphs[i].ID || a[i].X != (glyphs[i].X-firstX) || a[i].Offset != glyphs[i].Offset {
 			return false
 		}
 	}

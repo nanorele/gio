@@ -625,16 +625,11 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, siz
 		}
 	}
 
-	origMax := gtx.Constraints.Max
-	if e.SingleLine {
-		gtx.Constraints.Max.X = 1 << 24
-	}
-
+	// textView.Layout widens the shaping width itself for SingleLine
+	// editors; the real constraints must stay intact here so that
+	// viewSize (and with it ScrollBounds/ScrollToCaret) reflects the
+	// widget's visible width, not the unbounded text width.
 	e.text.Layout(gtx, lt, font, size)
-
-	if e.SingleLine {
-		gtx.Constraints.Max = origMax
-	}
 
 	return e.layout(gtx, textMaterial, selectMaterial)
 }
@@ -768,6 +763,11 @@ func (e *Editor) SetText(s string) {
 	// the editor is read-only or not. Bulk loads (collection import,
 	// pasting large bodies into ReqEditor) are the main beneficiaries.
 	e.text.ResetCaretToOrigin()
+	// Match upstream SetCaret(0,0) side effects without its reshape:
+	// bring the viewport back to the caret on the next frame and stop
+	// any inertial scrolling aimed at the old content.
+	e.scrollCaret = true
+	e.scroller.Stop()
 }
 
 func (e *Editor) CaretPos() (line, col int) {
@@ -910,6 +910,15 @@ func (e *Editor) replace(start, end int, s string, addHistory bool) int {
 		}
 	}
 
+	if addHistory && e.ReadOnly {
+		// Recording is skipped in read-only mode: reading the deleted
+		// range back is wasted work for bulk loads into viewers. The
+		// existing history no longer matches the mutated text, so it
+		// must be dropped — otherwise undo after clearing ReadOnly
+		// replays stale modifications against the new text.
+		e.history = e.history[:0]
+		e.nextHistoryIdx = 0
+	}
 	if addHistory && !e.ReadOnly {
 		if needed := replaceSize; needed > cap(e.historyScratch) {
 			e.historyScratch = make([]rune, 0, needed)

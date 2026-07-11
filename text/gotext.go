@@ -10,7 +10,6 @@ import (
 	"log"
 	"os"
 	"slices"
-	"unicode"
 
 	"github.com/nanorele/typesetting/di"
 	"github.com/nanorele/typesetting/font"
@@ -271,11 +270,14 @@ func (s *shaperImpl) splitBidi(input shaping.Input) []shaping.Input {
 	if input.Direction.Axis() != di.Horizontal || input.RunStart == input.RunEnd {
 		return []shaping.Input{input}
 	}
-	// Fast path: pure ASCII text has no bidi reordering; skip the
-	// bidi.Paragraph machinery, which otherwise copies the input into
-	// []byte and allocates per-rune Class/bracket tables (~10x the input
-	// size for large ASCII paragraphs).
-	if isASCII(input.Text[input.RunStart:input.RunEnd]) {
+	// Fast path: in an LTR paragraph, pure ASCII text has no bidi
+	// reordering; skip the bidi.Paragraph machinery, which otherwise
+	// copies the input into []byte and allocates per-rune Class/bracket
+	// tables (~10x the input size for large ASCII paragraphs). In an RTL
+	// paragraph the fast path would keep the locale's RTL direction on
+	// strong-LTR characters and render them reversed, so bidi resolution
+	// must still run there.
+	if input.Direction.Progression() != di.TowardTopLeft && isASCII(input.Text[input.RunStart:input.RunEnd]) {
 		return []shaping.Input{input}
 	}
 	def := bidi.LeftToRight
@@ -435,18 +437,19 @@ func (s *shaperImpl) shapeAndWrapText(params Parameters, txt []rune) (_ []shapin
 
 func replaceControlCharacters(in []rune) []rune {
 	for i, r := range in {
-		if r == '\t' {
-			in[i] = '\u2003'
-			continue
-		}
-
-		if unicode.IsSpace(r) {
-			in[i] = ' '
-			continue
-		}
-
 		switch r {
-		case '\u001C', '\u001D', '\u001E', '\u200B', '\u200C', '\u200D', '\u2060', '\uFEFF':
+		case '\t':
+			// Tabs render as an em space instead of the single-space
+			// width harfbuzz would give them.
+			in[i] = '\u2003'
+		// ASCII file/group/record separators, CR, LF, "next line" and
+		// "paragraph separator": paragraphs are split before shaping, so
+		// any stragglers render as plain spaces. Everything else must
+		// reach the shaper untouched: zero-width characters (ZWSP, ZWNJ,
+		// ZWJ, WJ, BOM) drive emoji sequences and cursive joining, and
+		// typographic spaces (NBSP, en/em/thin) carry their own width
+		// and line-break semantics.
+		case '\u001C', '\u001D', '\u001E', '\r', '\n', '\u0085', '\u2029':
 			in[i] = ' '
 		}
 	}

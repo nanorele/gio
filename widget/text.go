@@ -462,6 +462,7 @@ func (e *textView) layoutText(lt *text.Shaper) {
 			e.index.Glyph(g)
 		}
 	}
+	e.index.finishLayout()
 	e.paragraphReader.SetSource(e.rr)
 	e.graphemes = e.graphemes[:0]
 	if sz := e.rr.Size(); sz > 0 && cap(e.graphemes) < int(sz) {

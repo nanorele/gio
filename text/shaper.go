@@ -6,11 +6,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/nanorele/typesetting/font"
 	giofont "github.com/nanorele/gio/font"
 	"github.com/nanorele/gio/io/system"
 	"github.com/nanorele/gio/op"
 	"github.com/nanorele/gio/op/clip"
+	"github.com/nanorele/typesetting/font"
 	"golang.org/x/image/math/fixed"
 )
 
@@ -69,7 +69,10 @@ type Glyph struct {
 
 	Bounds fixed.Rectangle26_6
 
-	Runes uint16
+	// Runes is the number of runes represented by the glyph. It can
+	// exceed 65535 on the truncator glyph, which accounts for every
+	// rune hidden by truncation, so it must not be narrower than 32 bits.
+	Runes uint32
 
 	Flags Flags
 }
@@ -148,12 +151,12 @@ type Shaper struct {
 	reader    *bufio.Reader
 	paragraph []byte
 
-	brokeParagraph   bool
+	brokeParagraph bool
 	paragraphStart Glyph
-	txt              document
-	line             int
-	run              int
-	glyph            int
+	txt            document
+	line           int
+	run            int
+	glyph          int
 
 	advance fixed.Int26_6
 
@@ -214,7 +217,6 @@ func (l *Shaper) Layout(params Parameters, txt io.Reader) {
 func (l *Shaper) ResetLayoutCache() {
 	l.layoutCache.Clear()
 }
-
 
 // ReleaseLayoutBuffers drops the per-shape document held inside the
 // shaper after the last NextGlyph call. The next Layout/LayoutString
@@ -358,18 +360,19 @@ func (l *Shaper) layoutParagraph(params Parameters, asStr string, asBytes []byte
 		return l.shaper.LayoutString(params, asStr)
 	}
 	lk := layoutKey{
-		ppem:            params.PxPerEm,
-		maxWidth:        params.MaxWidth,
-		minWidth:        params.MinWidth,
-		maxLines:        params.MaxLines,
-		truncator:       params.Truncator,
-		locale:          params.Locale,
-		font:            params.Font,
-		forceTruncate:   params.forceTruncate,
-		wrapPolicy:      params.WrapPolicy,
-		str:             asStr,
-		lineHeight:      params.LineHeight,
-		lineHeightScale: params.LineHeightScale,
+		ppem:             params.PxPerEm,
+		maxWidth:         params.MaxWidth,
+		minWidth:         params.MinWidth,
+		maxLines:         params.MaxLines,
+		truncator:        params.Truncator,
+		locale:           params.Locale,
+		font:             params.Font,
+		forceTruncate:    params.forceTruncate,
+		wrapPolicy:       params.WrapPolicy,
+		str:              asStr,
+		lineHeight:       params.LineHeight,
+		lineHeightScale:  params.LineHeightScale,
+		disableSpaceTrim: params.DisableSpaceTrim,
 	}
 	if l, ok := l.layoutCache.Get(lk); ok {
 		return l
@@ -444,7 +447,7 @@ func (l *Shaper) NextGlyph() (_ Glyph, ok bool) {
 			Ascent:  line.ascent,
 			Descent: line.descent,
 			Advance: g.xAdvance,
-			Runes:   uint16(g.runeCount),
+			Runes:   uint32(g.runeCount),
 			Offset: fixed.Point26_6{
 				X: g.xOffset,
 				Y: g.yOffset,
@@ -480,7 +483,7 @@ func (l *Shaper) NextGlyph() (_ Glyph, ok bool) {
 		if endOfCluster {
 			glyph.Flags |= FlagClusterBreak
 			if run.truncator {
-				glyph.Runes += uint16(l.txt.unreadRuneCount)
+				glyph.Runes += uint32(l.txt.unreadRuneCount)
 			}
 		} else {
 			glyph.Runes = 0
