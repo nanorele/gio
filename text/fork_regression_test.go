@@ -58,12 +58,17 @@ func TestReplaceControlCharactersPreservesShapingControls(t *testing.T) {
 			t.Errorf("%U must be preserved, got %U", r, out[1])
 		}
 	}
-	replaced := []rune{0x001C, 0x001D, 0x001E, '\r', '\n', 0x0085, 0x2029}
+	replaced := []rune{0x001C, 0x001D, 0x001E, '\v', '\f', '\r', '\n', 0x0085, 0x2029}
 	for _, r := range replaced {
 		out := replaceControlCharacters([]rune{'a', r, 'b'})
 		if out[1] != ' ' {
 			t.Errorf("%U must be replaced with space, got %U", r, out[1])
 		}
+	}
+	// U+2028 LINE SEPARATOR deliberately passes through: it is a mandatory
+	// break and the wrapper must honor it.
+	if out := replaceControlCharacters([]rune{'a', 0x2028, 'b'}); out[1] != 0x2028 {
+		t.Errorf("U+2028 must be preserved as a mandatory break, got %U", out[1])
 	}
 	if out := replaceControlCharacters([]rune{'\t'}); out[0] != 0x2003 {
 		t.Errorf("tab must map to em space, got %U", out[0])

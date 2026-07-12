@@ -442,14 +442,17 @@ func replaceControlCharacters(in []rune) []rune {
 			// Tabs render as an em space instead of the single-space
 			// width harfbuzz would give them.
 			in[i] = '\u2003'
-		// ASCII file/group/record separators, CR, LF, "next line" and
+		// ASCII file/group/record separators, VT, FF, CR, LF, "next line" and
 		// "paragraph separator": paragraphs are split before shaping, so
-		// any stragglers render as plain spaces. Everything else must
+		// any stragglers render as plain spaces instead of injecting
+		// mandatory breaks mid-paragraph. U+2028 LINE SEPARATOR is
+		// deliberately NOT in this list: it exists to break lines and
+		// the wrapper honors it. Everything else must
 		// reach the shaper untouched: zero-width characters (ZWSP, ZWNJ,
 		// ZWJ, WJ, BOM) drive emoji sequences and cursive joining, and
 		// typographic spaces (NBSP, en/em/thin) carry their own width
 		// and line-break semantics.
-		case '\u001C', '\u001D', '\u001E', '\r', '\n', '\u0085', '\u2029':
+		case '\u001C', '\u001D', '\u001E', '\v', '\f', '\r', '\n', '\u0085', '\u2029':
 			in[i] = ' '
 		}
 	}

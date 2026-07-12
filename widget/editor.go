@@ -910,12 +910,14 @@ func (e *Editor) replace(start, end int, s string, addHistory bool) int {
 		}
 	}
 
-	if addHistory && e.ReadOnly {
+	if addHistory && e.ReadOnly && (replaceSize > 0 || s != "") {
 		// Recording is skipped in read-only mode: reading the deleted
 		// range back is wasted work for bulk loads into viewers. The
 		// existing history no longer matches the mutated text, so it
 		// must be dropped — otherwise undo after clearing ReadOnly
-		// replays stale modifications against the new text.
+		// replays stale modifications against the new text. No-op
+		// replaces (empty range, empty content) leave the text and
+		// therefore the history intact.
 		e.history = e.history[:0]
 		e.nextHistoryIdx = 0
 	}

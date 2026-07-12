@@ -68,6 +68,26 @@ func TestEditorUndoAfterReadOnlyEdit(t *testing.T) {
 	}
 }
 
+// TestEditorNoOpReadOnlyReplaceKeepsHistory ensures that replace calls which
+// cannot modify the text (empty insertion over an empty range) do not wipe
+// the undo history while the editor is read-only. Only genuine mutations
+// invalidate the history.
+func TestEditorNoOpReadOnlyReplaceKeepsHistory(t *testing.T) {
+	e := new(Editor)
+	e.Insert("hello")
+	e.ReadOnly = true
+	e.Insert("")              // no-op: nothing inserted
+	e.Delete(1)               // no-op: caret at end of text, nothing to delete
+	e.replace(2, 2, "", true) // no-op: empty range, empty content
+	e.ReadOnly = false
+	if _, ok := e.undo(); !ok {
+		t.Fatal("undo history was wiped by no-op replaces in read-only mode")
+	}
+	if got := e.Text(); got != "" {
+		t.Errorf("undo produced %q, want empty text (initial insert reverted)", got)
+	}
+}
+
 // TestEditorSetTextResetsScroll ensures SetText returns the viewport to the
 // caret (rune 0), matching upstream behavior: after replacing the content of
 // a scrolled editor the user must see the start of the new text, not a
