@@ -505,7 +505,6 @@ var (
 
 	dwmapi                        = syscall.NewLazySystemDLL("dwmapi")
 	_DwmExtendFrameIntoClientArea = dwmapi.NewProc("DwmExtendFrameIntoClientArea")
-	_DwmSetWindowAttribute        = dwmapi.NewProc("DwmSetWindowAttribute")
 )
 
 const VREFRESH = 116
@@ -596,24 +595,6 @@ func DwmExtendFrameIntoClientArea(hwnd syscall.Handle, margins Margins) error {
 	r, _, _ := _DwmExtendFrameIntoClientArea.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&margins)))
 	if r != 0 {
 		return fmt.Errorf("DwmExtendFrameIntoClientArea: %#x", r)
-	}
-	return nil
-}
-
-// DWMWA_CLOAK hides a window from the compositor without changing its window
-// state, geometry or message flow — unlike SW_HIDE it keeps the window "shown"
-// so it still sizes, paints and reports its mode. Used to keep the window
-// invisible until its first frame is presented.
-const DWMWA_CLOAK = 13
-
-func DwmSetCloak(hwnd syscall.Handle, cloak bool) error {
-	var v int32
-	if cloak {
-		v = 1
-	}
-	r, _, _ := _DwmSetWindowAttribute.Call(uintptr(hwnd), uintptr(DWMWA_CLOAK), uintptr(unsafe.Pointer(&v)), unsafe.Sizeof(v))
-	if r != 0 {
-		return fmt.Errorf("DwmSetWindowAttribute(CLOAK): %#x", r)
 	}
 	return nil
 }

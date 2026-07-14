@@ -61,8 +61,16 @@ type window struct {
 	cachedMetric unit.Metric
 
 	everShown bool
-	cloaked   bool
-	drawDepth int
+	// firstShowPending: Configure deferred the window's first ShowWindow until
+	// the first frame is presented; draw() performs it with firstShowMode.
+	// See Configure.
+	firstShowPending bool
+	firstShowMode    int32
+	// stripStyleAfterFirstShow: the deferred first show borrowed
+	// WS_OVERLAPPEDWINDOW so the DWM open animation plays for a fullscreen
+	// launch; draw() removes it right after the show.
+	stripStyleAfterFirstShow bool
+	drawDepth                int
 
 	// dnd is the registered OLE IDropTarget (see dnd_windows.go), kept alive for
 	// the window's lifetime and revoked on WM_DESTROY.
@@ -113,7 +121,7 @@ func newWindow(win *callbacks, options []Option) {
 		defer winMap.Delete(w.hwnd)
 		w.Configure(options)
 		w.ProcessEvent(Win32ViewEvent{HWND: uintptr(w.hwnd)})
-		// Configure() ends with ShowWindow(SW_SHOWNORMAL), which already
+		// The first ShowWindow (deferred by Configure() to draw()) already
 		// activates user-launched windows via the normal Win32 path. An
 		// explicit SetForegroundWindow/SetFocus here steals focus from the
 		// app the user is currently in (the foreground lock is bypassed
@@ -859,14 +867,33 @@ func (w *window) draw(sync bool) {
 		Sync: sync,
 	})
 	w.drawDepth--
-	// Reveal the window that Configure cloaked, but only once the outermost
-	// draw has returned — i.e. the first real frame is on the swapchain. A
-	// nested inner draw can return early without rendering; uncloaking there
-	// would expose an unpainted (white) window for the duration of the real
-	// frame's render. See Configure for why the window is cloaked.
-	if w.cloaked && w.drawDepth == 0 {
-		w.cloaked = false
-		windows.DwmSetCloak(w.hwnd, false)
+	// Perform the first ShowWindow that Configure deferred, but only once the
+	// outermost draw has returned — i.e. the first real frame is on the
+	// swapchain. A nested inner draw can return early without rendering;
+	// showing there would expose an unpainted (white) window for the duration
+	// of the real frame's render. The DWM open animation plays only on a
+	// window's very first show (hide/re-show never animates, and a cloaked
+	// show burns the animation invisibly), so this deferred show is the one
+	// chance to reveal an already-painted window with the animation intact.
+	// Clear the flag first: ShowWindow dispatches WM_SIZE/WM_WINDOWPOSCHANGED
+	// synchronously and re-enters draw(), which presents a fresh frame right
+	// after the show — before DWM's first composite of the window — so the
+	// never-painted background surface has no frame to be visible in.
+	if w.firstShowPending && w.drawDepth == 0 {
+		w.firstShowPending = false
+		windows.ShowWindow(w.hwnd, w.firstShowMode)
+		// A fullscreen launch was first shown with WS_OVERLAPPEDWINDOW so the
+		// open animation plays (see Configure); drop the borrowed style bits
+		// now that the show has happened. The rectangle is unchanged, so this
+		// repaints nothing — only the reported mode flips to Fullscreen.
+		if w.stripStyleAfterFirstShow {
+			w.stripStyleAfterFirstShow = false
+			style := windows.GetWindowLong(w.hwnd, windows.GWL_STYLE)
+			style &^= uintptr(windows.WS_OVERLAPPEDWINDOW)
+			windows.SetWindowLong(w.hwnd, windows.GWL_STYLE, style)
+			windows.SetWindowPos(w.hwnd, 0, 0, 0, 0, 0,
+				windows.SWP_NOZORDER|windows.SWP_NOMOVE|windows.SWP_NOSIZE|windows.SWP_FRAMECHANGED|windows.SWP_NOACTIVATE)
+		}
 	}
 }
 
@@ -976,6 +1003,10 @@ func (w *window) Configure(options []Option) {
 	case Fullscreen:
 		swpStyle |= windows.SWP_NOMOVE | windows.SWP_NOSIZE
 		showMode = windows.SW_SHOWMAXIMIZED
+		if !w.everShown {
+			style |= winStyle
+			w.stripStyleAfterFirstShow = true
+		}
 	}
 
 	if cnf.MaxSize != (image.Point{}) && cnf.MinSize == cnf.MaxSize {
@@ -983,21 +1014,31 @@ func (w *window) Configure(options []Option) {
 		style &^= windows.WS_THICKFRAME
 	}
 
+	if !w.everShown && showMode == windows.SW_SHOWMAXIMIZED && !cnf.Decorated {
+		mi := windows.GetMonitorInfo(w.hwnd)
+		x = mi.WorkArea.Left
+		y = mi.WorkArea.Top
+		width = mi.WorkArea.Right - mi.WorkArea.Left
+		height = mi.WorkArea.Bottom - mi.WorkArea.Top
+		swpStyle &^= windows.SWP_NOMOVE | windows.SWP_NOSIZE
+	}
 	windows.SetWindowPos(w.hwnd, 0, x, y, width, height, swpStyle)
 	windows.SetWindowLong(w.hwnd, windows.GWL_STYLE, style)
-	// On the first show, cloak the window (DWM-invisible, but otherwise a
-	// normally shown window) so the user never sees the transient startup
-	// frames: the maximize/fullscreen rectangle is computed and clamped to the
-	// work area while shown (a visible reposition), and the GPU's first frame
-	// is ~150ms away (an unpainted white window until then). draw() uncloaks
-	// once that first frame has been presented, so the window's first visible
-	// state is already positioned and fully painted. Minimized launches are
-	// skipped — they are not visible and would never reach the uncloak.
 	if !w.everShown {
 		w.everShown = true
-		if showMode != windows.SW_SHOWMINIMIZED && windows.DwmSetCloak(w.hwnd, true) == nil {
-			w.cloaked = true
+		if showMode != windows.SW_SHOWMINIMIZED {
+			w.firstShowMode = showMode
+			w.firstShowPending = true
+			w.Invalidate()
+			return
 		}
+	}
+	if w.firstShowPending {
+		if showMode != windows.SW_SHOWMINIMIZED {
+			w.firstShowMode = showMode
+			return
+		}
+		w.firstShowPending = false
 	}
 	windows.ShowWindow(w.hwnd, showMode)
 }
