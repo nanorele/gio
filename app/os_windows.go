@@ -70,7 +70,14 @@ type window struct {
 	// WS_OVERLAPPEDWINDOW so the DWM open animation plays for a fullscreen
 	// launch; draw() removes it right after the show.
 	stripStyleAfterFirstShow bool
-	drawDepth                int
+	// firstShowNormalRect: a maximized/fullscreen launch pre-sizes the hidden
+	// window to the work area so the first frame paints at the final rect, which
+	// also overwrites the OS restore rect. draw() writes this rect (the size the
+	// app actually asked for) back into the placement right after the first
+	// show, so a later unmaximize restores the requested windowed size instead
+	// of a work-area-sized window.
+	firstShowNormalRect image.Rectangle
+	drawDepth           int
 
 	// dnd is the registered OLE IDropTarget (see dnd_windows.go), kept alive for
 	// the window's lifetime and revoked on WM_DESTROY.
@@ -497,7 +504,8 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 	case windows.WM_WINDOWPOSCHANGED:
 		w.update()
 	case windows.WM_SIZE:
-		w.minimized = wParam == windows.SIZE_MINIMIZED
+		sizeMinimized := wParam == windows.SIZE_MINIMIZED
+		w.minimized = sizeMinimized
 		// On restore from minimized or when maximized, the OS cursor
 		// state from before the size change is no longer reliable.
 		if wParam == windows.SIZE_RESTORED || wParam == windows.SIZE_MAXIMIZED {
@@ -524,6 +532,16 @@ func windowProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr
 			w.clampToVisibleMonitor()
 		}
 		w.update()
+		// During an animated taskbar restore GetWindowPlacement can lag behind
+		// the final WM_SIZE, so update() above may have re-latched minimized on
+		// a window that WM_SIZE just reported visible. A latched flag freezes
+		// rendering permanently (update() and runLoop both skip draws while
+		// minimized). WM_SIZE's wParam is the authoritative signal: undo the
+		// stale latch and perform the draw update() skipped.
+		if !sizeMinimized && w.minimized {
+			w.minimized = false
+			w.draw(true)
+		}
 	case windows.WM_GETMINMAXINFO:
 		mm := (*windows.MinMaxInfo)(unsafe.Pointer(lParam)) //nolint:govet // Win32 lParam is a fresh function arg, not stored.
 		var frameDims image.Point
@@ -772,6 +790,14 @@ func (w *window) runLoop() {
 loop:
 	for {
 		anim := w.animating
+		if anim && w.minimized {
+			// Safety net for a stale minimized latch (see WM_SIZE): re-verify
+			// against live placement before skipping the frame, so no message
+			// ordering can freeze rendering for good. Costs one syscall per
+			// dispatched message, and only while a frame is pending on a window
+			// believed minimized.
+			w.minimized = windows.GetWindowPlacement(w.hwnd).IsMinimized()
+		}
 		if anim && !w.minimized && !windows.PeekMessage(&msg, 0, 0, 0, windows.PM_NOREMOVE) {
 			w.draw(false)
 			continue
@@ -882,6 +908,17 @@ func (w *window) draw(sync bool) {
 	if w.firstShowPending && w.drawDepth == 0 {
 		w.firstShowPending = false
 		windows.ShowWindow(w.hwnd, w.firstShowMode)
+		// A maximized/fullscreen launch painted its first frame at a
+		// work-area-sized rect (see Configure), which became the restore rect.
+		// Put the size the app requested back as the normal rect so the first
+		// unmaximize restores it. Only rcNormalPosition changes — the visible
+		// maximized rect stays put, so nothing repaints.
+		if r := w.firstShowNormalRect; !r.Empty() {
+			w.firstShowNormalRect = image.Rectangle{}
+			wp := windows.GetWindowPlacement(w.hwnd)
+			wp.Set(r.Min.X, r.Min.Y, r.Max.X, r.Max.Y)
+			windows.SetWindowPlacement(w.hwnd, wp)
+		}
 		// A fullscreen launch was first shown with WS_OVERLAPPEDWINDOW so the
 		// open animation plays (see Configure); drop the borrowed style bits
 		// now that the show has happened. The rectangle is unchanged, so this
@@ -983,6 +1020,16 @@ func (w *window) Configure(options []Option) {
 	case Windowed:
 		style |= winStyle
 		showMode = windows.SW_SHOWNORMAL
+		if windows.GetWindowPlacement(w.hwnd).IsMaximized() && cnf.Size == w.config.Size {
+			// Unmaximize without an explicit size request: cnf.Size is just the
+			// current (maximized) client size that update() recorded, so stamping
+			// it onto the restored window produces a windowed copy of the
+			// maximized rect and loses the real windowed size. Leave the
+			// geometry alone and let ShowWindow(SW_SHOWNORMAL) restore the
+			// window's normal rect, which the OS maintains.
+			swpStyle |= windows.SWP_NOMOVE | windows.SWP_NOSIZE
+			break
+		}
 		width = int32(cnf.Size.X)
 		height = int32(cnf.Size.Y)
 		wr := windows.GetWindowRect(w.hwnd)
@@ -1021,6 +1068,22 @@ func (w *window) Configure(options []Option) {
 		width = mi.WorkArea.Right - mi.WorkArea.Left
 		height = mi.WorkArea.Bottom - mi.WorkArea.Top
 		swpStyle &^= windows.SWP_NOMOVE | windows.SWP_NOSIZE
+		// Pre-sizing the hidden window to the work area (above) also makes the
+		// work area the restore rect, so the first unmaximize would produce a
+		// windowed copy of the maximized rect. Remember the size the app asked
+		// for; draw() writes it into the placement as the normal rect right
+		// after the first show.
+		if nw, nh := int32(cnf.Size.X), int32(cnf.Size.Y); nw > 0 && nh > 0 {
+			if nw > width {
+				nw = width
+			}
+			if nh > height {
+				nh = height
+			}
+			nx := mi.WorkArea.Left + (width-nw)/2
+			ny := mi.WorkArea.Top + (height-nh)/2
+			w.firstShowNormalRect = image.Rect(int(nx), int(ny), int(nx+nw), int(ny+nh))
+		}
 	}
 	windows.SetWindowPos(w.hwnd, 0, x, y, width, height, swpStyle)
 	windows.SetWindowLong(w.hwnd, windows.GWL_STYLE, style)
