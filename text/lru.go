@@ -16,6 +16,7 @@ type entry[K comparable, V any] struct {
 	next, prev *entry[K, V]
 	key        K
 	v          V
+	cost       int
 }
 
 type lru[K comparable, V any] struct {
@@ -27,6 +28,14 @@ type lru[K comparable, V any] struct {
 	// which holds clip.PathSpec values that can be tens of MB combined)
 	// to be tuned tighter than the broad default.
 	capLimit int
+	// costOf and costLimit bound the cache by retained bytes rather than
+	// by entry count. Entry counts are a poor proxy when single entries
+	// vary by orders of magnitude — a shaped paragraph holds one glyph
+	// record per rune, so 1000 multi-KB paragraphs retain gigabytes while
+	// 1000 short labels retain almost nothing.
+	costOf    func(K, V) int
+	costLimit int
+	cost      int
 }
 
 func (l *lru[K, V]) Get(k K) (V, bool) {
@@ -52,21 +61,30 @@ func (l *lru[K, V]) Put(k K, v V) {
 	// the stale tail entry and delete the new map entry).
 	if old, ok := l.m[k]; ok {
 		l.remove(old)
+		l.cost -= old.cost
 		if l.onEvict != nil {
 			l.onEvict(old.v)
 		}
 	}
 	val := &entry[K, V]{key: k, v: v}
+	if l.costOf != nil {
+		val.cost = l.costOf(k, v)
+	}
 	l.m[k] = val
 	l.insert(val)
+	l.cost += val.cost
 	limit := maxSize
 	if l.capLimit > 0 {
 		limit = l.capLimit
 	}
-	if len(l.m) > limit {
+	for len(l.m) > limit || (l.costLimit > 0 && l.cost > l.costLimit && len(l.m) > 1) {
 		oldest := l.tail.next
+		if oldest == l.head {
+			break
+		}
 		l.remove(oldest)
 		delete(l.m, oldest.key)
+		l.cost -= oldest.cost
 		if l.onEvict != nil {
 			l.onEvict(oldest.v)
 		}
@@ -87,6 +105,7 @@ func (l *lru[K, V]) Clear() {
 	l.m = nil
 	l.head = nil
 	l.tail = nil
+	l.cost = 0
 }
 
 func (l *lru[K, V]) insert(e *entry[K, V]) {
@@ -113,6 +132,15 @@ type glyphValue[V any] struct {
 type glyphLRU[V any] struct {
 	seed  uint64
 	cache lru[uint64, glyphValue[V]]
+}
+
+// setGlyphBudget bounds the cache by total cached glyphs instead of entry
+// count. Entries hold one shaped path per glyph run, and run lengths vary
+// from a single bracket to a full line, so an entry cap alone leaves the
+// retained size unbounded.
+func (c *glyphLRU[V]) setGlyphBudget(glyphs int) {
+	c.cache.costOf = func(_ uint64, v glyphValue[V]) int { return len(v.glyphs) }
+	c.cache.costLimit = glyphs
 }
 
 var seed uint32

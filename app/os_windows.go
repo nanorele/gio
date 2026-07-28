@@ -777,6 +777,7 @@ func (w *window) scrollEvent(wParam, lParam uintptr, horizontal bool, kmods key.
 		Kind:      pointer.Scroll,
 		Source:    pointer.Mouse,
 		Position:  p,
+		PointerID: pid,
 		Buttons:   getPointerButtons(pi),
 		Scroll:    sp,
 		Modifiers: kmods,

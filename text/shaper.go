@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"unicode/utf8"
+	"unsafe"
 
 	giofont "github.com/nanorele/gio/font"
 	"github.com/nanorele/gio/io/system"
@@ -202,7 +203,29 @@ func (l *Shaper) init() {
 	// allocate per-call buffers so cache eviction can reclaim them
 	// (see comments on those methods).
 	l.reader = bufio.NewReader(nil)
+	l.layoutCache.costOf = layoutCost
+	l.layoutCache.costLimit = maxLayoutCacheBytes
+	l.pathCache.setGlyphBudget(maxCachedPathGlyphs)
+	l.bitmapShapeCache.setGlyphBudget(maxCachedPathGlyphs)
 	l.shaper = *newShaperImpl(!l.config.disableSystemFonts, l.config.collection)
+}
+
+// maxLayoutCacheBytes bounds the retained size of cached paragraph layouts.
+// A shaped paragraph holds one glyph record per rune, so an entry-count cap
+// alone lets a handful of multi-KB paragraphs retain hundreds of megabytes.
+const maxLayoutCacheBytes = 16 << 20
+
+// maxCachedPathGlyphs bounds the shaped-path caches. Several screenfuls of
+// dense text is enough to keep repeated runs warm while keeping the retained
+// path data to tens of megabytes on documents whose every run is unique.
+const maxCachedPathGlyphs = 24 << 10
+
+func layoutCost(k layoutKey, d document) int {
+	return len(k.str) + len(k.truncator) +
+		len(d.glyphs)*int(unsafe.Sizeof(glyph{})) +
+		len(d.runs)*int(unsafe.Sizeof(runLayout{})) +
+		len(d.lines)*int(unsafe.Sizeof(line{})) +
+		len(d.visual)*int(unsafe.Sizeof(int(0)))
 }
 
 func (l *Shaper) Layout(params Parameters, txt io.Reader) {
@@ -562,6 +585,12 @@ func (l *Shaper) Shape(gs []Glyph) clip.PathSpec {
 
 func (l *Shaper) Bitmaps(gs []Glyph) op.CallOp {
 	l.init()
+	// Text without color-bitmap glyphs is the overwhelmingly common case,
+	// and its cache key (the whole line) is unique per line, so caching
+	// would allocate a key copy per line forever without ever hitting.
+	if !l.shaper.hasBitmapGlyphs(gs) {
+		return op.CallOp{}
+	}
 	key := l.bitmapShapeCache.hashGlyphs(gs)
 	call, ok := l.bitmapShapeCache.Get(key, gs)
 	if ok {

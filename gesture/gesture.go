@@ -85,6 +85,11 @@ type ClickEvent struct {
 	Modifiers key.Modifiers
 
 	NumClicks int
+
+	// Time is the event timestamp of the underlying pointer event, on the
+	// same clock as pointer.Event.Time. It is zero for KindCancel events
+	// synthesized without a pointer event.
+	Time time.Duration
 }
 
 type ClickKind uint8
@@ -172,6 +177,7 @@ func (c *Click) Update(q input.Source) (ClickEvent, bool) {
 					Source:    e.Source,
 					Modifiers: e.Modifiers,
 					NumClicks: c.clicks,
+					Time:      e.Time,
 				}, true
 			} else {
 				return ClickEvent{Kind: KindCancel}, true
@@ -204,7 +210,7 @@ func (c *Click) Update(q input.Source) (ClickEvent, bool) {
 				c.clicks = 1
 			}
 			c.clickedAt = e.Time
-			return ClickEvent{Kind: KindPress, Position: e.Position.Round(), Source: e.Source, Modifiers: e.Modifiers, NumClicks: c.clicks}, true
+			return ClickEvent{Kind: KindPress, Position: e.Position.Round(), Source: e.Source, Modifiers: e.Modifiers, NumClicks: c.clicks, Time: e.Time}, true
 		case pointer.Leave:
 			if !c.pressed {
 				c.pid = e.PointerID

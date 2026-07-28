@@ -156,6 +156,52 @@ type shaperImpl struct {
 	outScratchBuf    []shaping.Output
 	scratchRunes     []rune
 	bitmapGlyphCache bitmapCache
+	glyphDataCache   map[glyphDataKey]glyphDataEntry
+}
+
+type glyphDataKey struct {
+	face *font.Face
+	gid  font.GID
+}
+
+type glyphDataEntry struct {
+	outline font.GlyphOutline
+	bitmap  font.GlyphBitmap
+	isBmp   bool
+}
+
+// maxCachedGlyphData bounds the per-face glyph data cache. Entries hold
+// unscaled outlines, so one entry serves every text size; a few hundred
+// covers the Latin/Cyrillic working set of a code view.
+const maxCachedGlyphData = 4096
+
+// glyphData returns the parsed data for gid, caching it. Without the cache
+// every repaint re-parses the glyf table for every visible glyph — both to
+// build outlines and, in Bitmaps, merely to discover the glyph is not a
+// bitmap. That parse dominates allocation in text-heavy views.
+func (s *shaperImpl) glyphData(face *font.Face, gid font.GID) glyphDataEntry {
+	k := glyphDataKey{face: face, gid: gid}
+	if e, ok := s.glyphDataCache[k]; ok {
+		return e
+	}
+	var e glyphDataEntry
+	switch data := face.GlyphData(gid).(type) {
+	case font.GlyphOutline:
+		e.outline = data
+	case font.GlyphSVG:
+		e.outline = data.Outline
+	case font.GlyphBitmap:
+		e.bitmap = data
+		e.isBmp = true
+	}
+	if s.glyphDataCache == nil {
+		s.glyphDataCache = make(map[glyphDataKey]glyphDataEntry)
+	}
+	if len(s.glyphDataCache) >= maxCachedGlyphData {
+		clear(s.glyphDataCache)
+	}
+	s.glyphDataCache[k] = e
+	return e
 }
 
 type debugLogger struct {
@@ -681,15 +727,8 @@ func (s *shaperImpl) Shape(pathOps *op.Ops, gs []Glyph) clip.PathSpec {
 			cachedFaceIdx = faceIdx
 			cachedScaleFactor = scaleFactor
 		}
-		glyphData := face.GlyphData(gid)
-
-		var outline font.GlyphOutline
-		switch glyphData := glyphData.(type) {
-		case font.GlyphOutline:
-			outline = glyphData
-		case font.GlyphSVG:
-			outline = glyphData.Outline
-		default:
+		outline := s.glyphData(face, gid).outline
+		if outline.Segments == nil {
 			continue
 		}
 
@@ -746,6 +785,23 @@ func floatToFixed(f float32) fixed.Int26_6 {
 	return fixed.Int26_6(f * 64)
 }
 
+func (s *shaperImpl) hasBitmapGlyphs(gs []Glyph) bool {
+	for _, g := range gs {
+		_, faceIdx, gid := splitGlyphID(g.ID)
+		if faceIdx >= len(s.faces) {
+			continue
+		}
+		face := s.faces[faceIdx]
+		if face == nil {
+			continue
+		}
+		if s.glyphData(face, gid).isBmp {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *shaperImpl) Bitmaps(ops *op.Ops, gs []Glyph) op.CallOp {
 	var x fixed.Int26_6
 	bitmapMacro := op.Record(ops)
@@ -761,9 +817,10 @@ func (s *shaperImpl) Bitmaps(ops *op.Ops, gs []Glyph) op.CallOp {
 		if face == nil {
 			continue
 		}
-		glyphData := face.GlyphData(gid)
-		switch glyphData := glyphData.(type) {
-		case font.GlyphBitmap:
+		entry := s.glyphData(face, gid)
+		switch {
+		case entry.isBmp:
+			glyphData := entry.bitmap
 			var imgOp paint.ImageOp
 			var imgSize image.Point
 			bitmapData, ok := s.bitmapGlyphCache.Get(g.ID)
