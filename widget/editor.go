@@ -77,6 +77,13 @@ type Editor struct {
 	nextHistoryIdx int
 
 	pending []EditorEvent
+
+	rev uint64
+
+	filtersBase    []event.Filter
+	filtersBack    []event.Filter
+	filtersFwd     []event.Filter
+	filtersScratch []event.Filter
 }
 
 type offEntry struct {
@@ -314,6 +321,49 @@ func (e *Editor) processPointerEvent(gtx layout.Context, ev event.Event) (Editor
 	return nil, false
 }
 
+// keyFilters returns the editor's key filters, boxed once instead of on every
+// frame. Each entry is an interface value, so rebuilding the list per frame
+// allocated ~20 objects per editor per frame — the single largest source of
+// per-frame garbage in a window full of text fields.
+func (e *Editor) keyFilters(atBeginning, atEnd bool) []event.Filter {
+	if e.filtersBase == nil {
+		e.filtersBase = []event.Filter{
+			key.FocusFilter{Target: e},
+			transfer.TargetFilter{Target: e, Type: "application/text"},
+			key.Filter{Focus: e, Name: key.NameEnter, Optional: key.ModShift},
+			key.Filter{Focus: e, Name: key.NameReturn, Optional: key.ModShift},
+			key.Filter{Focus: e, Name: "Z", Required: key.ModShortcut, Optional: key.ModShift},
+			key.Filter{Focus: e, Name: "C", Required: key.ModShortcut},
+			key.Filter{Focus: e, Name: "V", Required: key.ModShortcut},
+			key.Filter{Focus: e, Name: "X", Required: key.ModShortcut},
+			key.Filter{Focus: e, Name: "A", Required: key.ModShortcut},
+			key.Filter{Focus: e, Name: key.NameDeleteBackward, Optional: key.ModShortcutAlt | key.ModShift},
+			key.Filter{Focus: e, Name: key.NameDeleteForward, Optional: key.ModShortcutAlt | key.ModShift},
+			key.Filter{Focus: e, Name: key.NameHome, Optional: key.ModShortcut | key.ModShift},
+			key.Filter{Focus: e, Name: key.NameEnd, Optional: key.ModShortcut | key.ModShift},
+			key.Filter{Focus: e, Name: key.NamePageDown, Optional: key.ModShift},
+			key.Filter{Focus: e, Name: key.NamePageUp, Optional: key.ModShift},
+		}
+		e.filtersBack = []event.Filter{
+			key.Filter{Focus: e, Name: key.NameLeftArrow, Optional: key.ModShortcutAlt | key.ModShift},
+			key.Filter{Focus: e, Name: key.NameUpArrow, Optional: key.ModShortcutAlt | key.ModShift},
+		}
+		e.filtersFwd = []event.Filter{
+			key.Filter{Focus: e, Name: key.NameRightArrow, Optional: key.ModShortcutAlt | key.ModShift},
+			key.Filter{Focus: e, Name: key.NameDownArrow, Optional: key.ModShortcutAlt | key.ModShift},
+		}
+	}
+	out := append(e.filtersScratch[:0], e.filtersBase...)
+	if !atBeginning {
+		out = append(out, e.filtersBack...)
+	}
+	if !atEnd {
+		out = append(out, e.filtersFwd...)
+	}
+	e.filtersScratch = out
+	return out
+}
+
 func (e *Editor) processKey(gtx layout.Context) (EditorEvent, bool) {
 	if e.text.Changed() {
 		return ChangeEvent{}, true
@@ -324,51 +374,7 @@ func (e *Editor) processKey(gtx layout.Context) (EditorEvent, bool) {
 	if gtx.Locale.Direction.Progression() != system.FromOrigin {
 		atEnd, atBeginning = atBeginning, atEnd
 	}
-	var filtersBuf [20]event.Filter
-	n := 0
-	filtersBuf[n] = key.FocusFilter{Target: e}
-	n++
-	filtersBuf[n] = transfer.TargetFilter{Target: e, Type: "application/text"}
-	n++
-	filtersBuf[n] = key.Filter{Focus: e, Name: key.NameEnter, Optional: key.ModShift}
-	n++
-	filtersBuf[n] = key.Filter{Focus: e, Name: key.NameReturn, Optional: key.ModShift}
-	n++
-	filtersBuf[n] = key.Filter{Focus: e, Name: "Z", Required: key.ModShortcut, Optional: key.ModShift}
-	n++
-	filtersBuf[n] = key.Filter{Focus: e, Name: "C", Required: key.ModShortcut}
-	n++
-	filtersBuf[n] = key.Filter{Focus: e, Name: "V", Required: key.ModShortcut}
-	n++
-	filtersBuf[n] = key.Filter{Focus: e, Name: "X", Required: key.ModShortcut}
-	n++
-	filtersBuf[n] = key.Filter{Focus: e, Name: "A", Required: key.ModShortcut}
-	n++
-	filtersBuf[n] = key.Filter{Focus: e, Name: key.NameDeleteBackward, Optional: key.ModShortcutAlt | key.ModShift}
-	n++
-	filtersBuf[n] = key.Filter{Focus: e, Name: key.NameDeleteForward, Optional: key.ModShortcutAlt | key.ModShift}
-	n++
-	filtersBuf[n] = key.Filter{Focus: e, Name: key.NameHome, Optional: key.ModShortcut | key.ModShift}
-	n++
-	filtersBuf[n] = key.Filter{Focus: e, Name: key.NameEnd, Optional: key.ModShortcut | key.ModShift}
-	n++
-	filtersBuf[n] = key.Filter{Focus: e, Name: key.NamePageDown, Optional: key.ModShift}
-	n++
-	filtersBuf[n] = key.Filter{Focus: e, Name: key.NamePageUp, Optional: key.ModShift}
-	n++
-	if !atBeginning {
-		filtersBuf[n] = key.Filter{Focus: e, Name: key.NameLeftArrow, Optional: key.ModShortcutAlt | key.ModShift}
-		n++
-		filtersBuf[n] = key.Filter{Focus: e, Name: key.NameUpArrow, Optional: key.ModShortcutAlt | key.ModShift}
-		n++
-	}
-	if !atEnd {
-		filtersBuf[n] = key.Filter{Focus: e, Name: key.NameRightArrow, Optional: key.ModShortcutAlt | key.ModShift}
-		n++
-		filtersBuf[n] = key.Filter{Focus: e, Name: key.NameDownArrow, Optional: key.ModShortcutAlt | key.ModShift}
-		n++
-	}
-	filters := filtersBuf[:n]
+	filters := e.keyFilters(atBeginning, atEnd)
 
 	var adjust int
 	for {
@@ -747,6 +753,22 @@ func (e *Editor) Text() string {
 	return string(e.scratch)
 }
 
+// TextInto appends the editor's content to dst and returns the extended
+// slice. Unlike Text it does not materialize a string, so with a reused dst
+// reading the content allocates nothing. Combine with [Editor.Revision] to
+// skip even the copy while the content is unchanged.
+func (e *Editor) TextInto(dst []byte) []byte {
+	e.initBuffer()
+	return e.text.TextTo(dst)
+}
+
+// TextEqual reports whether the editor's content equals s. It compares in
+// place — no copy of the content is made, and nothing is allocated.
+func (e *Editor) TextEqual(s string) bool {
+	e.initBuffer()
+	return e.text.TextEqual(s)
+}
+
 func (e *Editor) SetText(s string) {
 	e.initBuffer()
 	if e.SingleLine {
@@ -957,8 +979,14 @@ func (e *Editor) replace(start, end int, s string, addHistory bool) int {
 	}
 	e.ime.start = adjust(e.ime.start)
 	e.ime.end = adjust(e.ime.end)
+	e.rev++
 	return sc
 }
+
+// Revision changes whenever the editor's text does. Callers deriving state
+// from Text can key a cache on it instead of reading the text back — Text
+// allocates a copy of the whole content on every call.
+func (e *Editor) Revision() uint64 { return e.rev }
 
 func (e *Editor) MoveCaret(startDelta, endDelta int) {
 	e.initBuffer()

@@ -175,6 +175,18 @@ func Reset(o *Ops) {
 	o.version++
 }
 
+// Reserve ensures o can hold at least n more bytes of op data without
+// reallocating. Callers that know the approximate encoded size ahead of time
+// (e.g. glyph path builders) avoid the doubling-growth garbage of writing
+// into a fresh buffer.
+func Reserve(o *Ops, n int) {
+	if free := cap(o.data) - len(o.data); free < n {
+		data := make([]byte, len(o.data), len(o.data)+n)
+		copy(data, o.data)
+		o.data = data
+	}
+}
+
 func Write(o *Ops, n int) []byte {
 	if o.multipOp {
 		panic("cannot mix multi ops with single ones")

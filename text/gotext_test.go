@@ -35,7 +35,7 @@ func testShaper(faces ...giofont.Face) *shaperImpl {
 	for _, face := range faces {
 		ff = append(ff, FontFace{Face: face})
 	}
-	shaper := newShaperImpl(false, ff)
+	shaper := newShaperImpl(false, ff, nil)
 	return shaper
 }
 

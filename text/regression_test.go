@@ -16,8 +16,8 @@ import (
 func TestLRUPutOverwriteReturnsLatest(t *testing.T) {
 	c := new(layoutCache)
 	k := layoutKey{str: "k"}
-	c.Put(k, document{alignWidth: 1})
-	c.Put(k, document{alignWidth: 2})
+	c.Put(k, &document{alignWidth: 1})
+	c.Put(k, &document{alignWidth: 2})
 	v, ok := c.Get(k)
 	if !ok {
 		t.Fatalf("key missing after overwrite")
@@ -31,7 +31,7 @@ func TestLRUPutOverwriteSingleEntry(t *testing.T) {
 	c := new(layoutCache)
 	k := layoutKey{str: "k"}
 	for i := 0; i < 5; i++ {
-		c.Put(k, document{alignWidth: i})
+		c.Put(k, &document{alignWidth: i})
 	}
 	if got := len(c.m); got != 1 {
 		t.Fatalf("expected 1 map entry, got %d", got)
@@ -53,10 +53,10 @@ func TestLRUPutOverwriteSingleEntry(t *testing.T) {
 func TestLRUPutOverwriteFiresOnEvict(t *testing.T) {
 	c := new(layoutCache)
 	var evicted []int
-	c.onEvict = func(d document) { evicted = append(evicted, d.alignWidth) }
+	c.onEvict = func(d *document) { evicted = append(evicted, d.alignWidth) }
 	k := layoutKey{str: "k"}
-	c.Put(k, document{alignWidth: 1})
-	c.Put(k, document{alignWidth: 2})
+	c.Put(k, &document{alignWidth: 1})
+	c.Put(k, &document{alignWidth: 2})
 	if len(evicted) != 1 || evicted[0] != 1 {
 		t.Fatalf("expected onEvict to fire once with old value 1, got %v", evicted)
 	}
@@ -67,14 +67,14 @@ func TestLRUPutOverwriteAtCapacity(t *testing.T) {
 	c.capLimit = 3
 	keys := []layoutKey{{str: "a"}, {str: "b"}, {str: "c"}}
 	for i, k := range keys {
-		c.Put(k, document{alignWidth: i + 1})
+		c.Put(k, &document{alignWidth: i + 1})
 	}
 	// Overwrite "a". With the pre-fix bug the old "a" entry stays in the
 	// linked list; subsequent Puts that exceed capacity then evict the
 	// stale entry and delete the freshly written map entry.
-	c.Put(keys[0], document{alignWidth: 99})
-	c.Put(layoutKey{str: "d"}, document{alignWidth: 4})
-	c.Put(layoutKey{str: "e"}, document{alignWidth: 5})
+	c.Put(keys[0], &document{alignWidth: 99})
+	c.Put(layoutKey{str: "d"}, &document{alignWidth: 4})
+	c.Put(layoutKey{str: "e"}, &document{alignWidth: 5})
 	if v, ok := c.Get(keys[0]); !ok || v.alignWidth != 99 {
 		t.Fatalf("overwritten key 'a' lost or stale (ok=%v, value=%d)", ok, v.alignWidth)
 	}

@@ -3,6 +3,7 @@ package layout
 import (
 	"image"
 	"math"
+	"time"
 
 	"github.com/nanorele/gio/gesture"
 	"github.com/nanorele/gio/io/pointer"
@@ -33,6 +34,12 @@ type List struct {
 	Position Position
 
 	len int
+
+	// scrollApplied marks that VisibleRange already consumed this frame's
+	// scroll events (identified by scrollAppliedAt), so init must not
+	// process them again — the fling ticker must advance once per frame.
+	scrollApplied   bool
+	scrollAppliedAt time.Time
 
 	maxSize  int
 	children []scrollChild
@@ -79,7 +86,10 @@ func (l *List) init(gtx Context, len int) {
 	l.children = l.children[:0]
 	l.backward = l.backward[:0]
 	l.len = len
-	l.update(gtx)
+	if !(l.scrollApplied && l.scrollAppliedAt.Equal(gtx.Now)) {
+		l.update(gtx)
+	}
+	l.scrollApplied = false
 	if l.Position.First < 0 {
 		l.Position.Offset = 0
 		l.Position.First = 0
@@ -382,6 +392,81 @@ func (l *List) layout(ops *op.Ops, macro op.MacroOp) Dimensions {
 
 	call.Add(ops)
 	return Dimensions{Size: dims}
+}
+
+// VisibleRange applies the current frame's scroll events to the list
+// position and returns the index range [first, first+count) that a
+// subsequent Layout call in the same frame is expected to produce.
+// itemSize is the main-axis size of one element in pixels excluding Gap;
+// pass 0 to derive it from the previous frame's average. With uniform
+// element sizes the range is exact up to one element of slack on each side;
+// with varying sizes it is an estimate. When no size information exists yet
+// (first frame with itemSize 0), it returns the full range.
+//
+// It lets callers warm up exactly the widgets about to be laid out (event
+// handler prepass, column width measurement) instead of walking the whole
+// model with heuristics based on the previous frame.
+func (l *List) VisibleRange(gtx Context, len, itemSize int) (first, count int) {
+	if len <= 0 {
+		return 0, 0
+	}
+	l.len = len
+	if !(l.scrollApplied && l.scrollAppliedAt.Equal(gtx.Now)) {
+		l.update(gtx)
+		l.scrollApplied = true
+		l.scrollAppliedAt = gtx.Now
+	}
+
+	pos := l.Position
+	// Mirror init's clamping.
+	if pos.First < 0 {
+		pos.First, pos.Offset = 0, 0
+	}
+	toEnd := l.scrollToEnd() || pos.First > len
+	if toEnd {
+		pos.Offset = 0
+		pos.First = len
+	}
+
+	size := itemSize
+	if size > 0 {
+		size += l.Gap
+	} else if l.len > 0 && pos.Length > 0 {
+		// The previous frame's average length already amortizes Gap.
+		size = pos.Length / l.len
+	}
+	if size <= 0 {
+		// No sizing information: every index may be needed.
+		return 0, len
+	}
+	_, viewport := l.Axis.mainConstraint(gtx.Constraints)
+
+	if toEnd || pos.First >= len {
+		count = min(len, (viewport+size-1)/size+1)
+		return len - count, count
+	}
+
+	first = pos.First + pos.Offset/size
+	off := pos.Offset % size
+	if off < 0 {
+		first--
+		off += size
+	}
+	if first < 0 {
+		first, off = 0, 0
+	}
+	if first >= len {
+		first, off = len-1, 0
+	}
+	count = (viewport+off+size-1)/size + 1
+	if first+count > len {
+		// The range hit the end of the list: layout backfills earlier
+		// items until the viewport is covered, so extend downward.
+		needed := (viewport+size-1)/size + 1
+		first = max(0, min(first, len-needed))
+		count = len - first
+	}
+	return first, count
 }
 
 func (l *List) ScrollBy(num float32) {

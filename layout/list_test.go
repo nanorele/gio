@@ -534,3 +534,94 @@ func TestListScrollByItemAdvancesFirst(t *testing.T) {
 		t.Errorf("ScrollBy(2): First=%d, want 2", l.Position.First)
 	}
 }
+
+// TestListVisibleRange verifies that VisibleRange's prediction covers the
+// range Layout actually lays out, for uniform items across scroll positions,
+// and that Layout still consumes scroll events when VisibleRange ran first.
+func TestListVisibleRange(t *testing.T) {
+	const (
+		n        = 100
+		itemH    = 10
+		viewport = 45
+	)
+	el := func(gtx Context, idx int) Dimensions {
+		return Dimensions{Size: image.Pt(20, itemH)}
+	}
+	for _, start := range []int{0, 1, 7, 50, 95, 99} {
+		for _, offset := range []int{0, 3, 9, -4} {
+			var l List
+			l.Axis = Vertical
+			gtx := Context{
+				Ops:         new(op.Ops),
+				Constraints: Exact(image.Pt(20, viewport)),
+			}
+			// Establish Position.Length for the derived-size path.
+			l.Layout(gtx, n, el)
+			l.Position.First = start
+			l.Position.Offset = offset
+			l.Position.BeforeEnd = true
+
+			gtx.Ops.Reset()
+			first, count := l.VisibleRange(gtx, n, itemH)
+			var laidOut []int
+			l.Layout(gtx, n, func(gtx Context, idx int) Dimensions {
+				laidOut = append(laidOut, idx)
+				return el(gtx, idx)
+			})
+			// Every visible (laid out and displayed) index must be inside
+			// the predicted range.
+			visFirst, visCount := l.Position.First, l.Position.Count
+			if visFirst < first || visFirst+visCount > first+count {
+				t.Errorf("start=%d offset=%d: visible [%d,%d) outside predicted [%d,%d)",
+					start, offset, visFirst, visFirst+visCount, first, first+count)
+			}
+			// The prediction must not be wastefully wide: at most the
+			// visible count plus 2 items of slack.
+			if count > visCount+2 {
+				t.Errorf("start=%d offset=%d: predicted count %d far exceeds visible %d",
+					start, offset, count, visCount)
+			}
+		}
+	}
+}
+
+// TestListVisibleRangeDerivedSize covers itemSize == 0: the average from the
+// previous frame drives the estimate, and the very first frame (no data)
+// returns the full range.
+func TestListVisibleRangeDerivedSize(t *testing.T) {
+	const n = 50
+	var l List
+	l.Axis = Vertical
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(20, 40)),
+	}
+	if first, count := l.VisibleRange(gtx, n, 0); first != 0 || count != n {
+		t.Errorf("first frame without size info: got [%d,%d), want full range", first, first+count)
+	}
+	l.Layout(gtx, n, func(gtx Context, idx int) Dimensions {
+		return Dimensions{Size: image.Pt(20, 10)}
+	})
+	l.Position.First = 20
+	first, count := l.VisibleRange(gtx, n, 0)
+	if first > 20 || first+count < 24 {
+		t.Errorf("derived-size estimate [%d,%d) does not cover visible rows 20-23", first, first+count)
+	}
+}
+
+// TestListVisibleRangeScrollToEnd covers the ScrollToEnd tail range.
+func TestListVisibleRangeScrollToEnd(t *testing.T) {
+	const n = 30
+	l := List{Axis: Vertical, ScrollToEnd: true}
+	gtx := Context{
+		Ops:         new(op.Ops),
+		Constraints: Exact(image.Pt(20, 40)),
+	}
+	first, count := l.VisibleRange(gtx, n, 10)
+	if first+count != n {
+		t.Errorf("ScrollToEnd range [%d,%d) must end at %d", first, first+count, n)
+	}
+	if count < 4 || count > 6 {
+		t.Errorf("ScrollToEnd count %d, want ~viewport/item+slack (4-6)", count)
+	}
+}

@@ -116,6 +116,52 @@ func TestEditorSetTextResetsScroll(t *testing.T) {
 	}
 }
 
+// TestEditorTextIntoAndTextEqual covers the allocation-free content
+// accessors: TextInto must return the exact content with append semantics,
+// TextEqual must compare without materializing, and neither may allocate
+// once the destination buffer has capacity.
+func TestEditorTextIntoAndTextEqual(t *testing.T) {
+	e := new(Editor)
+	// Content long enough to span the gap buffer's segments after edits.
+	content := strings.Repeat("0123456789", 100)
+	e.SetText(content)
+	// Split the gap: move the caret and insert, so the buffer has two
+	// segments around the gap.
+	e.SetCaret(500, 500)
+	e.Insert("ABC")
+	want := content[:500] + "ABC" + content[500:]
+
+	if got := string(e.TextInto(nil)); got != want {
+		t.Fatalf("TextInto(nil) mismatch: %d bytes, want %d", len(got), len(want))
+	}
+	if got := string(e.TextInto([]byte("prefix-"))); got != "prefix-"+want {
+		t.Fatalf("TextInto with prefix does not append")
+	}
+	if !e.TextEqual(want) {
+		t.Errorf("TextEqual(want) = false")
+	}
+	if e.TextEqual(want[:len(want)-1]) {
+		t.Errorf("TextEqual with shorter text = true")
+	}
+	if e.TextEqual(want[:len(want)-1] + "X") {
+		t.Errorf("TextEqual with different tail = true")
+	}
+	if e.TextEqual("X" + want[1:]) {
+		t.Errorf("TextEqual with different head = true")
+	}
+
+	buf := make([]byte, 0, len(want)+16)
+	allocs := testing.AllocsPerRun(100, func() {
+		buf = e.TextInto(buf[:0])
+		if !e.TextEqual(want) {
+			t.Fatal("TextEqual flipped")
+		}
+	})
+	if allocs != 0 {
+		t.Errorf("TextInto+TextEqual allocated %v times per run, want 0", allocs)
+	}
+}
+
 // TestGlyphIndexLastLinePosEnd ensures the final caret position of the text
 // (after the last rune) is included in the last line's position range. The
 // soft-break posEnd decrement assumes a following line overwrites the

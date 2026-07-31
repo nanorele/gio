@@ -38,9 +38,14 @@ type document struct {
 	alignment       Alignment
 	alignWidth      int
 	unreadRuneCount int
+	// gen is the layout generation (see shaperImpl.docGen) during which this
+	// document was last produced or served from the layout cache. Shaper.txt
+	// aliases the document's slices for one generation, so a document may
+	// only be recycled once its generation has passed.
+	gen uint64
 }
 
-func (l *document) append(other document) {
+func (l *document) append(other *document) {
 	startIdx := len(l.lines)
 	l.lines = append(l.lines, other.lines...)
 	l.runs = append(l.runs, other.runs...)
@@ -153,15 +158,105 @@ type shaperImpl struct {
 	bidiParagraph    bidi.Paragraph
 	splitScratch1    []shaping.Input
 	splitScratch2    []shaping.Input
+	bidiScratch      []shaping.Input
 	outScratchBuf    []shaping.Output
 	scratchRunes     []rune
 	bitmapGlyphCache bitmapCache
 	glyphDataCache   map[glyphDataKey]glyphDataEntry
+
+	// truncCache holds shaped truncator symbols. Every truncated label
+	// otherwise pays a full shaping pass for the ellipsis on each layout
+	// cache miss. Cleared whenever a new face is registered, since face
+	// resolution for the truncator may change.
+	truncCache map[truncKey]shaping.Output
+
+	// docGen counts layout passes of the owning Shaper; docFree pools
+	// documents evicted from the layout cache for reuse by LayoutRunes.
+	// Only documents whose gen is older than docGen may be pooled — see
+	// document.gen.
+	docGen  uint64
+	docFree []*document
+
+	// disableSingleLineTrim turns off the MaxLines==1 shaping cutoff.
+	// Used by tests to compare trimmed output against full shaping.
+	disableSingleLineTrim bool
+
+	lazyFaces   []lazyFaceEntry
+	lazyPending int
+	// lazyLow counts, per rune below lazyLowLimit, how many unloaded lazy
+	// faces claim it, and lazyBlocks does the same per 256-rune block above
+	// that. Latin text must not pay for the isolated low codepoints an emoji
+	// face claims, so the busy range is tracked exactly.
+	lazyLow    []uint8
+	lazyBlocks []uint16
 }
+
+type lazyFaceEntry struct {
+	LazyFace
+	loaded bool
+}
+
+const runeBlockCount = (unicodeMax >> runeBlockShift) + 1
+
+const (
+	runeBlockShift = 8
+	unicodeMax     = 0x10FFFF
+	lazyLowLimit   = 0x1000
+)
 
 type glyphDataKey struct {
 	face *font.Face
 	gid  font.GID
+}
+
+// truncKey identifies a shaped truncator symbol. The shaped result depends on
+// the text itself, the size, the queried font and the locale (language and
+// direction).
+type truncKey struct {
+	truncator string
+	ppem      fixed.Int26_6
+	font      giofont.Font
+	locale    system.Locale
+}
+
+// maxCachedTruncators bounds truncCache. Truncator/size/font combinations are
+// few in practice; the bound only guards degenerate callers.
+const maxCachedTruncators = 64
+
+// growSlice returns a slice of length n, reusing s's backing array when it is
+// large enough. The caller is expected to overwrite every element.
+func growSlice[T any](s []T, n int) []T {
+	if cap(s) >= n {
+		return s[:n]
+	}
+	return make([]T, n)
+}
+
+// getDoc returns a pooled document (emptied, capacity preserved) or a new one.
+func (s *shaperImpl) getDoc() *document {
+	if n := len(s.docFree); n > 0 {
+		d := s.docFree[n-1]
+		s.docFree = s.docFree[:n-1]
+		return d
+	}
+	return new(document)
+}
+
+// recycleDoc accepts a document evicted from the layout cache for reuse.
+// Documents produced or served during the current generation are still
+// aliased by Shaper.txt and must not be reused; oversized documents are not
+// worth retaining.
+func (s *shaperImpl) recycleDoc(d *document) {
+	const (
+		maxPooledDocs      = 8
+		maxPooledDocGlyphs = 8192
+	)
+	if d == nil || d.gen == s.docGen ||
+		len(s.docFree) >= maxPooledDocs || cap(d.glyphs) > maxPooledDocGlyphs {
+		return
+	}
+	d.reset()
+	s.docFree = append(s.docFree, d)
 }
 
 type glyphDataEntry struct {
@@ -218,7 +313,7 @@ func (d debugLogger) Printf(format string, args ...any) {
 	}
 }
 
-func newShaperImpl(systemFonts bool, collection []FontFace) *shaperImpl {
+func newShaperImpl(systemFonts bool, collection []FontFace, lazy []LazyFace) *shaperImpl {
 	var shaper shaperImpl
 	shaper.logger = newDebugLogger()
 	shaper.fontMap = fontscan.NewFontMap(shaper.logger)
@@ -237,8 +332,130 @@ func newShaperImpl(systemFonts bool, collection []FontFace) *shaperImpl {
 		shaper.Load(f)
 		shaper.defaultFaces = append(shaper.defaultFaces, string(f.Font.Typeface))
 	}
+	shaper.initLazy(lazy)
 	shaper.shaper.SetFontCacheSize(32)
 	return &shaper
+}
+
+func (s *shaperImpl) initLazy(lazy []LazyFace) {
+	if len(lazy) == 0 {
+		return
+	}
+	s.lazyFaces = make([]lazyFaceEntry, len(lazy))
+	s.lazyLow = make([]uint8, lazyLowLimit)
+	s.lazyBlocks = make([]uint16, runeBlockCount)
+	for i, lf := range lazy {
+		s.lazyFaces[i] = lazyFaceEntry{LazyFace: lf}
+		s.defaultFaces = append(s.defaultFaces, string(lf.Typeface))
+		s.markClaims(lf.Ranges, 1)
+	}
+	s.lazyPending = len(lazy)
+}
+
+func (s *shaperImpl) markClaims(ranges []RuneRange, delta int) {
+	for _, rr := range ranges {
+		lo, hi := rr.Lo, rr.Hi
+		if lo < 0 {
+			lo = 0
+		}
+		if hi > unicodeMax {
+			hi = unicodeMax
+		}
+		for r := lo; r <= hi && r < lazyLowLimit; r++ {
+			s.lazyLow[r] = uint8(int(s.lazyLow[r]) + delta)
+		}
+		if hi < lazyLowLimit {
+			continue
+		}
+		if lo < lazyLowLimit {
+			lo = lazyLowLimit
+		}
+		for b := lo >> runeBlockShift; b <= hi>>runeBlockShift; b++ {
+			s.lazyBlocks[b] = uint16(int(s.lazyBlocks[b]) + delta)
+		}
+	}
+}
+
+func (s *shaperImpl) lazyClaimed(r rune) bool {
+	if r < 0 || r > unicodeMax {
+		return false
+	}
+	if r < lazyLowLimit {
+		return s.lazyLow[r] != 0
+	}
+	return s.lazyBlocks[r>>runeBlockShift] != 0
+}
+
+func (s *shaperImpl) loadLazyFace(i int) {
+	e := &s.lazyFaces[i]
+	if e.loaded {
+		return
+	}
+	e.loaded = true
+	s.lazyPending--
+	s.markClaims(e.Ranges, -1)
+	ff, err := e.Load()
+	if err != nil {
+		s.logger.Printf("failed loading deferred face %q: %v", e.Typeface, err)
+		return
+	}
+	s.Load(ff)
+}
+
+// claimLazyFaces loads any unloaded lazy face declaring r.
+func (s *shaperImpl) claimLazyFaces(r rune) {
+	if s.lazyPending == 0 || !s.lazyClaimed(r) {
+		return
+	}
+	for i := range s.lazyFaces {
+		e := &s.lazyFaces[i]
+		if e.loaded || !runeInRanges(e.Ranges, r) {
+			continue
+		}
+		s.loadLazyFace(i)
+	}
+}
+
+// claimLazyFacesByFont loads any unloaded lazy face whose Match predicate
+// accepts the font requested by the current layout. Runs before the font
+// query is set so the freshly loaded face participates in resolution.
+func (s *shaperImpl) claimLazyFacesByFont(f giofont.Font) {
+	if s.lazyPending == 0 {
+		return
+	}
+	for i := range s.lazyFaces {
+		e := &s.lazyFaces[i]
+		if e.loaded || e.Match == nil || !e.Match(f) {
+			continue
+		}
+		s.loadLazyFace(i)
+	}
+}
+
+// loadAllLazyFaces materializes every remaining lazy face. It runs when a rune
+// is covered by no loaded face, so that deferring a face can never lose
+// coverage an eager collection would have had.
+func (s *shaperImpl) loadAllLazyFaces() {
+	for i := range s.lazyFaces {
+		s.loadLazyFace(i)
+	}
+}
+
+func faceHasRune(f *font.Face, r rune) bool {
+	if f == nil {
+		return false
+	}
+	_, ok := f.NominalGlyph(r)
+	return ok
+}
+
+func runeInRanges(ranges []RuneRange, r rune) bool {
+	for _, rr := range ranges {
+		if r >= rr.Lo && r <= rr.Hi {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *shaperImpl) Load(f FontFace) {
@@ -256,6 +473,8 @@ func (s *shaperImpl) addFace(f *font.Face, md giofont.Font) {
 	s.faceToIndex[f.Font] = idx
 	s.faces = append(s.faces, f)
 	s.faceMeta = append(s.faceMeta, md)
+	// A new face can change which face the truncator resolves to.
+	clear(s.truncCache)
 }
 
 func splitByScript(inputs []shaping.Input, documentDir di.Direction, buf []shaping.Input) []shaping.Input {
@@ -312,9 +531,13 @@ func isASCII(rs []rune) bool {
 }
 
 func (s *shaperImpl) splitBidi(input shaping.Input) []shaping.Input {
-	var splitInputs []shaping.Input
+	// The returned slice is only read (and copied from) before the next
+	// splitBidi call, so a single scratch buffer serves every call.
+	splitInputs := s.bidiScratch[:0]
+	defer func() { s.bidiScratch = splitInputs }()
 	if input.Direction.Axis() != di.Horizontal || input.RunStart == input.RunEnd {
-		return []shaping.Input{input}
+		splitInputs = append(splitInputs, input)
+		return splitInputs
 	}
 	// Fast path: in an LTR paragraph, pure ASCII text has no bidi
 	// reordering; skip the bidi.Paragraph machinery, which otherwise
@@ -324,7 +547,8 @@ func (s *shaperImpl) splitBidi(input shaping.Input) []shaping.Input {
 	// strong-LTR characters and render them reversed, so bidi resolution
 	// must still run there.
 	if input.Direction.Progression() != di.TowardTopLeft && isASCII(input.Text[input.RunStart:input.RunEnd]) {
-		return []shaping.Input{input}
+		splitInputs = append(splitInputs, input)
+		return splitInputs
 	}
 	def := bidi.LeftToRight
 	if input.Direction.Progression() == di.TowardTopLeft {
@@ -333,7 +557,8 @@ func (s *shaperImpl) splitBidi(input shaping.Input) []shaping.Input {
 	s.bidiParagraph.SetString(string(input.Text), bidi.DefaultDirection(def)) //nolint:errcheck // Subsequent Order() call surfaces any error.
 	out, err := s.bidiParagraph.Order()
 	if err != nil {
-		return []shaping.Input{input}
+		splitInputs = append(splitInputs, input)
+		return splitInputs
 	}
 	for i := range out.NumRuns() {
 		currentInput := input
@@ -353,7 +578,12 @@ func (s *shaperImpl) splitBidi(input shaping.Input) []shaping.Input {
 }
 
 func (s *shaperImpl) ResolveFace(r rune) *font.Face {
+	s.claimLazyFaces(r)
 	face := s.fontMap.ResolveFace(r)
+	if s.lazyPending > 0 && !faceHasRune(face, r) {
+		s.loadAllLazyFaces()
+		face = s.fontMap.ResolveFace(r)
+	}
 	if face != nil {
 		family, aspect := s.fontMap.FontMetadata(face.Font)
 		md := opentype.DescriptionToFont(font.Description{
@@ -390,7 +620,10 @@ func (s *shaperImpl) shapeText(ppem fixed.Int26_6, lc system.Locale, txt []rune)
 	}
 	inputs := s.splitBidi(input)
 	inputs = s.splitByFaces(inputs, s.splitScratch1[:0])
+	// Store grown buffers back so capacity is retained across calls.
+	s.splitScratch1 = inputs
 	inputs = splitByScript(inputs, lcfg.Direction, s.splitScratch2[:0])
+	s.splitScratch2 = inputs
 	if needed := len(inputs) - len(s.outScratchBuf); needed > 0 {
 		s.outScratchBuf = slices.Grow(s.outScratchBuf, needed)
 	}
@@ -459,6 +692,7 @@ func (s *shaperImpl) shapeAndWrapText(params Parameters, txt []rune) (_ []shapin
 		BreakPolicy:                   wrapPolicyToGoText(params.WrapPolicy),
 		DisableTrailingWhitespaceTrim: params.DisableSpaceTrim,
 	}
+	s.claimLazyFacesByFont(params.Font)
 	families := s.defaultFaces
 	if params.Font.Typeface != "" {
 		parsed, err := s.parser.parse(string(params.Font.Typeface))
@@ -476,9 +710,94 @@ func (s *shaperImpl) shapeAndWrapText(params Parameters, txt []rune) (_ []shapin
 		if len(params.Truncator) == 0 {
 			params.Truncator = "…"
 		}
-		wc.Truncator = s.shapeText(params.PxPerEm, params.Locale, []rune(params.Truncator))[0]
+		wc.Truncator = s.shapedTruncator(params)
 	}
-	return s.wrapper.WrapParagraph(wc, params.MaxWidth, txt, shaping.NewSliceIterator(s.shapeText(params.PxPerEm, params.Locale, txt)))
+	txt, trimmed, outs := s.trimForSingleLine(params, wc, txt)
+	if outs == nil {
+		outs = s.shapeText(params.PxPerEm, params.Locale, txt)
+	}
+	lines, truncated := s.wrapper.WrapParagraph(wc, params.MaxWidth, txt, shaping.NewSliceIterator(outs))
+	// The trimmed tail could never be visible, so it is truncated by
+	// construction (trimming only happens when the retained prefix alone
+	// overflows MaxWidth).
+	truncated += trimmed
+	return lines, truncated
+}
+
+// shapedTruncator returns the shaped truncator symbol for params, cached.
+// Without the cache every truncated label pays a full shaping pass for the
+// ellipsis on each layout-cache miss.
+func (s *shaperImpl) shapedTruncator(params Parameters) shaping.Output {
+	k := truncKey{
+		truncator: params.Truncator,
+		ppem:      params.PxPerEm,
+		font:      params.Font,
+		locale:    params.Locale,
+	}
+	if out, ok := s.truncCache[k]; ok {
+		return out
+	}
+	// The Output struct in outScratchBuf is overwritten by the next
+	// shapeText call, but its Glyphs array is freshly allocated per Shape,
+	// so the copy stored in the cache owns its glyph data. The wrapper
+	// never mutates the truncator's Glyphs (it copies the Output struct
+	// and only adjusts the copy's Runes), so sharing it across wraps is
+	// safe.
+	out := s.shapeText(params.PxPerEm, params.Locale, []rune(params.Truncator))[0]
+	if s.truncCache == nil {
+		s.truncCache = make(map[truncKey]shaping.Output)
+	}
+	if len(s.truncCache) >= maxCachedTruncators {
+		clear(s.truncCache)
+	}
+	s.truncCache[k] = out
+	return out
+}
+
+// trimForSingleLine bounds the shaping cost of a single truncated line: for
+// MaxLines==1 the glyphs past the visible width can never be displayed, yet
+// shaping them makes an 80-character cell cost several times a short one.
+// It returns a prefix of txt whose shaped advance comfortably exceeds the
+// space a truncated line can use, the number of runes cut off, and the
+// prefix's shaped outputs (nil when no trim applied — the caller shapes
+// then).
+//
+// The cut must not change the visible glyphs, so it only applies to ASCII
+// text in a left-to-right locale: no bidi reordering (bracket pairing is
+// paragraph-global), no cross-boundary cluster or joining effects, and any
+// kerning/ligature difference at the cut sits beyond the visible width by at
+// least the safety margin.
+func (s *shaperImpl) trimForSingleLine(params Parameters, wc shaping.WrapConfig, txt []rune) (_ []rune, trimmed int, outs []shaping.Output) {
+	if wc.TruncateAfterLines != 1 || s.disableSingleLineTrim ||
+		params.PxPerEm < fixed.I(1) || params.MaxWidth <= 0 ||
+		params.Locale.Direction.Progression() != system.FromOrigin ||
+		!isASCII(txt) {
+		return txt, 0, nil
+	}
+	// Everything that fits must be shaped, plus a margin for the truncator
+	// and boundary effects (kerning, ligatures) at the cut.
+	needed := fixed.I(params.MaxWidth) + wc.Truncator.Advance + 2*params.PxPerEm
+	// No printable ASCII glyph is narrower than ~1/8 em, which bounds how
+	// many runes can contribute to the visible width.
+	maxVisibleRunes := 8 * needed.Ceil() / params.PxPerEm.Floor()
+	if len(txt) <= maxVisibleRunes {
+		return txt, 0, nil
+	}
+	n := maxVisibleRunes
+	for {
+		outs = s.shapeText(params.PxPerEm, params.Locale, txt[:n])
+		var advance fixed.Int26_6
+		for _, o := range outs {
+			advance += o.Advance
+		}
+		// The estimate is conservative, so a single pass suffices unless
+		// the font is far narrower than any plausible ASCII face; the
+		// loop guards correctness in that case.
+		if advance >= needed || n == len(txt) {
+			return txt[:n], len(txt) - n, outs
+		}
+		n = min(2*n, len(txt))
+	}
 }
 
 func replaceControlCharacters(in []rune) []rune {
@@ -505,12 +824,17 @@ func replaceControlCharacters(in []rune) []rune {
 	return in
 }
 
-func (s *shaperImpl) LayoutString(params Parameters, txt string) document {
-	s.scratchRunes = append(s.scratchRunes[:0], []rune(txt)...)
+func (s *shaperImpl) LayoutString(params Parameters, txt string) *document {
+	// Decode straight into the scratch buffer: []rune(txt) would allocate
+	// a throwaway intermediate slice on every call.
+	s.scratchRunes = s.scratchRunes[:0]
+	for _, r := range txt {
+		s.scratchRunes = append(s.scratchRunes, r)
+	}
 	return s.LayoutRunes(params, s.scratchRunes)
 }
 
-func (s *shaperImpl) Layout(params Parameters, txt io.RuneReader) document {
+func (s *shaperImpl) Layout(params Parameters, txt io.RuneReader) *document {
 	s.scratchRunes = s.scratchRunes[:0]
 	for {
 		r, _, err := txt.ReadRune()
@@ -543,7 +867,7 @@ func calculateYOffsetsFrom(lines []line, startIdx int) {
 	}
 }
 
-func (s *shaperImpl) LayoutRunes(params Parameters, txt []rune) document {
+func (s *shaperImpl) LayoutRunes(params Parameters, txt []rune) *document {
 	hasNewline := len(txt) > 0 && txt[len(txt)-1] == '\n'
 	var ls []shaping.Line
 	var truncated int
@@ -570,10 +894,14 @@ func (s *shaperImpl) LayoutRunes(params Parameters, txt []rune) document {
 		}
 	}
 
-	resLines := make([]line, len(ls))
-	resRuns := make([]runLayout, totalRuns)
-	resGlyphs := make([]glyph, totalGlyphs)
-	resVisual := make([]int, totalRuns)
+	// Reuse a document evicted from the layout cache when one is available:
+	// on a cache miss these four slices are the layout's dominant
+	// allocation, and eviction means a same-sized buffer just became free.
+	doc := s.getDoc()
+	resLines := growSlice(doc.lines, len(ls))
+	resRuns := growSlice(doc.runs, totalRuns)
+	resGlyphs := growSlice(doc.glyphs, totalGlyphs)
+	resVisual := growSlice(doc.visual, totalRuns)
 
 	runIdx := 0
 	glyphIdx := 0
@@ -670,13 +998,14 @@ func (s *shaperImpl) LayoutRunes(params Parameters, txt []rune) document {
 		resLines[i].lineHeight = maxHeight
 	}
 	calculateYOffsets(resLines)
-	doc := document{
+	*doc = document{
 		lines:      resLines,
 		runs:       resRuns,
 		glyphs:     resGlyphs,
 		visual:     resVisual,
 		alignment:  params.Alignment,
 		alignWidth: alignWidth(params.MinWidth, resLines),
+		gen:        s.docGen,
 	}
 	// Drop references to per-paragraph shaping outputs now that the data
 	// has been copied into the document; otherwise the underlying

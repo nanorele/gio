@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	giofont "github.com/nanorele/gio/font"
+	"github.com/nanorele/gio/internal/ops"
 	"github.com/nanorele/gio/io/system"
 	"github.com/nanorele/gio/op"
 	"github.com/nanorele/gio/op/clip"
@@ -52,6 +53,32 @@ type Parameters struct {
 }
 
 type FontFace = giofont.FontFace
+
+// RuneRange is an inclusive range of runes.
+type RuneRange struct {
+	Lo, Hi rune
+}
+
+// LazyFace describes a font face that is parsed on first use instead of when
+// the Shaper is built. Ranges lists the runes the face is expected to serve;
+// the face is parsed the first time one of them is shaped, or when a rune
+// turns out to be covered by no already-loaded face.
+//
+// Match, when non-nil, additionally loads the face the first time a layout
+// requests a matching font. This defers faces whose trigger is a style
+// rather than a codepoint — an italic or heavy-weight variant loads on the
+// first layout asking for that aspect, not at startup. A face with Match
+// set and no Ranges is loaded only by its Match (or by the missing-coverage
+// fallback, which always loads everything before giving up on a rune).
+//
+// Typeface must be the family name the parsed face reports, so that family
+// queries naming it behave the same before and after loading.
+type LazyFace struct {
+	Typeface giofont.Typeface
+	Ranges   []RuneRange
+	Match    func(giofont.Font) bool
+	Load     func() (FontFace, error)
+}
 
 type Glyph struct {
 	ID GlyphID
@@ -142,6 +169,7 @@ type Shaper struct {
 	config struct {
 		disableSystemFonts bool
 		collection         []FontFace
+		lazyCollection     []LazyFace
 	}
 	initialized      bool
 	shaper           shaperImpl
@@ -164,6 +192,13 @@ type Shaper struct {
 	pathOps   *op.Ops
 	bitmapOps *op.Ops
 
+	// pathBytesPerGlyph tracks the running average encoded size of one
+	// glyph's outline ops, so Shape can pre-size the per-call ops buffer.
+	// Building paths into an empty buffer otherwise doubles-and-copies its
+	// way up on every path-cache miss — the single largest source of
+	// per-frame garbage for changing text.
+	pathBytesPerGlyph int
+
 	done bool
 	err  error
 }
@@ -179,6 +214,15 @@ func NoSystemFonts() ShaperOption {
 func WithCollection(collection []FontFace) ShaperOption {
 	return func(s *Shaper) {
 		s.config.collection = collection
+	}
+}
+
+// WithLazyCollection registers faces that are parsed on demand. They rank
+// after the faces given to [WithCollection], as if they had been appended to
+// that collection.
+func WithLazyCollection(collection []LazyFace) ShaperOption {
+	return func(s *Shaper) {
+		s.config.lazyCollection = collection
 	}
 }
 
@@ -205,9 +249,13 @@ func (l *Shaper) init() {
 	l.reader = bufio.NewReader(nil)
 	l.layoutCache.costOf = layoutCost
 	l.layoutCache.costLimit = maxLayoutCacheBytes
+	// Evicted documents feed LayoutRunes' buffer pool: on a cache miss the
+	// four document slices are the dominant allocation, and an eviction
+	// means a same-sized buffer just became free.
+	l.layoutCache.onEvict = func(d *document) { l.shaper.recycleDoc(d) }
 	l.pathCache.setGlyphBudget(maxCachedPathGlyphs)
 	l.bitmapShapeCache.setGlyphBudget(maxCachedPathGlyphs)
-	l.shaper = *newShaperImpl(!l.config.disableSystemFonts, l.config.collection)
+	l.shaper = *newShaperImpl(!l.config.disableSystemFonts, l.config.collection, l.config.lazyCollection)
 }
 
 // maxLayoutCacheBytes bounds the retained size of cached paragraph layouts.
@@ -220,7 +268,7 @@ const maxLayoutCacheBytes = 16 << 20
 // path data to tens of megabytes on documents whose every run is unique.
 const maxCachedPathGlyphs = 24 << 10
 
-func layoutCost(k layoutKey, d document) int {
+func layoutCost(k layoutKey, d *document) int {
 	return len(k.str) + len(k.truncator) +
 		len(d.glyphs)*int(unsafe.Sizeof(glyph{})) +
 		len(d.runs)*int(unsafe.Sizeof(runLayout{})) +
@@ -285,6 +333,9 @@ func (l *Shaper) reset(align Alignment) {
 	l.err = nil
 	l.txt.reset()
 	l.txt.alignment = align
+	// A new generation begins: documents touched before this point are no
+	// longer aliased by l.txt and may be recycled on eviction.
+	l.shaper.docGen++
 }
 
 func (l *Shaper) layoutText(params Parameters, txt io.Reader, str string) {
@@ -361,9 +412,9 @@ func (l *Shaper) layoutText(params Parameters, txt io.Reader, str string) {
 	}
 }
 
-func (l *Shaper) layoutParagraph(params Parameters, asStr string, asBytes []byte) document {
+func (l *Shaper) layoutParagraph(params Parameters, asStr string, asBytes []byte) *document {
 	if l == nil {
-		return document{}
+		return &document{}
 	}
 	if len(asStr) == 0 && len(asBytes) > 0 {
 		asStr = string(asBytes)
@@ -397,8 +448,11 @@ func (l *Shaper) layoutParagraph(params Parameters, asStr string, asBytes []byte
 		lineHeightScale:  params.LineHeightScale,
 		disableSpaceTrim: params.DisableSpaceTrim,
 	}
-	if l, ok := l.layoutCache.Get(lk); ok {
-		return l
+	if d, ok := l.layoutCache.Get(lk); ok {
+		// l.txt will alias this document's slices until the next layout
+		// pass; stamp it so eviction does not recycle it prematurely.
+		d.gen = l.shaper.docGen
+		return d
 	}
 	lines := l.shaper.LayoutString(params, asStr)
 	l.layoutCache.Put(lk, lines)
@@ -578,7 +632,22 @@ func (l *Shaper) Shape(gs []Glyph) clip.PathSpec {
 	// keep the path bytes alive forever — eviction can't trim part of
 	// a single op buffer (Reset() only zeros length, freeing actual
 	// memory needs a new buffer).
-	shape = l.shaper.Shape(new(op.Ops), gs)
+	pathOps := new(op.Ops)
+	if l.pathBytesPerGlyph > 0 {
+		// Pre-size for the expected encoded outline size plus slack so a
+		// typical run encodes without a single buffer growth.
+		ops.Reserve(&pathOps.Internal, l.pathBytesPerGlyph*len(gs)*5/4+256)
+	}
+	shape = l.shaper.Shape(pathOps, gs)
+	if n := len(gs); n > 0 {
+		perGlyph := ops.DataLen(&pathOps.Internal) / n
+		if l.pathBytesPerGlyph == 0 {
+			l.pathBytesPerGlyph = perGlyph
+		} else {
+			// Exponential moving average, weight 1/8.
+			l.pathBytesPerGlyph += (perGlyph - l.pathBytesPerGlyph) / 8
+		}
+	}
 	l.pathCache.Put(key, gs, shape)
 	return shape
 }

@@ -541,9 +541,22 @@ type graphemeReader struct {
 func (p *graphemeReader) SetSource(source io.ReaderAt) {
 	p.source = source
 	p.cursor = 0
-	p.reader = bufio.NewReader(p)
+	// Reuse the buffered reader: allocating one per SetSource retained a
+	// fresh default-size (4KB) buffer on every layout of every editor —
+	// the dominant per-editor retention after SetText. The buffer only
+	// smooths rune-at-a-time reads of one paragraph, so a small one does.
+	if p.reader == nil {
+		p.reader = bufio.NewReaderSize(p, graphemeReaderBufSize)
+	} else {
+		p.reader.Reset(p)
+	}
 	p.runeOffset = 0
 }
+
+// graphemeReaderBufSize is deliberately far below bufio's 4096 default:
+// reads are sequential within a paragraph and the underlying source is an
+// in-memory gap buffer, so refills cost a copy, not I/O.
+const graphemeReaderBufSize = 256
 
 func (p *graphemeReader) Read(b []byte) (int, error) {
 	n, err := p.source.ReadAt(b, p.cursor)

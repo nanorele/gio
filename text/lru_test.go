@@ -10,7 +10,7 @@ import (
 func TestLayoutLRU(t *testing.T) {
 	c := new(layoutCache)
 	put := func(i int) {
-		c.Put(layoutKey{str: strconv.Itoa(i)}, document{})
+		c.Put(layoutKey{str: strconv.Itoa(i)}, &document{})
 	}
 	get := func(i int) bool {
 		_, ok := c.Get(layoutKey{str: strconv.Itoa(i)})

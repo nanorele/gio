@@ -56,6 +56,9 @@ type textView struct {
 	rr         textSource
 	maskReader maskReader
 	runeBuf    [utf8.UTFMax]byte
+	// eqScratch is TextEqual's chunk buffer; a heap slice because a stack
+	// buffer escapes through the textSource interface call.
+	eqScratch []byte
 
 	graphemes []int
 
@@ -371,6 +374,49 @@ func (e *textView) Text(buf []byte) []byte {
 	n, _ := io.ReadFull(e, buf)
 	buf = buf[:n]
 	return buf
+}
+
+// TextTo appends the text content to dst and returns the extended slice,
+// allocating only when dst lacks capacity.
+func (e *textView) TextTo(dst []byte) []byte {
+	size := int(e.rr.Size())
+	off := len(dst)
+	if cap(dst)-off < size {
+		grown := make([]byte, off, off+size)
+		copy(grown, dst)
+		dst = grown
+	}
+	dst = dst[:off+size]
+	// editBuffer.ReadAt serves both gap segments in a single call, so no
+	// read loop is needed.
+	n, _ := e.rr.ReadAt(dst[off:], 0)
+	return dst[:off+n]
+}
+
+// TextEqual reports whether the text content equals s, without materializing
+// either side.
+func (e *textView) TextEqual(s string) bool {
+	if int64(len(s)) != e.rr.Size() {
+		return false
+	}
+	// eqScratch persists on the view: a stack buffer would escape through
+	// the textSource interface call and cost an allocation per comparison.
+	if e.eqScratch == nil {
+		e.eqScratch = make([]byte, 256)
+	}
+	for off := 0; off < len(s); {
+		n, _ := e.rr.ReadAt(e.eqScratch, int64(off))
+		if n == 0 {
+			// Cannot happen while off < Size; guard against livelock.
+			return false
+		}
+		// string(byte-slice) == string comparisons do not allocate.
+		if string(e.eqScratch[:n]) != s[off:off+n] {
+			return false
+		}
+		off += n
+	}
+	return true
 }
 
 func (e *textView) ScrollBounds() image.Rectangle {

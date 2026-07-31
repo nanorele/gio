@@ -1,12 +1,16 @@
 package text
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	nsareg "eliasnaur.com/font/noto/sans/arabic/regular"
+	giofont "github.com/nanorele/gio/font"
 	"github.com/nanorele/gio/font/opentype"
 	"github.com/nanorele/gio/io/system"
+	"golang.org/x/image/font/gofont/goitalic"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/math/fixed"
 )
@@ -146,7 +150,7 @@ func TestLayoutCacheKeyIncludesSpaceTrim(t *testing.T) {
 	}
 }
 
-func trailingGlyphAdvance(t *testing.T, doc document) fixed.Int26_6 {
+func trailingGlyphAdvance(t *testing.T, doc *document) fixed.Int26_6 {
 	t.Helper()
 	run := doc.lines[0].runs[len(doc.lines[0].runs)-1]
 	if len(run.Glyphs) == 0 {
@@ -181,6 +185,126 @@ func TestGlyphRunesNoOverflowOnLargeTruncation(t *testing.T) {
 	}
 }
 
+// collectGlyphs drains the shaper's glyph iterator.
+func collectGlyphs(sh *Shaper) []Glyph {
+	var gs []Glyph
+	for g, ok := sh.NextGlyph(); ok; g, ok = sh.NextGlyph() {
+		gs = append(gs, g)
+	}
+	return gs
+}
+
+// TestSingleLineTrimMatchesFullShaping verifies the MaxLines==1 shaping
+// cutoff produces glyph-for-glyph identical output to shaping the entire
+// string, across widths, alignments, wrap policies and trailing newlines.
+func TestSingleLineTrimMatchesFullShaping(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	collection := []FontFace{{Face: ltrFace}}
+
+	long := strings.Repeat("virtually unbounded content in a narrow cell ", 12) // 540 runes
+	spaces := "abc" + strings.Repeat(" ", 400) + "x"
+	texts := []string{
+		long,
+		spaces,
+		long + "\nsecond paragraph",
+		strings.Repeat("x", 500),
+		strings.Repeat("wide ", 100),
+	}
+	widths := []int{60, 200, 350}
+	aligns := []Alignment{Start, Middle, End}
+	policies := []WrapPolicy{WrapHeuristically, WrapWords, WrapGraphemes}
+
+	for ti, txt := range texts {
+		for _, w := range widths {
+			for _, align := range aligns {
+				for _, policy := range policies {
+					params := Parameters{
+						PxPerEm:    fixed.I(14),
+						MaxWidth:   w,
+						MinWidth:   w,
+						MaxLines:   1,
+						Alignment:  align,
+						WrapPolicy: policy,
+						Locale:     english,
+					}
+					trimming := NewShaper(NoSystemFonts(), WithCollection(collection))
+					trimming.LayoutString(params, txt)
+					got := collectGlyphs(trimming)
+
+					full := NewShaper(NoSystemFonts(), WithCollection(collection))
+					full.shaper.disableSingleLineTrim = true
+					full.LayoutString(params, txt)
+					want := collectGlyphs(full)
+
+					if !reflect.DeepEqual(got, want) {
+						t.Errorf("text %d width %d align %v policy %v: trimmed shaping diverges from full shaping (%d vs %d glyphs)",
+							ti, w, align, policy, len(got), len(want))
+					}
+				}
+			}
+		}
+	}
+}
+
+// TestSingleLineTrimRuneCount ensures the glyph rune counts still sum to the
+// entire text length when the shaping cutoff applies, so caret/position
+// mapping sees every rune.
+func TestSingleLineTrimRuneCount(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	sh := NewShaper(NoSystemFonts(), WithCollection([]FontFace{{Face: ltrFace}}))
+	const n = 5000
+	sh.LayoutString(Parameters{
+		PxPerEm:  fixed.I(14),
+		MaxWidth: 150,
+		MaxLines: 1,
+		Locale:   english,
+	}, strings.Repeat("a b ", n/4))
+	total := 0
+	for g, ok := sh.NextGlyph(); ok; g, ok = sh.NextGlyph() {
+		total += int(g.Runes)
+	}
+	if total != n {
+		t.Errorf("glyph rune counts sum to %d, want %d", total, n)
+	}
+}
+
+// TestDocRecycleKeepsAliasedLayoutsIntact forces layout-cache evictions in
+// the middle of a multi-paragraph layout and verifies the glyph stream is
+// identical to an uncached shaper's. Evicted documents feed a reuse pool,
+// and a document served during the current layout pass is still aliased by
+// Shaper.txt — recycling it too early would corrupt earlier paragraphs.
+func TestDocRecycleKeepsAliasedLayoutsIntact(t *testing.T) {
+	ltrFace, _ := opentype.Parse(goregular.TTF)
+	collection := []FontFace{{Face: ltrFace}}
+	params := Parameters{
+		PxPerEm:  fixed.I(14),
+		MaxWidth: 400,
+		Locale:   english,
+	}
+	var paragraphs []string
+	for i := range 12 {
+		paragraphs = append(paragraphs, strings.Repeat(string(rune('a'+i)), 30+i))
+	}
+	txt := strings.Join(paragraphs, "\n")
+
+	small := NewShaper(NoSystemFonts(), WithCollection(collection))
+	small.init()
+	small.layoutCache.capLimit = 3 // evict within a single layout pass
+	// Warm the cache so the second pass serves hits and evicts them.
+	small.LayoutString(params, txt)
+	collectGlyphs(small)
+	small.LayoutString(params, txt)
+	got := collectGlyphs(small)
+
+	fresh := NewShaper(NoSystemFonts(), WithCollection(collection))
+	fresh.LayoutString(params, txt)
+	want := collectGlyphs(fresh)
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("glyph stream corrupted by document recycling under eviction pressure")
+	}
+}
+
 // TestGlyphCacheKeyIncludesOffset ensures two glyph sequences that differ
 // only in Offset do not collide in the glyph path/bitmap caches: the cached
 // path geometry embeds the offsets.
@@ -192,5 +316,85 @@ func TestGlyphCacheKeyIncludesOffset(t *testing.T) {
 	c.Put(c.hashGlyphs(base), base, 1)
 	if v, ok := c.Get(c.hashGlyphs(shifted), shifted); ok {
 		t.Errorf("glyphs differing only in Offset hit the same cache entry (got %d)", v)
+	}
+}
+
+// TestLazyFaceMatchLoadsOnStyleRequest ensures a Match-only lazy face (e.g.
+// an italic variant) is not parsed until a layout requests a matching font,
+// and is parsed exactly then.
+func TestLazyFaceMatchLoadsOnStyleRequest(t *testing.T) {
+	regular, _ := opentype.Parse(goregular.TTF)
+	loads := 0
+	sh := NewShaper(NoSystemFonts(),
+		WithCollection([]FontFace{{Face: regular}}),
+		WithLazyCollection([]LazyFace{{
+			Typeface: "Go",
+			Match:    func(f giofont.Font) bool { return f.Style == giofont.Italic },
+			Load: func() (FontFace, error) {
+				loads++
+				italic, err := opentype.Parse(goitalic.TTF)
+				return FontFace{Face: italic, Font: giofont.Font{Typeface: "Go", Style: giofont.Italic}}, err
+			},
+		}}))
+
+	params := Parameters{
+		PxPerEm:  fixed.I(14),
+		MaxWidth: 1000,
+		Locale:   english,
+	}
+	sh.LayoutString(params, "regular text does not need italics")
+	collectGlyphs(sh)
+	if loads != 0 {
+		t.Fatalf("italic face parsed by a regular layout (loads=%d)", loads)
+	}
+
+	params.Font.Style = giofont.Italic
+	sh.LayoutString(params, "now in italics")
+	if g := collectGlyphs(sh); len(g) == 0 {
+		t.Fatal("no glyphs for italic layout")
+	}
+	if loads != 1 {
+		t.Fatalf("italic face load count = %d, want 1", loads)
+	}
+	// A repeated italic layout must not reload.
+	params.MaxWidth = 999 // dodge the layout cache
+	sh.LayoutString(params, "now in italics")
+	collectGlyphs(sh)
+	if loads != 1 {
+		t.Fatalf("italic face reloaded (loads=%d)", loads)
+	}
+}
+
+// TestLazyFaceRangeStillLoads guards the pre-existing rune-range trigger:
+// a face claiming a range is parsed the first time one of its runes is
+// shaped.
+func TestLazyFaceRangeStillLoads(t *testing.T) {
+	regular, _ := opentype.Parse(goregular.TTF)
+	loads := 0
+	sh := NewShaper(NoSystemFonts(),
+		WithCollection([]FontFace{{Face: regular}}),
+		WithLazyCollection([]LazyFace{{
+			Typeface: "Nsareg",
+			Ranges:   []RuneRange{{Lo: 0x0600, Hi: 0x06FF}},
+			Load: func() (FontFace, error) {
+				loads++
+				rtl, err := opentype.Parse(nsareg.TTF)
+				return FontFace{Face: rtl, Font: giofont.Font{Typeface: "Nsareg"}}, err
+			},
+		}}))
+	params := Parameters{
+		PxPerEm:  fixed.I(14),
+		MaxWidth: 1000,
+		Locale:   english,
+	}
+	sh.LayoutString(params, "ascii only")
+	collectGlyphs(sh)
+	if loads != 0 {
+		t.Fatalf("range-claimed face parsed without its runes (loads=%d)", loads)
+	}
+	sh.LayoutString(params, "میلاد")
+	collectGlyphs(sh)
+	if loads != 1 {
+		t.Fatalf("range-claimed face load count = %d, want 1", loads)
 	}
 }

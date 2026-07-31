@@ -22,7 +22,10 @@ type entry[K comparable, V any] struct {
 type lru[K comparable, V any] struct {
 	m          map[K]*entry[K, V]
 	head, tail *entry[K, V]
-	onEvict    func(V)
+	// free chains evicted entries (via next) for reuse by Put, so steady
+	// eviction pressure does not allocate an entry per insertion.
+	free    *entry[K, V]
+	onEvict func(V)
 	// capLimit overrides the package-default maxSize when > 0. Allows
 	// individual cache instances (e.g. the per-glyph-batch path cache,
 	// which holds clip.PathSpec values that can be tens of MB combined)
@@ -65,8 +68,9 @@ func (l *lru[K, V]) Put(k K, v V) {
 		if l.onEvict != nil {
 			l.onEvict(old.v)
 		}
+		l.release(old)
 	}
-	val := &entry[K, V]{key: k, v: v}
+	val := l.acquire(k, v)
 	if l.costOf != nil {
 		val.cost = l.costOf(k, v)
 	}
@@ -88,7 +92,24 @@ func (l *lru[K, V]) Put(k K, v V) {
 		if l.onEvict != nil {
 			l.onEvict(oldest.v)
 		}
+		l.release(oldest)
 	}
+}
+
+func (l *lru[K, V]) acquire(k K, v V) *entry[K, V] {
+	if e := l.free; e != nil {
+		l.free = e.next
+		*e = entry[K, V]{key: k, v: v}
+		return e
+	}
+	return &entry[K, V]{key: k, v: v}
+}
+
+// release returns an unlinked entry to the free chain, dropping its key and
+// value so they do not outlive the eviction.
+func (l *lru[K, V]) release(e *entry[K, V]) {
+	*e = entry[K, V]{next: l.free}
+	l.free = e
 }
 
 func (l *lru[K, V]) remove(e *entry[K, V]) {
@@ -105,6 +126,7 @@ func (l *lru[K, V]) Clear() {
 	l.m = nil
 	l.head = nil
 	l.tail = nil
+	l.free = nil
 	l.cost = 0
 }
 
@@ -122,7 +144,7 @@ type bitmap struct {
 	size image.Point
 }
 
-type layoutCache = lru[layoutKey, document]
+type layoutCache = lru[layoutKey, *document]
 
 type glyphValue[V any] struct {
 	v      V
