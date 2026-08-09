@@ -480,6 +480,7 @@ func (e *Editor) command(gtx layout.Context, k key.Event) (EditorEvent, bool) {
 		selAct = selectionExtend
 	}
 	if k.Modifiers.Contain(key.ModShortcut) {
+		handled := true
 		switch k.Name {
 
 		case "V":
@@ -516,8 +517,15 @@ func (e *Editor) command(gtx layout.Context, k key.Event) (EditorEvent, bool) {
 			e.text.MoveTextStart(selAct)
 		case key.NameEnd:
 			e.text.MoveTextEnd(selAct)
+		default:
+			handled = false
 		}
-		return nil, false
+		// Where the shortcut and word modifiers are the same key (Ctrl on
+		// Windows/Linux), an unhandled shortcut chord is really a word chord:
+		// fall through so Ctrl+arrow/delete reach the moveByWord cases below.
+		if handled || key.ModShortcutAlt != key.ModShortcut {
+			return nil, false
+		}
 	}
 	switch k.Name {
 	case key.NameReturn, key.NameEnter:
