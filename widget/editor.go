@@ -27,6 +27,10 @@ import (
 	"github.com/nanorele/gio/unit"
 )
 
+// WordSeparator, when non-nil, defines the rune class treated as word
+// boundaries by double-click selection in Editor and Selectable.
+var WordSeparator func(rune) bool
+
 type Editor struct {
 	text textView
 
@@ -62,11 +66,15 @@ type Editor struct {
 		scratch []byte
 	}
 
-	dragging    bool
-	dragger     gesture.Drag
-	scroller    gesture.Scroll
-	scrollCaret bool
-	showCaret   bool
+	dragging        bool
+	wordDrag        bool
+	wordAnchorStart int
+	wordAnchorEnd   int
+	dragPressTime   time.Duration
+	dragger         gesture.Drag
+	scroller        gesture.Scroll
+	scrollCaret     bool
+	showCaret       bool
 
 	clicker gesture.Click
 
@@ -285,12 +293,28 @@ func (e *Editor) processPointerEvent(gtx layout.Context, ev event.Event) (Editor
 				e.text.ClearSelection()
 			}
 			e.dragging = true
+			e.wordDrag = false
+			e.dragPressTime = evt.Time
 
 			switch {
 			case evt.NumClicks == 2:
-				e.text.MoveWord(-1, selectionClear)
-				e.text.MoveWord(1, selectionExtend)
-				e.dragging = false
+				if sep := WordSeparator; sep != nil {
+					e.text.SelectWordAt(sep)
+					if evt.Source == pointer.Mouse {
+						s, en := e.text.Selection()
+						if s > en {
+							s, en = en, s
+						}
+						e.wordDrag = true
+						e.wordAnchorStart, e.wordAnchorEnd = s, en
+					} else {
+						e.dragging = false
+					}
+				} else {
+					e.text.MoveWord(-1, selectionClear)
+					e.text.MoveWord(1, selectionExtend)
+					e.dragging = false
+				}
 			case evt.NumClicks >= 3:
 				e.text.MoveLineStart(selectionClear)
 				e.text.MoveLineEnd(selectionExtend)
@@ -304,12 +328,20 @@ func (e *Editor) processPointerEvent(gtx layout.Context, ev event.Event) (Editor
 			release = true
 			fallthrough
 		case evt.Kind == pointer.Drag && evt.Source == pointer.Mouse:
+			if evt.Time < e.dragPressTime {
+				break
+			}
 			if e.dragging {
 				e.blinkStart = gtx.Now
 				e.text.MoveCoord(image.Point{
 					X: int(math.Round(float64(evt.Position.X))),
 					Y: int(math.Round(float64(evt.Position.Y))),
 				})
+				if e.wordDrag {
+					if sep := WordSeparator; sep != nil {
+						e.text.ExtendSelectionByWord(e.wordAnchorStart, e.wordAnchorEnd, sep)
+					}
+				}
 				e.scrollCaret = true
 
 				if release {
@@ -333,6 +365,7 @@ func (e *Editor) keyFilters(atBeginning, atEnd bool) []event.Filter {
 			key.Filter{Focus: e, Name: key.NameEnter, Optional: key.ModShift},
 			key.Filter{Focus: e, Name: key.NameReturn, Optional: key.ModShift},
 			key.Filter{Focus: e, Name: "Z", Required: key.ModShortcut, Optional: key.ModShift},
+			key.Filter{Focus: e, Name: "Y", Required: key.ModShortcut},
 			key.Filter{Focus: e, Name: "C", Required: key.ModShortcut},
 			key.Filter{Focus: e, Name: "V", Required: key.ModShortcut},
 			key.Filter{Focus: e, Name: "X", Required: key.ModShortcut},
@@ -511,6 +544,12 @@ func (e *Editor) command(gtx layout.Context, k key.Event) (EditorEvent, bool) {
 					if ev, ok := e.undo(); ok {
 						return ev, ok
 					}
+				}
+			}
+		case "Y":
+			if !e.ReadOnly {
+				if ev, ok := e.redo(); ok {
+					return ev, ok
 				}
 			}
 		case key.NameHome:
@@ -782,7 +821,7 @@ func (e *Editor) SetText(s string) {
 	if e.SingleLine {
 		s = strings.ReplaceAll(s, "\n", " ")
 	}
-	e.replace(0, e.text.Len(), s, true)
+	e.replace(0, e.text.Len(), s, len(e.history) > 0)
 
 	// Always pin the caret directly to (0,0) without going through
 	// SetCaret → closestToRune → makeValid. closestToRune triggers a
@@ -877,7 +916,7 @@ func (e *Editor) undo() (EditorEvent, bool) {
 	replaceEnd := mod.StartRune + utf8.RuneCountInString(mod.ApplyContent)
 	e.replace(mod.StartRune, replaceEnd, mod.ReverseContent, false)
 	caretEnd := mod.StartRune + utf8.RuneCountInString(mod.ReverseContent)
-	e.SetCaret(caretEnd, mod.StartRune)
+	e.SetCaret(caretEnd, caretEnd)
 	e.nextHistoryIdx--
 	return ChangeEvent{}, true
 }
@@ -891,7 +930,7 @@ func (e *Editor) redo() (EditorEvent, bool) {
 	end := mod.StartRune + utf8.RuneCountInString(mod.ReverseContent)
 	e.replace(mod.StartRune, end, mod.ApplyContent, false)
 	caretEnd := mod.StartRune + utf8.RuneCountInString(mod.ApplyContent)
-	e.SetCaret(caretEnd, mod.StartRune)
+	e.SetCaret(caretEnd, caretEnd)
 	e.nextHistoryIdx++
 	return ChangeEvent{}, true
 }

@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/nanorele/gio/font"
 	"github.com/nanorele/gio/gesture"
@@ -67,7 +68,13 @@ type Selectable struct {
 	text      textView
 	focused   bool
 	dragging  bool
-	dragger   gesture.Drag
+
+	wordDrag        bool
+	wordAnchorStart int
+	wordAnchorEnd   int
+	dragPressTime   time.Duration
+
+	dragger gesture.Drag
 
 	clicker gesture.Click
 }
@@ -220,12 +227,28 @@ func (e *Selectable) processClickEvent(gtx layout.Context, evt gesture.ClickEven
 			e.text.ClearSelection()
 		}
 		e.dragging = true
+		e.wordDrag = false
+		e.dragPressTime = evt.Time
 
 		switch {
 		case evt.NumClicks == 2:
-			e.text.MoveWord(-1, selectionClear)
-			e.text.MoveWord(1, selectionExtend)
-			e.dragging = false
+			if sep := WordSeparator; sep != nil {
+				e.text.SelectWordAt(sep)
+				if evt.Source == pointer.Mouse {
+					s, en := e.text.Selection()
+					if s > en {
+						s, en = en, s
+					}
+					e.wordDrag = true
+					e.wordAnchorStart, e.wordAnchorEnd = s, en
+				} else {
+					e.dragging = false
+				}
+			} else {
+				e.text.MoveWord(-1, selectionClear)
+				e.text.MoveWord(1, selectionExtend)
+				e.dragging = false
+			}
 		case evt.NumClicks >= 3:
 			e.text.MoveLineStart(selectionClear)
 			e.text.MoveLineEnd(selectionExtend)
@@ -241,11 +264,19 @@ func (e *Selectable) processDragEvent(evt pointer.Event) {
 		release = true
 		fallthrough
 	case evt.Kind == pointer.Drag && evt.Source == pointer.Mouse:
+		if evt.Time < e.dragPressTime {
+			break
+		}
 		if e.dragging {
 			e.text.MoveCoord(image.Point{
 				X: int(math.Round(float64(evt.Position.X))),
 				Y: int(math.Round(float64(evt.Position.Y))),
 			})
+			if e.wordDrag {
+				if sep := WordSeparator; sep != nil {
+					e.text.ExtendSelectionByWord(e.wordAnchorStart, e.wordAnchorEnd, sep)
+				}
+			}
 
 			if release {
 				e.dragging = false

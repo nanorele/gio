@@ -89,7 +89,7 @@ func TestEditorHistory(t *testing.T) {
 	assertContents(t, e, "", 0, 0)
 
 	e.undo()
-	assertContents(t, e, "안П你 hello 안П你", 13, 0)
+	assertContents(t, e, "안П你 hello 안П你", 13, 13)
 
 	e.redo()
 	assertContents(t, e, "", 0, 0)
@@ -106,9 +106,9 @@ func TestEditorHistory(t *testing.T) {
 	assertContents(t, e, "안ПeПlo", 4, 4)
 
 	e.undo()
-	assertContents(t, e, "안Пello", 4, 3)
+	assertContents(t, e, "안Пello", 4, 4)
 	e.undo()
-	assertContents(t, e, "안П你 hello", 5, 1)
+	assertContents(t, e, "안П你 hello", 5, 5)
 
 	e.Insert("Something New")
 
@@ -1647,6 +1647,79 @@ func TestEditorExtra_MoveWord_Unicode(t *testing.T) {
 		if s, _ := e.Selection(); s != c.want {
 			t.Errorf("[%d] %q from %d dist %d: got %d want %d",
 				i, c.text, c.start, c.dist, s, c.want)
+		}
+	}
+}
+
+func TestEditorExtra_SelectWordAt_Separators(t *testing.T) {
+	sep := func(r rune) bool {
+		return r == ' ' || strings.ContainsRune(".,:;!?()[]{}\"'`@", r)
+	}
+	type tc struct {
+		text       string
+		caret      int
+		start, end int
+	}
+	cases := []tc{
+		{"пример (слово) конец", 10, 8, 13},
+		{"пример (слово) конец", 8, 8, 13},
+		{"пример (слово) конец", 13, 8, 13},
+		{"a(b)c", 0, 0, 1},
+		{"a(b)c", 2, 2, 3},
+		{"(word)", 6, 6, 6},
+		{"foo  bar", 4, 3, 5},
+		{"{{host}}", 3, 2, 6},
+		{"x, y", 2, 2, 3},
+		{"ab  ", 4, 2, 4},
+		{"ab)", 3, 3, 3},
+		{"a)\nb", 2, 2, 2},
+		{"a \nb", 2, 1, 2},
+		{"a \n b", 3, 3, 4},
+		{"a\n\nb", 2, 2, 2},
+	}
+	for i, c := range cases {
+		e := new(Editor)
+		e.SetText(c.text)
+		updateEditor(e)
+		e.SetCaret(c.caret, c.caret)
+		e.text.SelectWordAt(sep)
+		s, en := e.Selection()
+		if s < en {
+			s, en = en, s
+		}
+		if en != c.start || s != c.end {
+			t.Errorf("[%d] %q caret %d: got (%d,%d) want (%d,%d)",
+				i, c.text, c.caret, en, s, c.start, c.end)
+		}
+	}
+}
+
+func TestEditorExtra_ExtendSelectionByWord(t *testing.T) {
+	sep := func(r rune) bool {
+		return r == ' ' || r == '\n' || strings.ContainsRune(".,:;!?()[]{}\"'`@", r)
+	}
+	type tc struct {
+		pos                    int
+		anchorStart, anchorEnd int
+		wantStart, wantEnd     int
+	}
+	cases := []tc{
+		{10, 0, 3, 13, 0},
+		{8, 0, 3, 8, 0},
+		{1, 0, 3, 3, 0},
+		{1, 8, 13, 0, 13},
+		{7, 8, 13, 7, 13},
+	}
+	for i, c := range cases {
+		e := new(Editor)
+		e.SetText("one two three")
+		updateEditor(e)
+		e.SetCaret(c.pos, c.pos)
+		e.text.ExtendSelectionByWord(c.anchorStart, c.anchorEnd, sep)
+		s, en := e.Selection()
+		if s != c.wantStart || en != c.wantEnd {
+			t.Errorf("[%d] pos %d anchor [%d,%d): got (%d,%d) want (%d,%d)",
+				i, c.pos, c.anchorStart, c.anchorEnd, s, en, c.wantStart, c.wantEnd)
 		}
 	}
 }

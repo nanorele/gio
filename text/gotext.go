@@ -149,6 +149,8 @@ type shaperImpl struct {
 	faceToIndex  map[*font.Font]int
 	faceMeta     []giofont.Font
 	defaultFaces []string
+	noLigaFonts  []giofont.Typeface
+	noLigaFaces  map[*font.Font]struct{}
 	logger       interface {
 		Printf(format string, args ...any)
 	}
@@ -313,11 +315,20 @@ func (d debugLogger) Printf(format string, args ...any) {
 	}
 }
 
-func newShaperImpl(systemFonts bool, collection []FontFace, lazy []LazyFace) *shaperImpl {
+var noLigatureFeatures = []shaping.FontFeature{
+	{Tag: gotextot.MustNewTag("liga")},
+	{Tag: gotextot.MustNewTag("clig")},
+	{Tag: gotextot.MustNewTag("dlig")},
+	{Tag: gotextot.MustNewTag("calt")},
+}
+
+func newShaperImpl(systemFonts bool, collection []FontFace, lazy []LazyFace, noLigatures []giofont.Typeface) *shaperImpl {
 	var shaper shaperImpl
 	shaper.logger = newDebugLogger()
 	shaper.fontMap = fontscan.NewFontMap(shaper.logger)
 	shaper.faceToIndex = make(map[*font.Font]int)
+	shaper.noLigaFonts = noLigatures
+	shaper.noLigaFaces = make(map[*font.Font]struct{})
 	if systemFonts {
 		str, err := os.UserCacheDir()
 		if err != nil {
@@ -473,6 +484,9 @@ func (s *shaperImpl) addFace(f *font.Face, md giofont.Font) {
 	s.faceToIndex[f.Font] = idx
 	s.faces = append(s.faces, f)
 	s.faceMeta = append(s.faceMeta, md)
+	if slices.Contains(s.noLigaFonts, md.Typeface) {
+		s.noLigaFaces[f.Font] = struct{}{}
+	}
 	// A new face can change which face the truncator resolves to.
 	clear(s.truncCache)
 }
@@ -630,6 +644,9 @@ func (s *shaperImpl) shapeText(ppem fixed.Int26_6, lc system.Locale, txt []rune)
 	s.outScratchBuf = s.outScratchBuf[:0]
 	for _, input := range inputs {
 		if input.Face != nil {
+			if _, ok := s.noLigaFaces[input.Face.Font]; ok {
+				input.FontFeatures = noLigatureFeatures
+			}
 			s.outScratchBuf = append(s.outScratchBuf, s.shaper.Shape(input))
 		} else {
 			s.outScratchBuf = append(s.outScratchBuf, shaping.Output{

@@ -170,6 +170,7 @@ type Shaper struct {
 		disableSystemFonts bool
 		collection         []FontFace
 		lazyCollection     []LazyFace
+		noLigatures        []giofont.Typeface
 	}
 	initialized      bool
 	shaper           shaperImpl
@@ -226,6 +227,12 @@ func WithLazyCollection(collection []LazyFace) ShaperOption {
 	}
 }
 
+func WithoutLigatures(typefaces ...giofont.Typeface) ShaperOption {
+	return func(s *Shaper) {
+		s.config.noLigatures = append(s.config.noLigatures, typefaces...)
+	}
+}
+
 func NewShaper(options ...ShaperOption) *Shaper {
 	l := &Shaper{
 		pathOps:   new(op.Ops),
@@ -255,7 +262,7 @@ func (l *Shaper) init() {
 	l.layoutCache.onEvict = func(d *document) { l.shaper.recycleDoc(d) }
 	l.pathCache.setGlyphBudget(maxCachedPathGlyphs)
 	l.bitmapShapeCache.setGlyphBudget(maxCachedPathGlyphs)
-	l.shaper = *newShaperImpl(!l.config.disableSystemFonts, l.config.collection, l.config.lazyCollection)
+	l.shaper = *newShaperImpl(!l.config.disableSystemFonts, l.config.collection, l.config.lazyCollection, l.config.noLigatures)
 }
 
 // maxLayoutCacheBytes bounds the retained size of cached paragraph layouts.

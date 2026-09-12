@@ -706,6 +706,111 @@ func (e *textView) MoveWord(distance int, selAct selectionAction) {
 	e.clampCursorToGraphemes()
 }
 
+func isLineBreak(r rune) bool {
+	return r == '\n' || r == '\r'
+}
+
+func lineSpace(r rune) bool {
+	return unicode.IsSpace(r) && !isLineBreak(r)
+}
+
+func (e *textView) SelectWordAt(isSep func(rune) bool) {
+	caret := e.closestToRune(e.caret.start)
+	pos := caret.runes
+	off := int64(e.runeOffset(pos))
+
+	at, atSz, _ := e.ReadRuneAt(off)
+	before, beforeSz, _ := e.ReadRuneBefore(off)
+	hasAt := atSz > 0 && !isLineBreak(at)
+	hasBefore := beforeSz > 0 && !isLineBreak(before)
+
+	isWord := func(r rune) bool { return !isSep(r) }
+
+	start, end := pos, pos
+	startOff, endOff := off, off
+	expandBack := func(pred func(rune) bool) {
+		for {
+			r, sz, _ := e.ReadRuneBefore(startOff)
+			if sz == 0 || !pred(r) {
+				break
+			}
+			startOff -= int64(sz)
+			start--
+		}
+	}
+	expandFwd := func(pred func(rune) bool) {
+		for {
+			r, sz, _ := e.ReadRuneAt(endOff)
+			if sz == 0 || !pred(r) {
+				break
+			}
+			endOff += int64(sz)
+			end++
+		}
+	}
+	switch {
+	case (hasAt && isWord(at)) || (hasBefore && isWord(before)):
+		expandBack(isWord)
+		expandFwd(isWord)
+	case hasAt && lineSpace(at):
+		expandBack(lineSpace)
+		expandFwd(lineSpace)
+	case hasAt:
+		end++
+	case hasBefore && lineSpace(before):
+		expandBack(lineSpace)
+	}
+	e.caret.start = end
+	e.caret.end = start
+	e.clampCursorToGraphemes()
+}
+
+func (e *textView) ExtendSelectionByWord(anchorStart, anchorEnd int, isSep func(rune) bool) {
+	pos := e.closestToRune(e.caret.start).runes
+	if pos >= anchorStart && pos <= anchorEnd {
+		e.caret.start = anchorEnd
+		e.caret.end = anchorStart
+		e.clampCursorToGraphemes()
+		return
+	}
+	off := int64(e.runeOffset(pos))
+	at, atSz, _ := e.ReadRuneAt(off)
+	before, beforeSz, _ := e.ReadRuneBefore(off)
+	inside := atSz > 0 && beforeSz > 0 && !isSep(at) && !isSep(before)
+
+	target := pos
+	if pos < anchorStart {
+		if inside {
+			bo := off
+			for {
+				r, sz, _ := e.ReadRuneBefore(bo)
+				if sz == 0 || isSep(r) {
+					break
+				}
+				bo -= int64(sz)
+				target--
+			}
+		}
+		e.caret.start = target
+		e.caret.end = anchorEnd
+	} else {
+		if inside {
+			fo := off
+			for {
+				r, sz, _ := e.ReadRuneAt(fo)
+				if sz == 0 || isSep(r) {
+					break
+				}
+				fo += int64(sz)
+				target++
+			}
+		}
+		e.caret.start = target
+		e.caret.end = anchorStart
+	}
+	e.clampCursorToGraphemes()
+}
+
 func (e *textView) ScrollToCaret() {
 	caret := e.closestToRune(e.caret.start)
 	if e.SingleLine {
