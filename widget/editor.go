@@ -315,7 +315,10 @@ func (e *Editor) processPointerEvent(gtx layout.Context, ev event.Event) (Editor
 					e.text.MoveWord(1, selectionExtend)
 					e.dragging = false
 				}
-			case evt.NumClicks >= 3:
+			case evt.NumClicks >= 4:
+				e.text.SetCaret(0, e.text.Len())
+				e.dragging = false
+			case evt.NumClicks == 3:
 				e.text.MoveLineStart(selectionClear)
 				e.text.MoveLineEnd(selectionExtend)
 				e.dragging = false

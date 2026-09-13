@@ -65,7 +65,8 @@ func (h *Hover) Update(q input.Source) bool {
 }
 
 type Click struct {
-	clickedAt time.Duration
+	clickedAt  time.Duration
+	clickedPos f32.Point
 
 	clicks int
 
@@ -139,6 +140,8 @@ const (
 
 const touchSlop = unit.Dp(3)
 
+const clickSlop = 5
+
 func (c *Click) Add(ops *op.Ops) {
 	event.Op(ops, c)
 }
@@ -204,12 +207,14 @@ func (c *Click) Update(q input.Source) (ClickEvent, bool) {
 				break
 			}
 			c.pressed = true
-			if e.Time-c.clickedAt < doubleClickDuration {
+			near := e.Position.Sub(c.clickedPos)
+			if e.Time-c.clickedAt < doubleClickDuration && near.X*near.X+near.Y*near.Y <= clickSlop*clickSlop && c.clicks < 4 {
 				c.clicks++
 			} else {
 				c.clicks = 1
 			}
 			c.clickedAt = e.Time
+			c.clickedPos = e.Position
 			return ClickEvent{Kind: KindPress, Position: e.Position.Round(), Source: e.Source, Modifiers: e.Modifiers, NumClicks: c.clicks, Time: e.Time}, true
 		case pointer.Leave:
 			if !c.pressed {

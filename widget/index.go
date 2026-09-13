@@ -398,18 +398,33 @@ func (g *glyphIndex) closestToXY(x fixed.Int26_6, y int) (pos combinedPos, atEnd
 	return g.positions[closest], false
 }
 
-func makeRegion(line lineInfo, y int, start, end fixed.Int26_6) Region {
+func (g *glyphIndex) lineSelBounds(lineIdx int, y int) (top, bottom int) {
+	line := g.lines[lineIdx]
+	top = y - line.ascent.Ceil()
+	bottom = y + line.descent.Ceil()
+	if lineIdx > 0 {
+		prev := g.lines[lineIdx-1]
+		if pb := prev.yOff + prev.descent.Ceil(); pb != top {
+			top = (pb + top) / 2
+		}
+	}
+	if lineIdx+1 < len(g.lines) {
+		next := g.lines[lineIdx+1]
+		if nt := next.yOff - next.ascent.Ceil(); nt != bottom {
+			bottom = (bottom + nt) / 2
+		}
+	}
+	return top, bottom
+}
+
+func makeRegion(line lineInfo, top, bottom int, start, end fixed.Int26_6) Region {
 	if start > end {
 		start, end = end, start
 	}
-	dotStart := image.Pt(start.Round(), y)
-	dotEnd := image.Pt(end.Round(), y)
 	return Region{
 		Bounds: image.Rectangle{
-			Min: dotStart.Sub(image.Point{Y: line.ascent.Ceil()}),
-			// Ceil (not Floor) so the fractional part of the descent is kept;
-			// otherwise descenders (j, g, p, q, y) get clipped by up to ~1px.
-			Max: dotEnd.Add(image.Point{Y: line.descent.Ceil()}),
+			Min: image.Pt(start.Round(), top),
+			Max: image.Pt(end.Round(), bottom),
 		},
 		Baseline: line.descent.Ceil(),
 	}
@@ -450,11 +465,12 @@ func (g *glyphIndex) locate(viewport image.Rectangle, startRune, endRune int, re
 		if int(pos.y)-pos.ascent.Ceil() > viewport.Max.Y {
 			break
 		}
+		top, bottom := g.lineSelBounds(lineIdx, pos.y)
 		if lineIdx > caretStart.lineCol.line && lineIdx < caretEnd.lineCol.line {
 			startX := line.xOff
 			endX := startX + line.width
 
-			rects = append(rects, makeRegion(line, pos.y, startX, endX))
+			rects = append(rects, makeRegion(line, top, bottom, startX, endX))
 			continue
 		}
 		selectionStart := caretStart
@@ -490,7 +506,7 @@ func (g *glyphIndex) locate(viewport image.Rectangle, startRune, endRune int, re
 			if selectionStart.runIndex == selectionEnd.runIndex {
 
 				endX = selectionEnd.x
-				rects = append(rects, makeRegion(line, pos.y, startX, endX))
+				rects = append(rects, makeRegion(line, top, bottom, startX, endX))
 				break
 			} else {
 				currentDirection := selectionStart.towardOrigin
@@ -503,19 +519,19 @@ func (g *glyphIndex) locate(viewport image.Rectangle, startRune, endRune int, re
 						selectionStart, eof = g.incrementPosition(selectionStart)
 						if eof {
 							endX = selectionStart.x
-							rects = append(rects, makeRegion(line, pos.y, startX, endX))
+							rects = append(rects, makeRegion(line, top, bottom, startX, endX))
 							break runLoop
 						}
 					}
 					if selectionStart.towardOrigin != currentDirection {
 						endX = previous.x
-						rects = append(rects, makeRegion(line, pos.y, startX, endX))
+						rects = append(rects, makeRegion(line, top, bottom, startX, endX))
 						break
 					}
 					if selectionStart.runIndex == selectionEnd.runIndex {
 
 						endX = selectionEnd.x
-						rects = append(rects, makeRegion(line, pos.y, startX, endX))
+						rects = append(rects, makeRegion(line, top, bottom, startX, endX))
 						break lineLoop
 					}
 				}

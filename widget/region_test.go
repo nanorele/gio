@@ -10,6 +10,56 @@ import (
 // regionHeight returns the pixel height of a region's bounding box.
 func regionHeight(r Region) int { return r.Bounds.Max.Y - r.Bounds.Min.Y }
 
+// singleLineRegion builds the region a lone line (no neighbours to share an
+// edge with) produces, so the per-line coverage tests keep their meaning.
+func singleLineRegion(line lineInfo, y int, start, end fixed.Int26_6) Region {
+	line.yOff = y
+	g := glyphIndex{lines: []lineInfo{line}}
+	top, bottom := g.lineSelBounds(0, y)
+	return makeRegion(line, top, bottom, start, end)
+}
+
+// TestLineSelBoundsAdjacentLinesMeet verifies that regions of neighbouring
+// lines share one edge: overlapping ascent/descent boxes (a translucent
+// selection painted twice shows a dark band) and gaps (unpainted rows) are
+// both resolved at the midpoint of the seam.
+func TestLineSelBoundsAdjacentLinesMeet(t *testing.T) {
+	tests := []struct {
+		name          string
+		ascent        fixed.Int26_6
+		descent       fixed.Int26_6
+		lineHeight    int
+		wantSeamAfter int // expected shared edge, relative to the first baseline
+	}{
+		{"overlapping boxes", fixed.I(12), fixed.I(4), 14, 3},
+		{"gap between boxes", fixed.I(12), fixed.I(4), 20, 6},
+		{"touching boxes", fixed.I(12), fixed.I(4), 16, 4},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			const y0 = 20
+			g := glyphIndex{lines: []lineInfo{
+				{yOff: y0, ascent: tc.ascent, descent: tc.descent},
+				{yOff: y0 + tc.lineHeight, ascent: tc.ascent, descent: tc.descent},
+				{yOff: y0 + 2*tc.lineHeight, ascent: tc.ascent, descent: tc.descent},
+			}}
+			_, b0 := g.lineSelBounds(0, y0)
+			t1, b1 := g.lineSelBounds(1, y0+tc.lineHeight)
+			t2, _ := g.lineSelBounds(2, y0+2*tc.lineHeight)
+			if b0 != t1 || b1 != t2 {
+				t.Errorf("seams: line0 bottom %d vs line1 top %d, line1 bottom %d vs line2 top %d", b0, t1, b1, t2)
+			}
+			if got := b0 - y0; got != tc.wantSeamAfter {
+				t.Errorf("first seam = %d px below the baseline, want %d", got, tc.wantSeamAfter)
+			}
+			t0, _ := g.lineSelBounds(0, y0)
+			if t0 != y0-tc.ascent.Ceil() {
+				t.Errorf("first line top = %d, want the full ascent %d", t0, y0-tc.ascent.Ceil())
+			}
+		})
+	}
+}
+
 // TestMakeRegionCoversDescent verifies that the selection rectangle produced by
 // makeRegion fully encloses the glyph row from the top of the ascent to the
 // bottom of the descent. The baseline sits at y; ascent extends above it and
@@ -62,7 +112,7 @@ func TestMakeRegionCoversDescent(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			line := lineInfo{ascent: tc.ascent, descent: tc.descent}
-			r := makeRegion(line, y, fixed.I(0), fixed.I(50))
+			r := singleLineRegion(line, y, fixed.I(0), fixed.I(50))
 
 			gotTop := y - r.Bounds.Min.Y
 			gotBottom := r.Bounds.Max.Y - y
@@ -89,7 +139,7 @@ func TestMakeRegionCoversDescent(t *testing.T) {
 // i.e. no rows lost to truncation on either edge.
 func TestMakeRegionHeight(t *testing.T) {
 	line := lineInfo{ascent: fixed.Int26_6(968), descent: fixed.Int26_6(216)}
-	r := makeRegion(line, 16, fixed.I(0), fixed.I(100))
+	r := singleLineRegion(line, 16, fixed.I(0), fixed.I(100))
 	want := line.ascent.Ceil() + line.descent.Ceil()
 	if got := regionHeight(r); got != want {
 		t.Errorf("region height = %d, want %d", got, want)
@@ -101,13 +151,13 @@ func TestMakeRegionHeight(t *testing.T) {
 func TestMakeRegionHorizontal(t *testing.T) {
 	line := lineInfo{ascent: fixed.I(10), descent: fixed.I(3)}
 
-	r := makeRegion(line, 0, fixed.I(5), fixed.I(40))
+	r := singleLineRegion(line, 0, fixed.I(5), fixed.I(40))
 	if r.Bounds.Min.X != 5 || r.Bounds.Max.X != 40 {
 		t.Errorf("x bounds = [%d,%d], want [5,40]", r.Bounds.Min.X, r.Bounds.Max.X)
 	}
 
 	// Reversed selection must yield identical bounds.
-	rev := makeRegion(line, 0, fixed.I(40), fixed.I(5))
+	rev := singleLineRegion(line, 0, fixed.I(40), fixed.I(5))
 	if rev.Bounds != r.Bounds {
 		t.Errorf("reversed region bounds = %v, want %v", rev.Bounds, r.Bounds)
 	}
@@ -118,7 +168,7 @@ func TestMakeRegionHorizontal(t *testing.T) {
 // the region bottom.
 func TestMakeRegionBaseline(t *testing.T) {
 	line := lineInfo{ascent: fixed.Int26_6(968), descent: fixed.Int26_6(216)}
-	r := makeRegion(line, 16, fixed.I(0), fixed.I(10))
+	r := singleLineRegion(line, 16, fixed.I(0), fixed.I(10))
 	wantBottom := r.Bounds.Max.Y - 16
 	if r.Baseline != wantBottom {
 		t.Errorf("Baseline = %d, want %d (region bottom below baseline)", r.Baseline, wantBottom)
