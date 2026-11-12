@@ -1047,13 +1047,7 @@ func (w *window) Configure(options []Option) {
 	cnf := w.config
 	cnf.apply(cfg, options)
 	w.config.decoHeight = cnf.decoHeight
-	if w.decor != nil && prev.Decorated != cnf.Decorated {
-		if cnf.Decorated {
-			C.zxdg_toplevel_decoration_v1_set_mode(w.decor, C.ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE)
-		} else {
-			C.zxdg_toplevel_decoration_v1_set_mode(w.decor, C.ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE)
-		}
-	}
+	w.setDecorated(prev, cnf)
 
 	switch cnf.Mode {
 	case Fullscreen:
@@ -1130,6 +1124,17 @@ func (w *window) setTitle(prev, cnf Config) {
 		C.xdg_toplevel_set_title(w.topLvl, title)
 		C.free(unsafe.Pointer(title))
 	}
+}
+
+func (w *window) setDecorated(prev, cnf Config) {
+	if w.decor == nil || prev.Decorated == cnf.Decorated {
+		return
+	}
+	mode := C.uint32_t(C.ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE)
+	if cnf.Decorated {
+		mode = C.ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE
+	}
+	C.zxdg_toplevel_decoration_v1_set_mode(w.decor, mode)
 }
 
 func (w *window) Perform(actions system.Action) {

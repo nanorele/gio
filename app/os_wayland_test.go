@@ -50,3 +50,10 @@ func TestWaylandPerformMove(t *testing.T) {
 		}
 	})
 }
+
+func TestWaylandSetDecorated(t *testing.T) {
+	t.Run("return without set_mode when decor is nil", func(t *testing.T) {
+		w := &window{}
+		w.setDecorated(Config{Decorated: false}, Config{Decorated: true})
+	})
+}
