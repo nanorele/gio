@@ -114,6 +114,11 @@ type wlSeat struct {
 
 	pointerSerial C.uint32_t
 
+	// primaryPressSerial is the serial of the last primary button press.
+	// Compositors such as Mutter accept only a press serial for
+	// xdg_toplevel.move, and s.serial is overwritten by unrelated events.
+	primaryPressSerial C.uint32_t
+
 	pointerFocus  *window
 	keyboardFocus *window
 	touchFoci     map[C.int32_t]*window
@@ -335,6 +340,9 @@ func (d *wlDisplay) createNativeWindow(options []Option) (*window, error) {
 		wakeups:   make(chan struct{}, 1),
 		clipReads: make(chan transfer.DataEvent, 1),
 	}
+	// Checks d.decor, not w.decor (still nil here, unlike upstream 84cf1a3e assumes),
+	// so the first Configure(Decorated(false)) sees a change and sends set_mode(CLIENT_SIDE).
+	w.config.Decorated = d.decor != nil
 	w.surf = C.wl_compositor_create_surface(d.compositor)
 	if w.surf == nil {
 		w.destroy()
@@ -885,6 +893,7 @@ func gio_onPointerButton(data unsafe.Pointer, p *C.struct_wl_pointer, serial, t,
 		return
 	}
 	if state == 1 && btn == pointer.ButtonPrimary {
+		s.primaryPressSerial = serial
 		if _, edge := w.systemGesture(); edge != 0 {
 			w.resize(serial, edge)
 			return
@@ -1038,6 +1047,7 @@ func (w *window) Configure(options []Option) {
 	cnf := w.config
 	cnf.apply(cfg, options)
 	w.config.decoHeight = cnf.decoHeight
+	w.setDecorated(prev, cnf)
 
 	switch cnf.Mode {
 	case Fullscreen:
@@ -1116,12 +1126,27 @@ func (w *window) setTitle(prev, cnf Config) {
 	}
 }
 
+func (w *window) setDecorated(prev, cnf Config) {
+	if w.decor == nil || prev.Decorated == cnf.Decorated {
+		return
+	}
+	mode := C.uint32_t(C.ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE)
+	if cnf.Decorated {
+		mode = C.ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE
+	}
+	C.zxdg_toplevel_decoration_v1_set_mode(w.decor, mode)
+}
+
 func (w *window) Perform(actions system.Action) {
 
 	walkActions(actions, func(action system.Action) {
 		switch action {
 		case system.ActionClose:
 			w.closing = true
+		case system.ActionMove:
+			if w.pointerBtns&pointer.ButtonPrimary != 0 && w.config.Mode == Windowed {
+				w.move(w.disp.seat.primaryPressSerial)
+			}
 		}
 	})
 }
